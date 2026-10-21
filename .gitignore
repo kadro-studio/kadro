@@ -1,0 +1,7 @@
+node_modules/
+dist/
+release/
+test-media/
+smoke-out/
+*.log
+.DS_Store

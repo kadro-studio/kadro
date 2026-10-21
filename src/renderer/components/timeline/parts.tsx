@@ -1,0 +1,291 @@
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { mediaUrl, WAVEFORM_RATE } from '../../../shared/api';
+import { keyframeTimes } from '../../core/keyframes';
+import { formatRuler } from '../../core/time';
+import type { Clip, MediaAsset, MediaRuntime, Track } from '../../core/types';
+import { getWaveform } from '../../engine/waveforms';
+import { useT } from '../../i18n';
+import { renameTrack, setTrackFlag } from '../../store/actions';
+import { useEditor } from '../../store/editor';
+import { Icon, type IconName } from '../../ui/Icon';
+import { IconButton } from '../../ui/controls';
+
+export const HEADER_W = 168;
+export const RULER_H = 28;
+
+export function trackHeight(track: Track): number {
+  return track.kind === 'video' ? 68 : 54;
+}
+
+// ---------------------------------------------------------------------------
+// Ruler
+
+const RULER_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
+
+export function RulerCanvas({ width, scrollLeft, pps, fps }: { width: number; scrollLeft: number; pps: number; fps: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useLayoutEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.floor(width));
+    canvas.width = w * dpr;
+    canvas.height = RULER_H * dpr;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${RULER_H}px`;
+    const ctx = canvas.getContext('2d')!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, RULER_H);
+
+    const frameSteps = [1, 2, 5, 10].map((n) => n / fps);
+    const steps = [...frameSteps, 0.5, ...RULER_STEPS];
+    const major = steps.find((s) => s * pps >= 90) ?? 3600;
+    const minor = major * pps / 5 >= 7 ? major / 5 : major / 2;
+    const t0 = scrollLeft / pps;
+    const t1 = (scrollLeft + w) / pps;
+    ctx.font = '10px Segoe UI, sans-serif';
+    ctx.textBaseline = 'top';
+    const first = Math.floor(t0 / minor) * minor;
+    for (let i = 0; ; i++) {
+      const tt = first + i * minor;
+      if (tt > t1 + minor) break;
+      if (tt < 0) continue;
+      const x = Math.round(tt * pps - scrollLeft) + 0.5;
+      const ratio = tt / major;
+      const isMajor = Math.abs(ratio - Math.round(ratio)) < 1e-6;
+      ctx.strokeStyle = isMajor ? '#7b8090' : '#4a4e59';
+      ctx.beginPath();
+      ctx.moveTo(x, RULER_H);
+      ctx.lineTo(x, RULER_H - (isMajor ? 11 : 5));
+      ctx.stroke();
+      if (isMajor) {
+        ctx.fillStyle = '#a3a7b1';
+        ctx.fillText(formatRuler(tt, fps, major < 1), x + 4, 4);
+      }
+    }
+  }, [width, scrollLeft, pps, fps]);
+  return <canvas ref={ref} style={{ left: HEADER_W }} />;
+}
+
+export function RulerPlayhead({ pps }: { pps: number }) {
+  const playhead = useEditor((s) => s.playhead);
+  return <div className="playhead-head" style={{ left: playhead * pps }} />;
+}
+
+export function PlayheadLine({ pps, scrollRef }: { pps: number; scrollRef: React.RefObject<HTMLDivElement | null> }) {
+  const playhead = useEditor((s) => s.playhead);
+  const playing = useEditor((s) => s.playing);
+  const x = HEADER_W + playhead * pps;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !playing) return;
+    const viewLeft = el.scrollLeft + HEADER_W;
+    const viewRight = el.scrollLeft + el.clientWidth;
+    if (x > viewRight - 30 || x < viewLeft) el.scrollLeft = Math.max(0, x - HEADER_W - 60);
+  }, [x, playing, scrollRef]);
+  return <div className="playhead" style={{ left: x }} />;
+}
+
+// ---------------------------------------------------------------------------
+// Track header
+
+export function TrackHeader({ track, height, onContextMenu }: { track: Track; height: number; onContextMenu: (e: React.MouseEvent) => void }) {
+  const t = useT();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(track.name);
+  return (
+    <div className="track-header" style={{ width: HEADER_W, height }} onContextMenu={onContextMenu}>
+      <div className="track-name" onDoubleClick={() => (setName(track.name), setEditing(true))}>
+        <span className="track-kind" style={{ background: track.kind === 'video' ? 'var(--clip-video)' : 'var(--clip-audio)' }} />
+        {editing ? (
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => {
+              renameTrack(track.id, name);
+              setEditing(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              if (e.key === 'Escape') setEditing(false);
+              e.stopPropagation();
+            }}
+          />
+        ) : (
+          <span title={t('tl.renameTrack')}>{track.name}</span>
+        )}
+      </div>
+      {track.kind === 'video' && (
+        <IconButton
+          icon={track.hidden ? 'eyeOff' : 'eye'}
+          size={15}
+          className="small"
+          title={t('tl.hide')}
+          active={track.hidden}
+          onClick={() => setTrackFlag(track.id, 'hidden', !track.hidden)}
+        />
+      )}
+      <IconButton
+        icon={track.muted ? 'volumeOff' : 'volume'}
+        size={15}
+        className="small"
+        title={t('tl.mute')}
+        active={track.muted}
+        onClick={() => setTrackFlag(track.id, 'muted', !track.muted)}
+      />
+      <IconButton
+        icon={track.locked ? 'lock' : 'unlock'}
+        size={15}
+        className="small"
+        title={t('tl.lock')}
+        active={track.locked}
+        onClick={() => setTrackFlag(track.id, 'locked', !track.locked)}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Clips
+
+const TYPE_ICON: Record<Clip['type'], IconName> = {
+  video: 'film',
+  audio: 'music',
+  image: 'image',
+  text: 'text',
+  color: 'shapes',
+};
+
+function Waveform({ clip, pps, color, waveVersion }: { clip: Clip; pps: number; color: string; waveVersion: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const cssW = Math.max(1, Math.round(clip.duration * pps));
+  useLayoutEffect(() => {
+    const canvas = ref.current;
+    if (!canvas || !clip.mediaId) return;
+    const peaks = getWaveform(clip.mediaId);
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.min(4096, Math.round(cssW * dpr));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, w, h);
+    if (!peaks) return;
+    ctx.fillStyle = color;
+    const srcLen = clip.duration * clip.speed;
+    const gain = Math.min(1.6, clip.muted ? 0.2 : clip.volume);
+    for (let x = 0; x < w; x++) {
+      const s0 = clip.in + (x / w) * srcLen;
+      const s1 = clip.in + ((x + 1) / w) * srcLen;
+      const i0 = Math.floor(s0 * WAVEFORM_RATE);
+      const i1 = Math.max(i0 + 1, Math.floor(s1 * WAVEFORM_RATE));
+      let max = 0;
+      for (let i = i0; i < i1 && i < peaks.length; i++) if (peaks[i] > max) max = peaks[i];
+      const bar = Math.min(1, (max / 255) * gain) * h;
+      if (bar > 0.5) ctx.fillRect(x, (h - bar) / 2, 1, bar);
+    }
+  }, [clip.mediaId, clip.in, clip.speed, clip.duration, clip.volume, clip.muted, cssW, color, waveVersion]);
+  return <canvas ref={ref} className="clip-wave" />;
+}
+
+function Filmstrip({ clip, rt, pps, height }: { clip: Clip; rt: MediaRuntime | undefined; pps: number; height: number }) {
+  const width = clip.duration * pps;
+  if (clip.type === 'image' && rt?.thumb) {
+    return (
+      <div
+        className="clip-strip"
+        style={{ backgroundImage: `url("${mediaUrl(rt.thumb)}")`, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x' }}
+      />
+    );
+  }
+  const fs = rt?.filmstrip;
+  if (!fs || height <= 0) return null;
+  const tileW = (fs.tileW / fs.tileH) * height;
+  const maxTiles = 160;
+  const n = Math.max(1, Math.min(maxTiles, Math.ceil(width / tileW)));
+  const step = width / n;
+  const url = `url("${mediaUrl(fs.path)}")`;
+  const tiles = [];
+  for (let i = 0; i < n; i++) {
+    const local = (i * step + step / 2) / pps;
+    const src = clip.in + local * clip.speed;
+    const idx = Math.max(0, Math.min(fs.count - 1, Math.floor(src / fs.interval)));
+    tiles.push(
+      <div
+        key={i}
+        style={{
+          width: step,
+          backgroundImage: url,
+          backgroundSize: `${fs.count * tileW}px ${height}px`,
+          backgroundPosition: `${-idx * tileW}px 0`,
+        }}
+      />,
+    );
+  }
+  return <div className="clip-strip">{tiles}</div>;
+}
+
+export interface ClipViewProps {
+  clip: Clip;
+  track: Track;
+  pps: number;
+  height: number;
+  selected: boolean;
+  media: MediaAsset | undefined;
+  rt: MediaRuntime | undefined;
+  razor: boolean;
+  waveVersion: number;
+  onPointerDown: (e: React.PointerEvent, clip: Clip, part: 'body' | 'l' | 'r') => void;
+  onContextMenu: (e: React.MouseEvent, clip: Clip) => void;
+}
+
+export const ClipView = memo(function ClipView(p: ClipViewProps) {
+  const { clip, track, pps } = p;
+  const left = clip.start * pps;
+  const width = Math.max(2, clip.duration * pps);
+  const bodyH = p.height - 6 - 17 - 2;
+  const hasAudio = clip.type === 'audio' || (clip.type === 'video' && !!p.media?.hasAudio);
+  const showStrip = clip.type === 'video' || clip.type === 'image';
+  const kfs = keyframeTimes(clip).filter((k) => k >= 0 && k <= clip.duration);
+  const fxActive = clip.filter.id !== 'none' || clip.chroma.enabled || Object.values(clip.adjust).some((v) => v !== 0);
+  const cls = ['clip', clip.type, p.selected && 'selected', track.locked && 'locked', p.razor && 'razor', clip.muted && 'muted-clip']
+    .filter(Boolean)
+    .join(' ');
+  const label = clip.type === 'text' && clip.text ? clip.text.content.split('\n')[0] : clip.name;
+
+  return (
+    <div
+      className={cls}
+      style={{ left, width }}
+      onPointerDown={(e) => p.onPointerDown(e, clip, 'body')}
+      onContextMenu={(e) => p.onContextMenu(e, clip)}
+      title={clip.name}
+    >
+      <div className="clip-label">
+        <Icon name={TYPE_ICON[clip.type]} size={12} />
+        <span>{label}</span>
+        {clip.speed !== 1 && <span className="badge">×{+clip.speed.toFixed(2)}</span>}
+        {fxActive && <span className="badge">fx</span>}
+        {clip.muted && hasAudio && <Icon name="volumeOff" size={12} />}
+      </div>
+      <div className="clip-body">
+        {showStrip && <Filmstrip clip={clip} rt={p.rt} pps={pps} height={bodyH} />}
+        {clip.type === 'color' && <div className="clip-strip" style={{ background: clip.color, opacity: 0.85 }} />}
+        {hasAudio && <Waveform clip={clip} pps={pps} color={clip.type === 'audio' ? '#a5f3d0' : 'rgba(255,255,255,0.8)'} waveVersion={p.waveVersion} />}
+      </div>
+      {clip.transition.type !== 'none' && <div className="clip-transition" style={{ width: Math.min(clip.transition.duration, clip.duration) * pps }} />}
+      {clip.fadeIn > 0 && <div className="clip-fade in" style={{ width: clip.fadeIn * pps }} />}
+      {clip.fadeOut > 0 && <div className="clip-fade out" style={{ width: clip.fadeOut * pps }} />}
+      {kfs.map((k) => (
+        <div key={k} className="clip-kf" style={{ left: k * pps }} />
+      ))}
+      {!track.locked && !p.razor && (
+        <>
+          <div className="clip-trim l" onPointerDown={(e) => (e.stopPropagation(), p.onPointerDown(e, clip, 'l'))} />
+          <div className="clip-trim r" onPointerDown={(e) => (e.stopPropagation(), p.onPointerDown(e, clip, 'r'))} />
+        </>
+      )}
+    </div>
+  );
+});
