@@ -29,6 +29,8 @@ export interface FxDef {
   name: string;
   nameRu?: string;
   description?: string;
+  descriptionRu?: string;
+  descriptionUk?: string;
   author?: string;
   version?: string;
   params: FxParam[];
@@ -75,4 +77,10 @@ export function validateFxDef(raw: unknown): string | null {
 export function fxName(def: { name: string; nameRu?: string; nameUk?: string }, lang: string): string {
   if (lang === 'uk') return def.nameUk ?? def.nameRu ?? def.name;
   return lang === 'ru' && def.nameRu ? def.nameRu : def.name;
+}
+
+/** Description in the current language, falling back like fxName. */
+export function fxDescription(def: { description?: string; descriptionRu?: string; descriptionUk?: string }, lang: string): string | undefined {
+  if (lang === 'uk') return def.descriptionUk ?? def.descriptionRu ?? def.description;
+  return lang === 'ru' && def.descriptionRu ? def.descriptionRu : def.description;
 }

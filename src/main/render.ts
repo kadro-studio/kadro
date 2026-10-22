@@ -238,9 +238,31 @@ function chooseEncoder(spec: ExportSpec, available: HwEncoder[]): HwEncoder | nu
   return available.includes(spec.encoder) ? spec.encoder : null;
 }
 
+/** Rate-control arguments for a target bitrate (Mbit/s): average, 1.5x peak, 2x buffer. */
+function bitrateArgs(mbps: number): string[] {
+  const k = (x: number) => `${Math.max(100, Math.round(mbps * x * 1000))}k`;
+  return ['-b:v', k(1), '-maxrate', k(1.5), '-bufsize', k(2)];
+}
+
 /** Encoder arguments for H.264/HEVC on the GPU or the CPU. */
-function videoCodecArgs(codec: 'h264' | 'hevc', hw: HwEncoder | null, q: Quality): string[] {
+function videoCodecArgs(codec: 'h264' | 'hevc', hw: HwEncoder | null, q: Quality, bitrate?: number): string[] {
   const hevc = codec === 'hevc';
+  if (bitrate) {
+    switch (hw) {
+      case 'nvenc':
+        return ['-c:v', `${codec}_nvenc`, '-preset', pick(q, 'p6', 'p5', 'p3'), '-tune', 'hq', '-rc', 'vbr', ...bitrateArgs(bitrate), '-spatial-aq', '1'];
+      case 'qsv':
+        return ['-c:v', `${codec}_qsv`, '-preset', pick(q, 'slow', 'medium', 'faster'), ...bitrateArgs(bitrate), '-look_ahead', '0'];
+      case 'amf':
+        return ['-c:v', `${codec}_amf`, '-quality', pick(q, 'quality', 'balanced', 'speed'), '-rc', 'vbr_peak', ...bitrateArgs(bitrate)];
+      default:
+        return [
+          '-c:v', hevc ? 'libx265' : 'libx264',
+          '-preset', hevc ? pick(q, 'fast', 'faster', 'veryfast') : pick(q, 'medium', 'faster', 'veryfast'),
+          ...bitrateArgs(bitrate),
+        ];
+    }
+  }
   switch (hw) {
     case 'nvenc':
       return ['-c:v', `${codec}_nvenc`, '-preset', pick(q, 'p6', 'p5', 'p3'), '-tune', 'hq', '-rc', 'vbr',
@@ -293,23 +315,24 @@ function buildArgs(spec: ExportSpec, hwAvailable: HwEncoder[]): { args: string[]
   if (hasAudio) args.push('-map', '[aout]');
 
   const q = spec.quality;
+  const audioRate = (fallback: number) => `${Math.round(spec.audioBitrate && spec.audioBitrate > 0 ? spec.audioBitrate : fallback)}k`;
   switch (spec.format) {
     case 'mp4':
     case 'mp4-hevc': {
       const codec = spec.format === 'mp4' ? 'h264' : 'hevc';
       const hw = chooseEncoder(spec, hwAvailable);
-      const codecArgs = videoCodecArgs(codec, hw, q);
+      const codecArgs = videoCodecArgs(codec, hw, q, spec.bitrate);
       encoder = codecArgs[1];
       args.push(...codecArgs, '-pix_fmt', 'yuv420p', ...BT709);
       if (codec === 'hevc') args.push('-tag:v', 'hvc1');
-      args.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart');
+      args.push('-c:a', 'aac', '-b:a', audioRate(192), '-movflags', '+faststart');
       break;
     }
     case 'webm':
       encoder = 'libvpx-vp9';
-      args.push('-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', pick(q, 28, 32, 38), '-row-mt', '1', '-tile-columns', '2',
+      args.push('-c:v', 'libvpx-vp9', ...(spec.bitrate ? bitrateArgs(spec.bitrate) : ['-b:v', '0', '-crf', pick(q, 28, 32, 38)]), '-row-mt', '1', '-tile-columns', '2',
         '-deadline', q === 'low' ? 'realtime' : 'good', '-cpu-used', pick(q, 3, 5, 8),
-        '-pix_fmt', 'yuv420p', ...BT709, '-c:a', 'libopus', '-b:a', '160k');
+        '-pix_fmt', 'yuv420p', ...BT709, '-c:a', 'libopus', '-b:a', audioRate(160));
       break;
     case 'mov-prores':
       encoder = 'prores_ks';
@@ -319,7 +342,7 @@ function buildArgs(spec: ExportSpec, hwAvailable: HwEncoder[]): { args: string[]
       args.push('-loop', '0');
       break;
     case 'mp3':
-      args.push('-c:a', 'libmp3lame', '-b:a', q === 'high' ? '320k' : q === 'medium' ? '192k' : '128k');
+      args.push('-c:a', 'libmp3lame', '-b:a', audioRate(q === 'high' ? 320 : q === 'medium' ? 192 : 128));
       break;
     case 'wav':
       args.push('-c:a', 'pcm_s16le');

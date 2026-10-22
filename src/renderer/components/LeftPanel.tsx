@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { fxOfKind, useFx } from '../engine/fx/registry';
-import { drawFxFrame, filterThumbnail, fxThumbnail, THUMB_SIZE } from '../engine/fx/thumbs';
+import { drawFxFrame, filterThumbnail, fxThumbnail, lookThumbnail, THUMB_SIZE } from '../engine/fx/thumbs';
 import { sampleUrl } from '../engine/samples';
-import { fxName, type FxDef } from '../engine/fx/types';
+import { fxDescription, fxName, type FxDef } from '../engine/fx/types';
 import { ModsPanel } from './ModsPanel';
 import { LibraryPanel } from './LibraryPanel';
 import { mediaUrl } from '../../shared/api';
@@ -10,7 +10,7 @@ import { FILTERS, TRANSITIONS } from '../core/effects';
 import { TEXT_PRESETS } from '../core/textPresets';
 import { formatBytes, formatDuration } from '../core/time';
 import type { MediaAsset } from '../core/types';
-import { useLang, useT, type I18nKey } from '../i18n';
+import { t, useLang, useT, type I18nKey } from '../i18n';
 import { api } from '../api';
 import {
   addAdjustmentClip,
@@ -21,7 +21,9 @@ import {
   addOverlayClip,
   addSticker,
   addTextClip,
+  addTextFromPreset,
   applyFilter,
+  applyLookPreset,
   applyTransition,
   setLeftTab,
 } from '../store/actions';
@@ -31,6 +33,7 @@ import { createEditingProxy, importFiles, importViaDialog, relinkMedia, removeEd
 import { openContextMenu, type MenuEntry } from '../ui/ContextMenu';
 import { Icon, type IconName } from '../ui/Icon';
 import { DND } from './dnd';
+import { deletePreset, renamePreset, usePresets, type Look, type PresetKind } from '../store/presets';
 
 const TABS: { id: LeftTab; icon: IconName; label: I18nKey }[] = [
   { id: 'media', icon: 'folder', label: 'tab.media' },
@@ -255,11 +258,56 @@ function textPreviewStyle(style: (typeof TEXT_PRESETS)[number]['style']): CSSPro
   };
 }
 
+/** Right-click menu of a user preset card. */
+function presetMenu(e: React.MouseEvent, kind: PresetKind, id: string): void {
+  e.preventDefault();
+  openContextMenu(e.clientX, e.clientY, [
+    { label: `${t('presets.rename')}…`, onClick: () => void renamePreset(kind, id) },
+    { label: t('common.delete'), onClick: () => void deletePreset(kind, id) },
+  ]);
+}
+
+function MyTextStyles() {
+  const t = useT();
+  const presets = usePresets((s) => s.text);
+  if (presets.length === 0) return null;
+  return (
+    <>
+      <div className="mods-section-title">{t('presets.myStyles')}</div>
+      <div className="preset-grid">
+        {presets.map((p) => {
+          const k = 1080 / p.ref;
+          return (
+            <button
+              key={p.id}
+              className="preset-card"
+              draggable
+              onDragStart={(e) => e.dataTransfer.setData(DND.text, `my:${p.id}`)}
+              onClick={() => addTextFromPreset(p.id)}
+              onContextMenu={(e) => presetMenu(e, 'text', p.id)}
+              title={t('presets.cardHint')}
+            >
+              <div className="preset-visual photo-dim" style={{ backgroundImage: `url(${sampleUrl('spa')})` }}>
+                <span style={textPreviewStyle({ ...p.style, content: p.style.content, fontSize: p.style.fontSize * k, strokeWidth: p.style.strokeWidth * k, shadowBlur: p.style.shadowBlur * k, letterSpacing: p.style.letterSpacing * k })}>
+                  {p.style.content.split('\n')[0].slice(0, 24) || p.name}
+                </span>
+              </div>
+              <div className="preset-label">{p.name}</div>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mods-section-title">{t('presets.builtIn')}</div>
+    </>
+  );
+}
+
 function TextPanel() {
   const t = useT();
   return (
     <>
       <p className="panel-hint">{t('text.hint')}</p>
+      <MyTextStyles />
       <div className="preset-grid">
         {TEXT_PRESETS.map((p) => (
           <button
@@ -377,7 +425,7 @@ export function FxCard({ def, active, onClick }: { def: FxDef; active?: boolean;
           : e.dataTransfer.setData(def.kind === 'effect' ? DND.effect : DND.transition, def.id)
       }
       onClick={onClick}
-      title={[def.description, def.author && `© ${def.author}`, error].filter(Boolean).join('\n')}
+      title={[fxDescription(def, lang), def.author && `© ${def.author}`, error].filter(Boolean).join('\n')}
     >
       <div className="preset-visual">
         {thumb ? <img src={thumb} alt="" className="fx-thumb" /> : <Icon name="wand" size={24} />}
@@ -464,6 +512,49 @@ function FilterThumb({ id }: { id: string }) {
   return url ? <img src={url} alt="" className="fx-thumb" /> : <div className="photo" style={{ backgroundImage: `url(${sampleUrl('street')})` }} />;
 }
 
+function LookThumb({ look }: { look: Look }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void lookThumbnail(look).then((u) => alive && setUrl(u));
+    return () => {
+      alive = false;
+    };
+  }, [look]);
+  return url ? <img src={url} alt="" className="fx-thumb" /> : <Icon name="palette" size={24} />;
+}
+
+function MyLooks({ selection }: { selection: string[] }) {
+  const t = useT();
+  const looks = usePresets((s) => s.looks);
+  if (looks.length === 0) return null;
+  return (
+    <>
+      <div className="mods-section-title">{t('presets.myLooks')}</div>
+      <div className="preset-grid">
+        {looks.map((p) => (
+          <button
+            key={p.id}
+            className="preset-card"
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData(DND.filter, `my:${p.id}`)}
+            onClick={() => void applyLookPreset(selection, p.id)}
+            onContextMenu={(e) => presetMenu(e, 'looks', p.id)}
+            title={t('presets.cardHint')}
+          >
+            <div className="preset-visual">
+              <LookThumb look={p.look} />
+              {p.look.effects.length > 0 && <span className="fx-badge">FX</span>}
+            </div>
+            <div className="preset-label">{p.name}</div>
+          </button>
+        ))}
+      </div>
+      <div className="mods-section-title">{t('presets.builtIn')}</div>
+    </>
+  );
+}
+
 function FiltersPanel() {
   const t = useT();
   const selection = useEditor((s) => s.selection);
@@ -475,6 +566,7 @@ function FiltersPanel() {
   return (
     <>
       <p className="panel-hint">{t('filters.hint')}</p>
+      <MyLooks selection={selection} />
       <div className="preset-grid">
         {FILTERS.map((f) => (
           <button

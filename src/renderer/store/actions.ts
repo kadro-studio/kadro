@@ -31,12 +31,12 @@ import {
 } from '../core/edit';
 import { TEXT_PRESETS } from '../core/textPresets';
 import { clamp, EPS, snapToFrame } from '../core/time';
-import type { Clip, ClipType, MediaAsset, Project, ShapeKind, Track, TrackKind } from '../core/types';
+import type { Clip, ClipType, Marker, MediaAsset, Project, ShapeKind, Track, TrackKind } from '../core/types';
 import type { I18nKey } from '../i18n';
 import { clipHasAudio } from '../core/scene';
 import { clearWaveforms } from '../engine/waveforms';
 import { api } from '../api';
-import { ask } from './prompt';
+import { ask, askText } from './prompt';
 import { APP_NAME } from '../../shared/brand';
 import { t, useLang } from '../i18n';
 import { fxName } from '../engine/fx/types';
@@ -54,6 +54,7 @@ import {
   type LeftTab,
 } from './editor';
 import { forgetRecent, rememberRecent, usePrefs } from './prefs';
+import { applyLookTo, prepareLook, scaledTextStyle, usePresets } from './presets';
 
 /** Length of photos, titles and elements when added (Preferences → General). */
 function stillDuration(): number {
@@ -189,6 +190,41 @@ export function addTextClip(presetId: string, opts: PlaceOptions = {}): void {
   placeNewClip(clip, 'video', opts);
 }
 
+/** Title in one of the user's saved styles. */
+export function addTextFromPreset(presetId: string, opts: PlaceOptions = {}): void {
+  const preset = usePresets.getState().text.find((p) => p.id === presetId);
+  if (!preset) return;
+  const frame = st().project.settings;
+  const style = scaledTextStyle(preset, frame);
+  const clip = makeClip('text', {
+    name: style.content.split('\n')[0],
+    duration: DEFAULT_TEXT_DURATION,
+    text: style,
+    animIn: { ...preset.animIn },
+    animOut: { ...preset.animOut },
+  });
+  clip.transform.x = Math.round(preset.x * frame.width);
+  clip.transform.y = Math.round(preset.y * frame.height);
+  placeNewClip(clip, 'video', opts);
+}
+
+/** Applies one of the user's saved looks (colour + effects) to clips. */
+export async function applyLookPreset(clipIds: string[], presetId: string): Promise<void> {
+  const preset = usePresets.getState().looks.find((p) => p.id === presetId);
+  if (!preset) return;
+  const p = st().project;
+  const ids = clipIds.filter((id) => {
+    const f = findClip(p, id);
+    return f && f.clip.type !== 'audio' && !f.track.locked;
+  });
+  if (ids.length === 0) {
+    toast(t('toast.selectClipFirst'));
+    return;
+  }
+  await prepareLook(preset.look);
+  updateClips(ids, (c) => applyLookTo(c, preset.look));
+}
+
 /** Adjustment layer: effects and colour on it apply to all tracks below. */
 export function addAdjustmentClip(opts: PlaceOptions = {}): void {
   const clip = makeClip('adjustment', { name: t('elements.adjustment'), duration: stillDuration() });
@@ -295,6 +331,34 @@ export function splitAt(time: number, ids?: string[]): void {
 
 export function splitAtPlayhead(): void {
   splitAt(st().playhead);
+}
+
+/** Cuts every unlocked track at `time`, whatever is selected. */
+export function splitAllTracks(time = st().playhead): void {
+  const tt = snapToFrame(time, fps());
+  const ids = st()
+    .project.tracks.filter((tr) => !tr.locked)
+    .flatMap((tr) => tr.clips.filter((c) => tt > c.start && tt < clipEnd(c)).map((c) => c.id));
+  if (ids.length === 0) {
+    toast(t('toast.noClipAtPlayhead'));
+    return;
+  }
+  splitAt(tt, ids);
+}
+
+/** Mutes the selected clips, or unmutes them when all are muted already. */
+export function toggleMuteSelection(): void {
+  const p = st().project;
+  const media = mediaMap(p);
+  const ids = editableSelection().filter((id) => {
+    const f = findClip(p, id);
+    return f && clipHasAudio(f.clip, media);
+  });
+  if (ids.length === 0) return;
+  const mute = ids.some((id) => !findClip(p, id)!.clip.muted);
+  updateClips(ids, (c) => {
+    c.muted = mute;
+  });
 }
 
 export function deleteSelection(ripple = false): void {
@@ -431,6 +495,8 @@ export function detachAudio(clipId: string): void {
     volume: src.volume,
     fadeIn: src.fadeIn,
     fadeOut: src.fadeOut,
+    audioFx: structuredClone(src.audioFx),
+    keyframes: src.keyframes.volume ? { volume: structuredClone(src.keyframes.volume) } : {},
   });
   const free = freeTrack(p, 'audio', audio.start, clipEnd(audio));
   edit((d) => {
@@ -704,6 +770,21 @@ export function markedRange(): { start: number; end: number } | null {
   const end = p.markOut ?? projectDuration(p);
   const start = p.markIn ?? 0;
   return end > start ? { start, end } : null;
+}
+
+export function updateMarker(id: string, patch: Partial<Omit<Marker, 'id'>>): void {
+  edit((d) => {
+    const m = d.markers.find((x) => x.id === id);
+    if (m) Object.assign(m, patch);
+    d.markers.sort((a, b) => a.time - b.time);
+  });
+}
+
+export async function renameMarker(id: string): Promise<void> {
+  const m = st().project.markers.find((x) => x.id === id);
+  if (!m) return;
+  const label = await askText({ title: t('marker.rename'), value: m.label, placeholder: t('marker.placeholder'), ok: t('common.ok'), cancel: t('common.cancel') });
+  if (label !== null) updateMarker(id, { label: label.trim() });
 }
 
 export function removeMarker(id: string): void {

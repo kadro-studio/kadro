@@ -3,7 +3,7 @@ import type { AppInfo, AutosaveData, EncoderChoice, ExportFormat, ExportQuality,
 import { setPrefs, usePrefs } from '../store/prefs';
 import { restoreAutosave } from '../store/autosave';
 import { projectDuration } from '../core/project';
-import { formatDuration } from '../core/time';
+import { formatBytes, formatDuration } from '../core/time';
 import { AUDIO_ONLY, runExport, type CancelToken, type ExportProgress } from '../engine/exporter';
 import { player } from '../engine/player';
 import { useT, type I18nKey } from '../i18n';
@@ -12,12 +12,15 @@ import { APP_NAME, SITE_URL, SOURCE_URL } from '../../shared/brand';
 import { markedRange, openDialog } from '../store/actions';
 import { edit, useEditor } from '../store/editor';
 import { Icon } from '../ui/Icon';
+import { IconButton } from '../ui/controls';
+import { deletePreset, saveExportPreset, usePresets, type ExportPreset } from '../store/presets';
 import { Modal } from './Modal';
 import { BackgroundDialog, SubtitlesDialog } from './AiDialog';
 import { CreditsDialog, EnhanceDialog, PasteAttributesDialog, VoiceoverDialog, type EnhanceKind } from './ToolDialogs';
 
 const ENHANCE_KINDS: EnhanceKind[] = ['stabilize', 'denoise', 'loudness', 'scenes', 'beats', 'duck'];
 import { PrefsDialog } from './PrefsDialog';
+import { ShortcutsDialog } from './ShortcutsDialog';
 
 export function Dialogs() {
   const dialog = useEditor((s) => s.dialog);
@@ -79,6 +82,19 @@ function even(n: number): number {
   return Math.max(2, Math.round(n / 2) * 2);
 }
 
+/** Ready-made export settings; `short` is the shorter side (0 = project size), fps 0 = project rate. */
+const BUILTIN_EXPORTS: (Omit<ExportPreset, 'name'> & { nameKey: I18nKey })[] = [
+  { id: 'b:youtube4k', nameKey: 'export.p.youtube4k', format: 'mp4', short: 2160, fps: 0, quality: 'high' },
+  { id: 'b:youtube', nameKey: 'export.p.youtube', format: 'mp4', short: 1080, fps: 0, quality: 'high' },
+  { id: 'b:social', nameKey: 'export.p.social', format: 'mp4', short: 1080, fps: 30, quality: 'high', bitrate: 12 },
+  { id: 'b:messenger', nameKey: 'export.p.messenger', format: 'mp4', short: 720, fps: 30, quality: 'medium', bitrate: 3, audioBitrate: 128 },
+  { id: 'b:master', nameKey: 'export.p.master', format: 'mov-prores', short: 0, fps: 0, quality: 'high' },
+  { id: 'b:web', nameKey: 'export.p.web', format: 'webm', short: 1080, fps: 0, quality: 'medium' },
+  { id: 'b:gif', nameKey: 'export.p.gif', format: 'gif', short: 480, fps: 15, quality: 'medium' },
+  { id: 'b:mp3', nameKey: 'export.p.mp3', format: 'mp3', short: 0, fps: 0, quality: 'high' },
+];
+const AUDIO_RATES = [96, 128, 160, 192, 256, 320];
+
 function ExportDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const project = useEditor((s) => s.project);
@@ -87,15 +103,25 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   const duration = projectDuration(project);
   const [format, setFormat] = useState<ExportFormat>('mp4');
   const [height, setHeight] = useState<number>(s.height);
+  const [customHeight, setCustomHeight] = useState(false);
   const [fps, setFps] = useState<number>(s.fps);
   const [quality, setQuality] = useState<ExportQuality>('high');
+  /** Target video bitrate in Mbit/s; null uses the quality level. */
+  const [bitrate, setBitrate] = useState<number | null>(null);
+  /** 0 = the format's default. */
+  const [audioBitrate, setAudioBitrate] = useState(0);
+  const [presetId, setPresetId] = useState('');
+  const myPresets = usePresets((p) => p.exports);
   const [outPath, setOutPath] = useState('');
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ExportResult | null>(null);
   const token = useRef<CancelToken>({ cancelled: false });
   const encoder = usePrefs((p) => p.encoder);
-  const marked = useEditor((s) => (s.project.markIn != null || s.project.markOut != null ? markedRange() : null));
+  // Plain values from the store: an object built in the selector would change on every read.
+  const markIn = useEditor((s) => s.project.markIn ?? null);
+  const markOut = useEditor((s) => s.project.markOut ?? null);
+  const marked = useMemo(() => (markIn != null || markOut != null ? markedRange() : null), [markIn, markOut, duration]);
   const [useRange, setUseRange] = useState(!!marked);
   const [hw, setHw] = useState<HwEncoder[]>([]);
   useEffect(() => {
@@ -106,6 +132,49 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   const h = even(height);
   const audioOnly = AUDIO_ONLY.includes(format);
   const usesEncoderChoice = format === 'mp4' || format === 'mp4-hevc';
+  const supportsBitrate = format === 'mp4' || format === 'mp4-hevc' || format === 'webm';
+  const supportsAudioRate = format === 'mp4' || format === 'mp4-hevc' || format === 'webm' || format === 'mp3';
+  const landscape = s.width >= s.height;
+  const heightForShort = (short: number) => (short <= 0 ? s.height : landscape ? short : even((short * s.height) / s.width));
+
+  /** Any manual change leaves the chosen preset. */
+  const manual = <T,>(fn: (v: T) => void) => (v: T) => {
+    fn(v);
+    setPresetId('');
+  };
+
+  const applyPreset = (id: string) => {
+    setPresetId(id);
+    const p = BUILTIN_EXPORTS.find((x) => x.id === id) ?? myPresets.find((x) => x.id === id);
+    if (!p) return;
+    setFormat(p.format);
+    const nextHeight = heightForShort(p.short);
+    setHeight(nextHeight);
+    setCustomHeight(!heights.includes(nextHeight));
+    setFps(p.fps > 0 ? p.fps : s.fps);
+    setQuality(p.quality);
+    setBitrate(p.bitrate ?? null);
+    setAudioBitrate(p.audioBitrate ?? 0);
+  };
+
+  const saveAsPreset = async () => {
+    const saved = await saveExportPreset({
+      format,
+      short: Math.min(width, h),
+      fps,
+      quality,
+      bitrate: supportsBitrate && bitrate ? bitrate : undefined,
+      audioBitrate: supportsAudioRate && audioBitrate ? audioBitrate : undefined,
+    });
+    if (saved) setPresetId(saved.id);
+  };
+
+  const estimate = (() => {
+    if (!bitrate || !supportsBitrate) return null;
+    const seconds = useRange && marked ? marked.end - marked.start : duration;
+    const audio = (audioBitrate || (format === 'webm' ? 160 : 192)) * 1000;
+    return formatBytes(((bitrate * 1e6 + audio) / 8) * seconds);
+  })();
 
   useEffect(() => {
     player.pause();
@@ -147,7 +216,22 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
     setResult(null);
     setProgress(null);
     const range = useRange && marked ? marked : undefined;
-    const r = await runExport({ outPath: target, format, width, height: h, fps, quality, encoder, range }, setProgress, token.current);
+    const r = await runExport(
+      {
+        outPath: target,
+        format,
+        width,
+        height: h,
+        fps,
+        quality,
+        bitrate: supportsBitrate && bitrate ? bitrate : undefined,
+        audioBitrate: supportsAudioRate && audioBitrate ? audioBitrate : undefined,
+        encoder,
+        range,
+      },
+      setProgress,
+      token.current,
+    );
     setRunning(false);
     if (r.error === 'cancelled') {
       setProgress(null);
@@ -197,10 +281,38 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+      <div className="field">
+        <label className="field-label">{t('export.preset')}</label>
+        <div className="file-row">
+          <select className="select" value={presetId} disabled={running} onChange={(e) => applyPreset(e.target.value)}>
+            <option value="">{t('export.preset.custom')}</option>
+            <optgroup label={t('export.preset.builtIn')}>
+              {BUILTIN_EXPORTS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {t(p.nameKey)}
+                </option>
+              ))}
+            </optgroup>
+            {myPresets.length > 0 && (
+              <optgroup label={t('export.preset.mine')}>
+                {myPresets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          <IconButton icon="save" title={t('presets.saveExport')} disabled={running} onClick={() => void saveAsPreset()} />
+          {myPresets.some((p) => p.id === presetId) && (
+            <IconButton icon="trash" title={t('common.delete')} disabled={running} onClick={() => void deletePreset('exports', presetId).then(() => setPresetId(''))} />
+          )}
+        </div>
+      </div>
       <div className="grid-2">
         <div className="field">
           <label className="field-label">{t('export.format')}</label>
-          <select className="select" value={format} disabled={running} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
+          <select className="select" value={format} disabled={running} onChange={(e) => manual(setFormat)(e.target.value as ExportFormat)}>
             {FORMATS.map((f) => (
               <option key={f} value={f}>
                 {t(`fmt.${f}` as I18nKey)}
@@ -210,28 +322,97 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
         </div>
         <div className="field">
           <label className="field-label">{t('export.quality')}</label>
-          <select className="select" value={quality} disabled={running} onChange={(e) => setQuality(e.target.value as ExportQuality)}>
+          <select
+            className="select"
+            value={supportsBitrate && bitrate ? 'bitrate' : quality}
+            disabled={running}
+            onChange={(e) => manual((v: string) => {
+              if (v === 'bitrate') {
+                // A sensible start: about 0.1 bit per pixel per frame.
+                setBitrate(Math.max(1, Math.round((width * h * fps * 0.1) / 1e6)));
+              } else {
+                setBitrate(null);
+                setQuality(v as ExportQuality);
+              }
+            })(e.target.value)}
+          >
             <option value="high">{t('export.q.high')}</option>
             <option value="medium">{t('export.q.medium')}</option>
             <option value="low">{t('export.q.low')}</option>
+            {supportsBitrate && <option value="bitrate">{t('export.q.bitrate')}</option>}
           </select>
         </div>
+        {supportsBitrate && bitrate !== null && (
+          <div className="field">
+            <label className="field-label">{t('export.bitrate')}</label>
+            <input
+              className="text-input"
+              type="number"
+              min={0.5}
+              max={400}
+              step={0.5}
+              value={bitrate}
+              disabled={running}
+              onChange={(e) => manual(setBitrate)(Math.min(400, Math.max(0.5, Number(e.target.value) || 0.5)))}
+            />
+          </div>
+        )}
+        {supportsAudioRate && (
+          <div className="field">
+            <label className="field-label">{t('export.audioBitrate')}</label>
+            <select className="select" value={audioBitrate} disabled={running} onChange={(e) => manual(setAudioBitrate)(Number(e.target.value))}>
+              <option value={0}>{t('export.audioAuto')}</option>
+              {AUDIO_RATES.map((r) => (
+                <option key={r} value={r}>
+                  {r} kbit/s
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {!audioOnly && (
           <>
             <div className="field">
               <label className="field-label">{t('export.resolution')}</label>
-              <select className="select" value={height} disabled={running} onChange={(e) => setHeight(Number(e.target.value))}>
+              <select
+                className="select"
+                value={customHeight ? 'custom' : height}
+                disabled={running}
+                onChange={(e) => manual((v: string) => {
+                  if (v === 'custom') setCustomHeight(true);
+                  else {
+                    setCustomHeight(false);
+                    setHeight(Number(v));
+                  }
+                })(e.target.value)}
+              >
                 {heights.map((x) => (
                   <option key={x} value={x}>
                     {x === s.height ? t('export.projectRes', { w: s.width, h: s.height }) : `${even((s.width * x) / s.height)}×${even(x)}`}
                   </option>
                 ))}
+                <option value="custom">{customHeight ? `${width}×${h}` : t('export.customRes')}</option>
               </select>
             </div>
+            {customHeight && (
+              <div className="field">
+                <label className="field-label">{t('export.height')}</label>
+                <input
+                  className="text-input"
+                  type="number"
+                  min={16}
+                  max={8192}
+                  step={2}
+                  value={height}
+                  disabled={running}
+                  onChange={(e) => manual(setHeight)(Math.min(8192, Math.max(16, Number(e.target.value) || 16)))}
+                />
+              </div>
+            )}
             <div className="field">
               <label className="field-label">{t('export.fps')}</label>
-              <select className="select" value={fps} disabled={running} onChange={(e) => setFps(Number(e.target.value))}>
-                {[...new Set([s.fps, 10, 12, 15, 24, 25, 30, 50, 60])].sort((a, b) => a - b).map((x) => (
+              <select className="select" value={fps} disabled={running} onChange={(e) => manual(setFps)(Number(e.target.value))}>
+                {[...new Set([s.fps, 10, 12, 15, 23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120])].sort((a, b) => a - b).map((x) => (
                   <option key={x} value={x}>
                     {x} fps
                   </option>
@@ -283,6 +464,7 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
           h: audioOnly ? '—' : h,
           fps: audioOnly ? '—' : fps,
         })}
+        {estimate && ` · ${t('export.estimate', { size: estimate })}`}
       </div>
       {(running || progress) && !result && (
         <div className="export-status">
@@ -482,50 +664,3 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-const SHORTCUTS: { key: I18nKey; keys: string[] }[] = [
-  { key: 'sc.playPause', keys: ['Space', 'K'] },
-  { key: 'sc.frameStep', keys: ['←', '→'] },
-  { key: 'sc.secondStep', keys: ['Shift+←', 'Shift+→'] },
-  { key: 'sc.editPoints', keys: ['↑', '↓'] },
-  { key: 'sc.homeEnd', keys: ['Home', 'End'] },
-  { key: 'sc.split', keys: ['S', 'Ctrl+K'] },
-  { key: 'sc.delete', keys: ['Del'] },
-  { key: 'sc.rippleDelete', keys: ['Shift+Del'] },
-  { key: 'sc.undoRedo', keys: ['Ctrl+Z', 'Ctrl+Shift+Z'] },
-  { key: 'sc.copyPaste', keys: ['Ctrl+C', 'Ctrl+X', 'Ctrl+V'] },
-  { key: 'sc.duplicate', keys: ['Ctrl+D'] },
-  { key: 'sc.selectAll', keys: ['Ctrl+A'] },
-  { key: 'sc.tools', keys: ['V', 'C'] },
-  { key: 'sc.moreTools', keys: ['A', 'B', 'R', 'Y', 'U'] },
-  { key: 'sc.nudge', keys: ['Alt+←', 'Alt+→'] },
-  { key: 'sc.freeze', keys: ['Shift+F'] },
-  { key: 'sc.reverse', keys: ['Ctrl+R'] },
-  { key: 'sc.insertDrop', keys: ['Ctrl'] },
-  { key: 'sc.marquee', keys: ['Drag'] },
-  { key: 'sc.snap', keys: ['N'] },
-  { key: 'sc.marker', keys: ['M'] },
-  { key: 'sc.zoom', keys: ['+', '−', 'Ctrl+Wheel'] },
-  { key: 'sc.save', keys: ['Ctrl+S', 'Ctrl+O', 'Ctrl+N'] },
-  { key: 'sc.import', keys: ['Ctrl+I'] },
-  { key: 'sc.export', keys: ['Ctrl+E'] },
-];
-
-function ShortcutsDialog({ onClose }: { onClose: () => void }) {
-  const t = useT();
-  return (
-    <Modal title={t('shortcuts.title')} onClose={onClose}>
-      <div className="shortcut-table">
-        {SHORTCUTS.map((s) => (
-          <div key={s.key} style={{ display: 'contents' }}>
-            <span>{t(s.key)}</span>
-            <span>
-              {s.keys.map((k) => (
-                <kbd key={k}>{k}</kbd>
-              ))}
-            </span>
-          </div>
-        ))}
-      </div>
-    </Modal>
-  );
-}

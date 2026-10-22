@@ -16,8 +16,10 @@ import {
   addSticker,
   addMediaClip,
   addTextClip,
+  addTextFromPreset,
   addTrack,
   applyFilter,
+  applyLookPreset,
   applyTransition,
   closeTrackGaps,
   copySelection,
@@ -29,9 +31,12 @@ import {
   openDialog,
   paste,
   removeMarker,
+  renameMarker,
+  updateMarker,
   removeTrack,
   reverseClip,
   selectForward,
+  splitAllTracks,
   splitAt,
   updateClip,
   zoomBy,
@@ -46,11 +51,24 @@ import { api } from '../../api';
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu';
 import { IconButton } from '../../ui/controls';
 import { Icon } from '../../ui/Icon';
-import { defaultAdjust, defaultChroma } from '../../core/project';
+import { defaultAdjust, defaultChroma, defaultWheels } from '../../core/project';
 import { ClipView, HEADER_W, PlayheadLine, RulerCanvas, RulerPlayhead, TrackHeader, trackHeight } from './parts';
 import { DND } from '../dnd';
+import { usePrefs } from '../../store/prefs';
+import { shortcutLabel, withShortcut } from '../../keymap';
+
+const sc = (id: string): string | undefined => shortcutLabel(id) || undefined;
 
 const SNAP_PX = 9;
+
+const MARKER_COLORS: { color: string; label: I18nKey }[] = [
+  { color: '#ffb300', label: 'marker.yellow' },
+  { color: '#ff5252', label: 'marker.red' },
+  { color: '#69f0ae', label: 'marker.green' },
+  { color: '#40c4ff', label: 'marker.blue' },
+  { color: '#e040fb', label: 'marker.purple' },
+  { color: '#ffffff', label: 'marker.white' },
+];
 
 function snapPoints(p: Project, exclude: Set<string>, playhead: number): number[] {
   const pts = [0, playhead];
@@ -82,15 +100,23 @@ function snapDelta(edges: number[], points: number[], threshold: number): { delt
   return { delta, at };
 }
 
-export const TOOLS: { id: Tool; icon: IconName; label: I18nKey }[] = [
-  { id: 'select', icon: 'cursor', label: 'tl.select' },
-  { id: 'forward', icon: 'forward', label: 'tool.forward' },
-  { id: 'ripple', icon: 'ripple', label: 'tool.ripple' },
-  { id: 'roll', icon: 'roll', label: 'tool.roll' },
-  { id: 'slip', icon: 'slip', label: 'tool.slip' },
-  { id: 'slide', icon: 'slide', label: 'tool.slide' },
-  { id: 'razor', icon: 'razor', label: 'tl.razor' },
+export const TOOLS: { id: Tool; icon: IconName; label: I18nKey; command: string }[] = [
+  { id: 'select', icon: 'cursor', label: 'tl.select', command: 'toolSelect' },
+  { id: 'forward', icon: 'forward', label: 'tool.forward', command: 'toolForward' },
+  { id: 'ripple', icon: 'ripple', label: 'tool.ripple', command: 'toolRipple' },
+  { id: 'roll', icon: 'roll', label: 'tool.roll', command: 'toolRoll' },
+  { id: 'slip', icon: 'slip', label: 'tool.slip', command: 'toolSlip' },
+  { id: 'slide', icon: 'slide', label: 'tool.slide', command: 'toolSlide' },
+  { id: 'razor', icon: 'razor', label: 'tl.razor', command: 'toolRazor' },
 ];
+
+/** Tooltip with the command's current shortcut after the name (before any ' — ' explanation). */
+function tip(text: string, command: string): string {
+  const k = shortcutLabel(command);
+  if (!k) return text;
+  const i = text.indexOf(' — ');
+  return i < 0 ? `${text} (${k})` : `${text.slice(0, i)} (${k})${text.slice(i)}`;
+}
 
 function kindIndex(p: Project, track: Track): number {
   return tracksOfKind(p, track.kind).findIndex((tr) => tr.id === track.id);
@@ -123,6 +149,8 @@ export function Timeline() {
   const snapLine = useEditor((s) => s.snapLine);
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
+  // Tooltips show the current shortcuts.
+  usePrefs((p) => p.keymap);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ w: 800, scrollLeft: 0 });
@@ -218,6 +246,8 @@ export function Timeline() {
 
   const applyMove = (d: Draft<Project>, st: Extract<DragState, { kind: 'move' }>, final: boolean, insert = false) => {
     const fps = st.base.settings.fps;
+    // Only clips of the dragged clip's kind change tracks; the others just shift in time.
+    const anchorKind = findClip(st.base, st.anchorId)?.track.kind;
     const moved: { clip: Draft<Clip>; target: Draft<Track> }[] = [];
     for (const id of st.ids) {
       const from = d.tracks.find((tr) => tr.clips.some((c) => c.id === id));
@@ -227,7 +257,8 @@ export function Timeline() {
       clip.start = Math.max(0, snapToFrame(clip.start + st.dt, fps));
       const kindTracks = d.tracks.filter((tr) => tr.kind === from.kind);
       const ki = kindTracks.indexOf(from);
-      const target = kindTracks[ki + st.trackDelta] ?? from;
+      const delta = from.kind === anchorKind ? st.trackDelta : 0;
+      const target = kindTracks[ki + delta] ?? from;
       moved.push({ clip, target });
     }
     const movedIds = new Set(st.ids);
@@ -321,7 +352,8 @@ export function Timeline() {
     if (s.tool === 'razor') {
       let tt = snapToFrame(timeAt(e.clientX), s.project.settings.fps);
       if (s.snapping && Math.abs(tt - s.playhead) * pps < SNAP_PX) tt = s.playhead;
-      splitAt(tt, [clip.id]);
+      if (e.shiftKey) splitAllTracks(tt);
+      else splitAt(tt, [clip.id]);
       return;
     }
 
@@ -476,6 +508,76 @@ export function Timeline() {
   };
 
   // -------------------------------------------------------------------------
+  // Markers: click seeks, drag moves, double-click renames.
+
+  const onMarkerDown = (e: React.PointerEvent, id: string) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const base = useEditor.getState().project;
+    const marker = base.markers.find((m) => m.id === id);
+    if (!marker) return;
+    player.pause();
+    player.seek(marker.time);
+    const x0 = e.clientX;
+    let moved = false;
+    let time = marker.time;
+    const place = (d: Draft<Project>) => {
+      const m = d.markers.find((x) => x.id === id);
+      if (m) m.time = time;
+    };
+    // The playhead follows the marker, so it is not a snap point here.
+    const points = snapPoints(base, new Set(), -1).concat(base.markers.filter((m) => m.id !== id).map((m) => m.time));
+    const onMove = (ev: PointerEvent) => {
+      if (!moved && Math.abs(ev.clientX - x0) < 3) return;
+      moved = true;
+      const s = useEditor.getState();
+      time = Math.max(0, marker.time + (ev.clientX - x0) / s.pxPerSec);
+      let at: number | null = null;
+      if (s.snapping && !ev.altKey) {
+        const snap = snapDelta([time], points, SNAP_PX / s.pxPerSec);
+        time += snap.delta;
+        at = snap.at;
+      }
+      time = snapToFrame(time, base.settings.fps);
+      previewEdit(place);
+      useEditor.setState({ snapLine: at });
+      player.seek(time);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (moved) {
+        commitPreview((d) => {
+          place(d);
+          d.markers.sort((a, b) => a.time - b.time);
+        });
+      }
+      useEditor.setState({ snapLine: null });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  const markerMenu = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const m = useEditor.getState().project.markers.find((x) => x.id === id);
+    if (!m) return;
+    openContextMenu(e.clientX, e.clientY, [
+      { label: `${t('marker.rename')}…`, onClick: () => void renameMarker(id) },
+      { separator: true },
+      ...MARKER_COLORS.map((c) => ({
+        label: t(c.label),
+        swatch: c.color,
+        checked: m.color.toLowerCase() === c.color,
+        onClick: () => updateMarker(id, { color: c.color }),
+      })),
+      { separator: true },
+      { label: t('tl.deleteMarker'), onClick: () => removeMarker(id) },
+    ]);
+  };
+
+  // -------------------------------------------------------------------------
   // Context menus
 
   const clipMenu = (e: React.MouseEvent, clip: Clip) => {
@@ -487,16 +589,16 @@ export function Timeline() {
     const playheadInside = s.playhead > clip.start && s.playhead < clipEnd(clip);
     const hasAudio = clip.type === 'video' && !!(clip.mediaId && media.get(clip.mediaId)?.hasAudio);
     const items: MenuEntry[] = [
-      { label: t('ctx.split'), shortcut: 'S', onClick: () => splitAt(playheadInside ? s.playhead : at, [clip.id]) },
-      { label: t('ctx.copy'), shortcut: 'Ctrl+C', onClick: copySelection },
-      { label: t('ctx.cut'), shortcut: 'Ctrl+X', onClick: cutSelection },
-      { label: t('ctx.paste'), shortcut: 'Ctrl+V', onClick: () => paste(at), disabled: !s.clipboard },
-      { label: t('ctx.duplicate'), shortcut: 'Ctrl+D', onClick: duplicateSelection },
-      { label: `${t('menu.pasteAttrs')}…`, shortcut: 'Ctrl+Alt+V', onClick: () => openDialog('paste-attrs'), disabled: !s.clipboard },
+      { label: t('ctx.split'), shortcut: sc('split'), onClick: () => splitAt(playheadInside ? s.playhead : at, [clip.id]) },
+      { label: t('ctx.copy'), shortcut: sc('copy'), onClick: copySelection },
+      { label: t('ctx.cut'), shortcut: sc('cut'), onClick: cutSelection },
+      { label: t('ctx.paste'), shortcut: sc('paste'), onClick: () => paste(at), disabled: !s.clipboard },
+      { label: t('ctx.duplicate'), shortcut: sc('duplicate'), onClick: duplicateSelection },
+      { label: `${t('menu.pasteAttrs')}…`, shortcut: sc('pasteAttrs'), onClick: () => openDialog('paste-attrs'), disabled: !s.clipboard },
     ];
-    if (hasAudio) items.push({ label: t('ctx.detachAudio'), onClick: () => detachAudio(clip.id) });
-    if (clip.type === 'video') items.push({ label: t('tool.freeze'), shortcut: 'Shift+F', onClick: () => void freezeFrame() });
-    if (clip.type === 'video' || clip.type === 'audio') items.push({ label: t('tool.reverse'), shortcut: 'Ctrl+R', onClick: () => void reverseClip(clip.id) });
+    if (hasAudio) items.push({ label: t('ctx.detachAudio'), shortcut: sc('detachAudio'), onClick: () => detachAudio(clip.id) });
+    if (clip.type === 'video') items.push({ label: t('tool.freeze'), shortcut: sc('freeze'), onClick: () => void freezeFrame() });
+    if (clip.type === 'video' || clip.type === 'audio') items.push({ label: t('tool.reverse'), shortcut: sc('reverse'), onClick: () => void reverseClip(clip.id) });
     if (clip.type === 'video') {
       items.push(
         { label: `${t('enh.stabilize')}…`, onClick: () => openDialog('stabilize') },
@@ -522,15 +624,20 @@ export function Timeline() {
         onClick: () =>
           updateClip(clip.id, (c) => {
             c.adjust = defaultAdjust();
+            c.wheels = defaultWheels();
+            c.curves = null;
+            c.hsl = null;
+            c.lut = null;
             c.filter = { id: 'none', amount: 100 };
             c.chroma = defaultChroma();
+            c.effects = [];
           }),
       });
     }
     items.push(
       { separator: true },
-      { label: t('ctx.delete'), shortcut: 'Del', onClick: () => deleteSelection(false) },
-      { label: t('ctx.rippleDelete'), shortcut: 'Shift+Del', onClick: () => deleteSelection(true) },
+      { label: t('ctx.delete'), shortcut: sc('delete'), onClick: () => deleteSelection(false) },
+      { label: t('ctx.rippleDelete'), shortcut: sc('rippleDelete'), onClick: () => deleteSelection(true) },
     );
     openContextMenu(e.clientX, e.clientY, items);
   };
@@ -540,7 +647,7 @@ export function Timeline() {
     const at = timeAt(e.clientX);
     const s = useEditor.getState();
     openContextMenu(e.clientX, e.clientY, [
-      { label: t('ctx.paste'), shortcut: 'Ctrl+V', onClick: () => paste(at), disabled: !s.clipboard },
+      { label: t('ctx.paste'), shortcut: sc('paste'), onClick: () => paste(at), disabled: !s.clipboard },
       { label: t('tl.marker'), onClick: () => addMarker(at) },
       { separator: true },
       { label: t('tl.addVideoTrack'), onClick: () => addTrack('video') },
@@ -604,14 +711,17 @@ export function Timeline() {
       }
       return;
     }
+    const textOpts = track?.kind === 'video' ? opts : { time, newTrack: !track };
     if (mediaId) addMediaClip(mediaId, opts);
-    else if (textId) addTextClip(textId, track?.kind === 'video' ? opts : { time, newTrack: !track });
+    else if (textId.startsWith('my:')) addTextFromPreset(textId.slice(3), textOpts);
+    else if (textId) addTextClip(textId, textOpts);
     else if (color) addColorClip(color, track?.kind === 'video' ? opts : { time, newTrack: !track });
     else if (transition || filter) {
       if (!track) return;
       const target = clipAtTime(track, timeAt(e.clientX));
       if (!target) return;
       if (transition) applyTransition(target.id, transition);
+      else if (filter.startsWith('my:')) void applyLookPreset([target.id], filter.slice(3));
       else applyFilter([target.id], filter);
       select([target.id]);
     } else if (dt.files.length > 0) {
@@ -650,23 +760,23 @@ export function Timeline() {
     <div className="timeline">
       <div className="tl-toolbar">
         {TOOLS.map((x) => (
-          <IconButton key={x.id} icon={x.icon} title={t(x.label)} active={tool === x.id} onClick={() => useEditor.setState({ tool: x.id })} />
+          <IconButton key={x.id} icon={x.icon} title={tip(t(x.label), x.command)} active={tool === x.id} onClick={() => useEditor.setState({ tool: x.id })} />
         ))}
         <div className="sep" />
-        <IconButton icon="undo" title={`${t('menu.undo')} (Ctrl+Z)`} disabled={!canUndo} onClick={undo} />
-        <IconButton icon="redo" title={`${t('menu.redo')} (Ctrl+Shift+Z)`} disabled={!canRedo} onClick={redo} />
+        <IconButton icon="undo" title={withShortcut(t('menu.undo'), 'undo')} disabled={!canUndo} onClick={undo} />
+        <IconButton icon="redo" title={withShortcut(t('menu.redo'), 'redo')} disabled={!canRedo} onClick={redo} />
         <div className="sep" />
-        <IconButton icon="scissors" title={t('tl.split')} onClick={() => splitAt(s().playhead)} />
-        <IconButton icon="trash" title={t('tl.delete')} disabled={selection.length === 0} onClick={() => deleteSelection(false)} />
-        <IconButton icon="marker" title={t('tl.marker')} onClick={() => addMarker()} />
+        <IconButton icon="scissors" title={withShortcut(t('tl.split'), 'split')} onClick={() => splitAt(s().playhead)} />
+        <IconButton icon="trash" title={withShortcut(t('tl.delete'), 'delete')} disabled={selection.length === 0} onClick={() => deleteSelection(false)} />
+        <IconButton icon="marker" title={withShortcut(t('tl.marker'), 'marker')} onClick={() => addMarker()} />
         <IconButton icon="mic" title={t('vo.title')} onClick={() => openDialog('voiceover')} />
         <div className="sep" />
-        <IconButton icon="magnet" title={t('tl.snap')} active={snapping} onClick={() => useEditor.setState({ snapping: !snapping })} />
+        <IconButton icon="magnet" title={withShortcut(t('tl.snap'), 'snapping')} active={snapping} onClick={() => useEditor.setState({ snapping: !snapping })} />
         <div className="spacer" />
         <IconButton icon="film" title={t('tl.addVideoTrack')} onClick={() => addTrack('video')} />
         <IconButton icon="music" title={t('tl.addAudioTrack')} onClick={() => addTrack('audio')} />
         <div className="sep" />
-        <IconButton icon="minus" title={t('tl.zoomOut')} onClick={() => zoomBy(1 / 1.4)} />
+        <IconButton icon="minus" title={withShortcut(t('tl.zoomOut'), 'zoomOut')} onClick={() => zoomBy(1 / 1.4)} />
         <input
           type="range"
           className="tl-zoom"
@@ -676,8 +786,8 @@ export function Timeline() {
           value={(Math.log(pps / 2) / Math.log(600)) * 100}
           onChange={(e) => useEditor.setState({ pxPerSec: 2 * Math.pow(600, Number(e.target.value) / 100) })}
         />
-        <IconButton icon="plus" title={t('tl.zoomIn')} onClick={() => zoomBy(1.4)} />
-        <IconButton icon="fit" title={t('tl.fit')} onClick={() => zoomToFit(view.w - HEADER_W)} />
+        <IconButton icon="plus" title={withShortcut(t('tl.zoomIn'), 'zoomIn')} onClick={() => zoomBy(1.4)} />
+        <IconButton icon="fit" title={withShortcut(t('tl.fit'), 'zoomFit')} onClick={() => zoomToFit(view.w - HEADER_W)} />
       </div>
       <div
         className={`tl-scroll tool-${tool}`}
@@ -705,20 +815,21 @@ export function Timeline() {
                 />
               )}
               {project.markers.map((m) => (
-                <div
-                  key={m.id}
-                  className="marker"
-                  style={{ left: m.time * pps, background: m.color }}
-                  title={t('tl.deleteMarker')}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    player.seek(m.time);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    openContextMenu(e.clientX, e.clientY, [{ label: t('tl.deleteMarker'), onClick: () => removeMarker(m.id) }]);
-                  }}
-                />
+                <div key={m.id} style={{ display: 'contents' }}>
+                  <div
+                    className="marker"
+                    style={{ left: m.time * pps, background: m.color }}
+                    title={m.label || t('marker.hint')}
+                    onPointerDown={(e) => onMarkerDown(e, m.id)}
+                    onDoubleClick={() => void renameMarker(m.id)}
+                    onContextMenu={(e) => markerMenu(e, m.id)}
+                  />
+                  {m.label && (
+                    <span className="marker-label" style={{ left: m.time * pps + 7, color: m.color }}>
+                      {m.label}
+                    </span>
+                  )}
+                </div>
               ))}
             </div>
           </div>

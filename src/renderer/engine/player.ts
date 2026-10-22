@@ -28,6 +28,18 @@ interface MediaEl {
 }
 
 const PRELOAD_AHEAD = 2;
+
+/**
+ * Where playback stops: the end of the project, or with looping on the in/out
+ * range (whole project when no marks are set) that it repeats.
+ */
+function playRange(p: Project): { start: number; end: number; looping: boolean } {
+  const dur = projectDuration(p);
+  if (!usePrefs.getState().loopPlayback) return { start: 0, end: dur, looping: false };
+  const start = Math.max(0, p.markIn ?? 0);
+  const end = Math.min(dur, p.markOut ?? dur);
+  return end > start ? { start, end, looping: true } : { start: 0, end: dur, looping: true };
+}
 const MAX_IDLE_ELEMENTS = 8;
 
 class Player implements SourceProvider {
@@ -109,9 +121,10 @@ class Player implements SourceProvider {
     if (s.playing) return;
     const ctx = this.ensureAudio();
     void ctx.resume();
-    const dur = projectDuration(s.project);
+    const range = playRange(s.project);
     let t = s.playhead;
-    if (dur > 0 && t >= dur - 1e-3) t = 0;
+    if (range.end > 0 && t >= range.end - 1e-3) t = range.start;
+    else if (range.looping && t < range.start) t = range.start;
     this.startTime = t;
     this.startWall = performance.now();
     useEditor.setState({ playing: true, playhead: t });
@@ -165,13 +178,18 @@ class Player implements SourceProvider {
   private tick = (): void => {
     const s = useEditor.getState();
     if (!s.playing) return;
-    const dur = projectDuration(s.project);
+    const range = playRange(s.project);
     let t = this.startTime + (performance.now() - this.startWall) / 1000;
-    if (t >= dur) {
-      t = dur;
-      setPlayhead(t);
-      this.pause();
-      return;
+    if (t >= range.end) {
+      if (range.looping && range.end - range.start > 0.05) {
+        // Start over: the media elements re-sync to the new time on the next frame.
+        this.startTime = t = range.start;
+        this.startWall = performance.now();
+      } else {
+        setPlayhead(range.end);
+        this.pause();
+        return;
+      }
     }
     setPlayhead(t);
     this.renderFrame(t, true);

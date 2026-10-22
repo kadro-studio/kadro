@@ -1,6 +1,6 @@
 import { api } from '../api';
 import { useFx } from '../engine/fx/registry';
-import { fxName } from '../engine/fx/types';
+import { fxDescription, fxName } from '../engine/fx/types';
 import { useLang, useT } from '../i18n';
 import { installMods, installModsViaDialog, uninstallMod, useMods, type ModEntry } from '../store/mods';
 import { Icon } from '../ui/Icon';
@@ -24,15 +24,17 @@ function ModRow({ entry, action }: { entry: ModEntry; action: React.ReactNode })
   const lang = useLang((s) => s.lang);
   const compileError = useFx((s) => (entry.def ? s.errors[entry.def.id] : undefined));
   const def = entry.def;
+  const description = def ? fxDescription(def, lang) : undefined;
+  const kind = def?.kind === 'effect' ? t('mods.effect') : def?.kind === 'transition' ? t('mods.transition') : t('mods.generator');
   return (
     <div className="mod-row">
-      <Icon name={def?.kind === 'transition' ? 'transition' : 'wand'} size={20} />
+      <Icon name={def?.kind === 'transition' ? 'transition' : def?.kind === 'generator' ? 'shapes' : 'wand'} size={20} />
       <div className="mod-info">
         <div className="mod-name">{def ? fxName(def, lang) : entry.fileName}</div>
         <div className="mod-meta">
-          {def ? `${def.kind === 'effect' ? t('mods.effect') : t('mods.transition')}${def.author ? ` · ${def.author}` : ''}${def.version ? ` · v${def.version}` : ''}` : entry.fileName}
+          {def ? `${kind}${def.author ? ` · ${def.author}` : ''}${def.version ? ` · v${def.version}` : ''}` : entry.fileName}
         </div>
-        {def?.description && <div className="mod-meta">{def.description}</div>}
+        {description && <div className="mod-meta">{description}</div>}
         {(entry.error || compileError) && <div className="mod-error">{entry.error ?? compileError}</div>}
       </div>
       {action}

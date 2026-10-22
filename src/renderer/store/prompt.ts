@@ -17,6 +17,8 @@ export interface PromptSpec {
   buttons: PromptButton[];
   /** Answer for Esc, the close button and a click outside. */
   cancelId: string;
+  /** Shows a text field; its value is passed to answer(). */
+  input?: { value: string; placeholder?: string };
 }
 
 interface PromptState {
@@ -33,9 +35,12 @@ export function ask(spec: PromptSpec): Promise<string> {
   });
 }
 
-export function answer(id: string): void {
+let answeredText = '';
+
+export function answer(id: string, text = ''): void {
   const cur = usePrompt.getState().current;
   if (!cur) return;
+  answeredText = text;
   usePrompt.setState({ current: null });
   cur.resolve(id);
 }
@@ -53,4 +58,20 @@ export async function confirmAction(opts: { title: string; message?: string; con
     cancelId: 'cancel',
   });
   return id === 'ok';
+}
+
+/** Asks for a line of text; resolves null when cancelled. */
+export async function askText(opts: { title: string; message?: string; value: string; placeholder?: string; ok: string; cancel: string }): Promise<string | null> {
+  const id = await ask({
+    title: opts.title,
+    message: opts.message,
+    icon: 'question',
+    input: { value: opts.value, placeholder: opts.placeholder },
+    buttons: [
+      { id: 'cancel', label: opts.cancel },
+      { id: 'ok', label: opts.ok, kind: 'primary' },
+    ],
+    cancelId: 'cancel',
+  });
+  return id === 'ok' ? answeredText : null;
 }

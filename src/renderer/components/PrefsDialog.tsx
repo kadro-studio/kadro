@@ -8,11 +8,16 @@ import { setLang, useLang, useT, type I18nKey } from '../i18n';
 import { setPrefs, setTheme, usePrefs } from '../store/prefs';
 import { ACCENTS, SURFACES, type Corners } from '../store/theme';
 import { Modal } from './Modal';
+import { openDialog } from '../store/actions';
+import { exportPresetsFile, importPresetsFile, usePresets } from '../store/presets';
+import { addUserFonts, removeUserFont, useUserFonts } from '../store/userFonts';
+import { Icon } from '../ui/Icon';
 
-type Tab = 'general' | 'appearance' | 'performance' | 'library' | 'storage';
+type Tab = 'general' | 'appearance' | 'mine' | 'performance' | 'library' | 'storage';
 const TABS: { id: Tab; label: I18nKey }[] = [
   { id: 'general', label: 'prefs.tab.general' },
   { id: 'appearance', label: 'prefs.tab.appearance' },
+  { id: 'mine', label: 'prefs.tab.mine' },
   { id: 'performance', label: 'prefs.tab.performance' },
   { id: 'library', label: 'prefs.tab.library' },
   { id: 'storage', label: 'prefs.tab.storage' },
@@ -37,6 +42,7 @@ export function PrefsDialog({ onClose }: { onClose: () => void }) {
         <div className="prefs-page">
           {tab === 'general' && <GeneralPage />}
           {tab === 'appearance' && <AppearancePage />}
+          {tab === 'mine' && <MinePage />}
           {tab === 'performance' && <PerformancePage />}
           {tab === 'library' && <LibraryPage />}
           {tab === 'storage' && <StoragePage />}
@@ -87,6 +93,63 @@ function GeneralPage() {
         <span className="field-label">{t('prefs.followPlayhead')}</span>
         <input type="checkbox" className="switch" checked={follow} onChange={(e) => setPrefs({ followPlayhead: e.target.checked })} />
       </label>
+    </>
+  );
+}
+
+/** The user's own things: presets, fonts and keyboard shortcuts. */
+function MinePage() {
+  const t = useT();
+  const presets = usePresets((p) => p);
+  const fonts = useUserFonts((s) => s.fonts);
+  const customKeys = usePrefs((p) => Object.keys(p.keymap).length);
+  return (
+    <>
+      <div className="mods-section-title">{t('prefs.mine.presets')}</div>
+      <p className="panel-hint" style={{ margin: 0 }}>
+        {t('prefs.mine.presetsCount', { text: presets.text.length, looks: presets.looks.length, exports: presets.exports.length })}
+      </p>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn" onClick={() => void exportPresetsFile()}>
+          <Icon name="export" size={16} />
+          {t('prefs.mine.exportPresets')}
+        </button>
+        <button className="btn" onClick={() => void importPresetsFile()}>
+          <Icon name="import" size={16} />
+          {t('prefs.mine.importPresets')}
+        </button>
+      </div>
+      <div className="mods-section-title">{t('prefs.mine.fonts')}</div>
+      {fonts.length === 0 && <p className="panel-hint" style={{ margin: 0 }}>{t('prefs.mine.noFonts')}</p>}
+      {fonts.map((f) => (
+        <div key={f.family} className="storage-row">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="storage-title" style={{ fontFamily: `"${f.family}"`, fontSize: 18 }}>{f.family}</div>
+            <div className="panel-hint" style={{ margin: 0 }}>{f.files.join(', ')}</div>
+          </div>
+          <button className="btn small danger" onClick={() => void removeUserFont(f.family)}>
+            {t('common.delete')}
+          </button>
+        </div>
+      ))}
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn" onClick={() => void addUserFonts()}>
+          <Icon name="plus" size={16} />
+          {t('fonts.add')}
+        </button>
+        <button className="btn" onClick={() => api.openFontsFolder()}>
+          <Icon name="folder" size={16} />
+          {t('fonts.folder')}
+        </button>
+      </div>
+      <div className="mods-section-title">{t('shortcuts.title')}</div>
+      <p className="panel-hint" style={{ margin: 0 }}>{customKeys ? t('prefs.mine.keysCustom', { n: customKeys }) : t('prefs.mine.keysDefault')}</p>
+      <div className="row">
+        <button className="btn" onClick={() => openDialog('shortcuts')}>
+          <Icon name="keyboard" size={16} />
+          {t('prefs.mine.editKeys')}
+        </button>
+      </div>
     </>
   );
 }

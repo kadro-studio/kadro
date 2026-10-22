@@ -9,8 +9,10 @@ import { t } from '../i18n';
 import { edit, setRuntime, toast, useEditor } from './editor';
 import { usePrefs } from './prefs';
 import { installMods } from './mods';
+import { addUserFonts } from './userFonts';
 import { confirmAction } from './prompt';
 
+const FONT_FILE = /\.(ttf|otf|woff2?)$/i;
 const PLAYABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1', 'theora']);
 const PLAYABLE_AUDIO = new Set(['aac', 'mp3', 'opus', 'vorbis', 'flac', 'pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le', 'pcm_u8']);
 
@@ -151,7 +153,10 @@ export async function importFiles(allPaths: string[]): Promise<MediaAsset[]> {
   // Mod files dropped anywhere are installed rather than imported as media.
   const modPaths = allPaths.filter((p) => p.toLowerCase().endsWith('.vrmod'));
   if (modPaths.length) void installMods(modPaths);
-  const paths = allPaths.filter((p) => !p.toLowerCase().endsWith('.vrmod'));
+  // So are font files: they become available in the font picker.
+  const fontPaths = allPaths.filter((p) => FONT_FILE.test(p));
+  if (fontPaths.length) void addUserFonts(fontPaths);
+  const paths = allPaths.filter((p) => !p.toLowerCase().endsWith('.vrmod') && !FONT_FILE.test(p));
   const result: MediaAsset[] = [];
   for (const path of paths) {
     const existing = useEditor.getState().project.media.find((m) => samePath(m.path, path));

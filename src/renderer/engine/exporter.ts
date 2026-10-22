@@ -31,6 +31,10 @@ export interface ExportSettings {
   height: number;
   fps: number;
   quality: ExportQuality;
+  /** Target video bitrate in Mbit/s instead of the quality level. */
+  bitrate?: number;
+  /** Audio bitrate in kbit/s. */
+  audioBitrate?: number;
   encoder?: EncoderChoice;
   /** Export only this part of the timeline (seconds). */
   range?: { start: number; end: number };
@@ -259,6 +263,8 @@ export async function runExport(
     fps,
     duration,
     quality: settings.quality,
+    bitrate: settings.bitrate,
+    audioBitrate: settings.audioBitrate,
     audio: trimAudioPlan(audioPlan(project, media), rangeStart, rangeEnd),
     pixelFormat: readFormat,
     encoder: settings.encoder ?? 'auto',

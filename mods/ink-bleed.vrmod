@@ -7,6 +7,8 @@
   "author": "Kadro",
   "version": "1.0.0",
   "description": "The next clip spreads like ink soaking into paper.",
+  "descriptionRu": "Следующий клип растекается, как чернила по бумаге.",
+  "descriptionUk": "Наступний кліп розтікається, як чорнило по папері.",
   "params": [
     {
       "id": "softness",

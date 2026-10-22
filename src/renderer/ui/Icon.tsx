@@ -70,6 +70,7 @@ const PATHS = {
   scopes: 'M3 4h18v16H3zM3 15l4-5 3 3 4-6 3 4 4-3',
   globe: 'M12 21a9 9 0 100-18 9 9 0 000 18zM3.5 9h17M3.5 15h17M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
   playSmall: 'M8 5.5v13l10-6.5z',
+  loop: 'M17 2.5l3 3-3 3M4 11V9.5a4 4 0 014-4h12M7 21.5l-3-3 3-3M20 13v1.5a4 4 0 01-4 4H4',
   pauseSmall: 'M8 5h3v14H8zM13 5h3v14h-3z',
 } satisfies Record<string, string>;
 

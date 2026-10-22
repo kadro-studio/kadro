@@ -1,7 +1,10 @@
 // Thumbnails for effect, transition and filter cards: the real shader or
 // colour preset applied to sample photos, so mods get previews for free.
 import { effectiveAdjust } from '../../core/effects';
-import { makeClip, makeTrack } from '../../core/project';
+import { createProject, makeClip, makeTrack } from '../../core/project';
+import type { Clip } from '../../core/types';
+import { buildItems } from '../items';
+import { loadLut } from '../lut';
 import type { LayerPlan } from '../../core/scene';
 import { Compositor, hexToRgb, type DrawItem } from '../gl';
 import { loadSample, sampleIfLoaded, type SampleId } from '../samples';
@@ -153,6 +156,33 @@ export async function filterThumbnail(filterId: string): Promise<string | null> 
     return url;
   } catch (e) {
     console.warn('Filter thumbnail failed', filterId, e);
+    return null;
+  }
+}
+
+/**
+ * A saved look (colour, curves, LUT and effects of a clip) applied to the
+ * street photo through the same item builder as the preview.
+ */
+export async function lookThumbnail(look: Pick<Clip, 'adjust' | 'wheels' | 'curves' | 'hsl' | 'filter' | 'lut' | 'effects'>): Promise<string | null> {
+  const key = `look:${JSON.stringify(look)}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  try {
+    const img = await loadSample('street');
+    if (look.lut) await loadLut(look.lut.path);
+    const p = plan('look', 0.6);
+    Object.assign(p.clip, structuredClone(look));
+    const project = createProject();
+    project.settings = { ...project.settings, width: W, height: H };
+    const source = { key: 'sample:street', kind: 'element' as const, el: img, width: img.naturalWidth, height: img.naturalHeight, version: 1 };
+    const c = compositor();
+    c.render(buildItems(project, [p], new Map(), { source: () => source }, 1, 'thumb:'), { width: W, height: H, background: '#000000' });
+    const url = c.canvas.toDataURL('image/jpeg', 0.86);
+    cache.set(key, url);
+    return url;
+  } catch (e) {
+    console.warn('Look thumbnail failed', e);
     return null;
   }
 }

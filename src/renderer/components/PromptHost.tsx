@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { answer, usePrompt } from '../store/prompt';
 import { Icon, type IconName } from '../ui/Icon';
 
@@ -8,10 +8,12 @@ const ICONS: Record<string, IconName> = { warning: 'alert', danger: 'alert', que
 export function PromptHost() {
   const p = usePrompt((s) => s.current);
   const primary = useRef<HTMLButtonElement>(null);
+  const [text, setText] = useState('');
 
   useEffect(() => {
     if (!p) return;
-    primary.current?.focus();
+    setText(p.input?.value ?? '');
+    if (!p.input) primary.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -35,6 +37,17 @@ export function PromptHost() {
           <div className="prompt-text">
             <h3 id="prompt-title">{p.title}</h3>
             {p.message && <p>{p.message}</p>}
+            {p.input && (
+              <input
+                className="text-input prompt-input"
+                autoFocus
+                value={text}
+                placeholder={p.input.placeholder}
+                onChange={(e) => setText(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onKeyDown={(e) => e.key === 'Enter' && answer(main.id, text)}
+              />
+            )}
           </div>
         </div>
         <div className="prompt-buttons">
@@ -43,7 +56,7 @@ export function PromptHost() {
               key={b.id}
               ref={b === main ? primary : undefined}
               className={`btn ${b.kind === 'primary' ? 'primary' : b.kind === 'danger' ? 'danger' : ''}`}
-              onClick={() => answer(b.id)}
+              onClick={() => answer(b.id, text)}
             >
               {b.label}
             </button>

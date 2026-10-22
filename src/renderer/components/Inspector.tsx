@@ -20,6 +20,7 @@ import { CurvesSection, HslSection } from './ColorTools';
 import { FontPicker } from '../ui/FontPicker';
 import { isVariableFont, textWeight } from '../engine/fonts';
 import { MAX_VOLUME } from '../store/enhance';
+import { saveLookPreset, saveTextPreset } from '../store/presets';
 import {
   ColorField,
   ColorWheelField,
@@ -419,7 +420,7 @@ function WheelsSection({ clip, set }: { clip: Clip; set: Setter }) {
 function ShapeSection({ clip, set }: { clip: Clip; set: Setter }) {
   const t = useT();
   const s = clip.shape!;
-  const kinds: ShapeKind[] = ['rect', 'ellipse', 'triangle', 'star', 'arrow', 'line', 'bubble'];
+  const kinds: ShapeKind[] = ['rect', 'ellipse', 'triangle', 'star', 'arrow', 'line', 'bubble', 'pill', 'heart', 'burst', 'hexagon', 'ring', 'check', 'cross'];
   const setShape = (recipe: (x: Draft<ShapeStyle>) => void, final: boolean) =>
     set((c) => {
       if (c.shape) recipe(c.shape);
@@ -480,7 +481,11 @@ function MaskSection({ clip, set }: { clip: Clip; set: Setter }) {
 function FilterSection({ clip, set }: { clip: Clip; set: Setter }) {
   const t = useT();
   return (
-    <Section id="filter" title={t('sec.filter')}>
+    <Section
+      id="filter"
+      title={t('sec.filter')}
+      actions={<IconButton icon="save" size={14} className="small" title={t('presets.saveLookHint')} onClick={() => void saveLookPreset(clip)} />}
+    >
       <SelectField
         label={t('p.preset')}
         value={clip.filter.id}
@@ -798,7 +803,14 @@ function TextSection({ clip, set }: { clip: Clip; set: Setter }) {
       x.bold = w >= 600;
     }, final);
   return (
-    <Section id="text" title={t('sec.text')}>
+    <Section
+      id="text"
+      title={t('sec.text')}
+      actions={
+        <IconButton icon="save" size={14} className="small" title={t('presets.saveText')}
+          onClick={() => void saveTextPreset(clip, useEditor.getState().project.settings)} />
+      }
+    >
       <TextField label={t('p.content')} multiline value={s.content} onChange={(v, f) => setText((x) => void (x.content = v), f)} />
       <FontPicker label={t('p.font')} value={s.fontFamily} onChange={(v) => setText((x) => void (x.fontFamily = v), true)} />
       <SliderField label={t('p.size')} value={s.fontSize} min={6} max={1000} softMax={400} unit="px"

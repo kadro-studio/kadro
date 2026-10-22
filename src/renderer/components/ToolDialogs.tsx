@@ -6,6 +6,7 @@ import { clipHasAudio } from '../core/scene';
 import { formatTimecode, snapToFrame } from '../core/time';
 import { player } from '../engine/player';
 import { useT, type I18nKey } from '../i18n';
+import { shortcutLabel } from '../keymap';
 import { addMediaClip, ATTR_GROUPS, pasteAttributes, type AttrGroup } from '../store/actions';
 import { denoiseClip, normalizeLoudness, stabilizeClip } from '../store/enhance';
 import { duckUnderVoice, markBeats, splitAtScenes } from '../store/tools';
@@ -181,7 +182,7 @@ export function PasteAttributesDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <p className="panel-hint" style={{ margin: 0 }}>
-        {source ? t('attrs.hint', { name: source.name, n: count }) : t('attrs.copyFirst')}
+        {source ? t('attrs.hint', { name: source.name, n: count }) : t('attrs.copyFirst', { key: shortcutLabel('copy') || '—' })}
       </p>
       {ATTR_GROUPS.map((g) => (
         <label key={g} className="field toggle-field">

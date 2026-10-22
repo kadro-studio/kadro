@@ -7,6 +7,7 @@ import * as render from './render';
 import { ffmpegPath, ffmpegVersion, hwEncoders } from './ffmpeg';
 import * as autosave from './autosave';
 import * as mods from './mods';
+import * as fonts from './fonts';
 import * as library from './library';
 import * as storage from './storage';
 import { APP_NAME, TITLE_BAR_COLOR, TITLE_BAR_HEIGHT, TITLE_BAR_SYMBOLS } from '../shared/brand';
@@ -272,6 +273,18 @@ function registerIpc(): void {
     const r = await dialog.showOpenDialog(win!, {
       properties: ['openFile', 'multiSelections'],
       filters: [{ name: `${APP_NAME} mod`, extensions: ['vrmod'] }],
+    });
+    return r.canceled ? [] : r.filePaths;
+  });
+  ipcMain.handle('fonts:list', () => fonts.listFonts());
+  ipcMain.handle('fonts:read', (_e, file: string) => fonts.readFont(file));
+  ipcMain.handle('fonts:install', (_e, paths: string[]) => fonts.installFonts(paths));
+  ipcMain.handle('fonts:remove', (_e, file: string) => fonts.removeFont(file));
+  ipcMain.on('fonts:folder', () => fonts.openFontsFolder());
+  ipcMain.handle('dialog:openFonts', async () => {
+    const r = await dialog.showOpenDialog(win!, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
     });
     return r.canceled ? [] : r.filePaths;
   });

@@ -11,6 +11,8 @@ export type MenuEntry =
       onClick: () => void;
       disabled?: boolean;
       checked?: boolean;
+      /** Colour chip shown before the label. */
+      swatch?: string;
     };
 
 interface MenuState {
@@ -45,6 +47,7 @@ export function MenuItems({ items, onDone }: { items: MenuEntry[]; onDone: () =>
             }}
           >
             {showChecks && <span className="check">{item.checked ? <Icon name="check" size={14} /> : null}</span>}
+            {item.swatch && <span className="menu-swatch" style={{ background: item.swatch }} />}
             <span>{item.label}</span>
             {item.shortcut && <span className="shortcut">{item.shortcut}</span>}
           </button>

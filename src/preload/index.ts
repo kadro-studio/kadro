@@ -59,6 +59,12 @@ const api: VrApi = {
   removeMod: (file) => ipcRenderer.invoke('mods:remove', file),
   openModsFolder: () => ipcRenderer.send('mods:folder'),
   openModsDialog: () => ipcRenderer.invoke('dialog:openMods'),
+  listFonts: () => ipcRenderer.invoke('fonts:list'),
+  readFont: (file) => ipcRenderer.invoke('fonts:read', file),
+  installFonts: (paths) => ipcRenderer.invoke('fonts:install', paths),
+  removeFont: (file) => ipcRenderer.invoke('fonts:remove', file),
+  openFontsFolder: () => ipcRenderer.send('fonts:folder'),
+  openFontsDialog: () => ipcRenderer.invoke('dialog:openFonts'),
 
   setDirty: (dirty, prompt) => ipcRenderer.send('app:setDirty', dirty, prompt),
   setTitle: (title) => ipcRenderer.send('app:setTitle', title),

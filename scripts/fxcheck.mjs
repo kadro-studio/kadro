@@ -14,7 +14,7 @@ const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.en
 const win = await app.firstWindow();
 win.on('pageerror', (e) => console.log('[pageerror]', e.message));
 await win.waitForSelector('.timeline');
-await win.click('.rail-btn:has-text("Mods"), .rail-btn:has-text("Моды")');
+await win.click('.rail-btn:has-text("Mods"), .rail-btn:has-text("Моды"), .rail-btn:has-text("Моди")');
 await win.waitForTimeout(1500);
 
 const result = await win.evaluate(async () => {

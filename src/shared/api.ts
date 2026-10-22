@@ -202,6 +202,10 @@ export interface ExportSpec {
   fps: number;
   duration: number;
   quality: ExportQuality;
+  /** Target video bitrate in Mbit/s; overrides the quality level. */
+  bitrate?: number;
+  /** Audio bitrate in kbit/s (default per format). */
+  audioBitrate?: number;
   audio: AudioSegment[];
   /** Layout of frames sent with exportFrame: GPU-packed YUV, or bottom-up RGBA. */
   pixelFormat: 'yuv420p' | 'rgba';
@@ -250,6 +254,12 @@ export interface AutosaveData {
   json: string;
   meta: AutosaveMeta;
   savedAt: number;
+}
+
+/** A font file in the user's fonts folder. */
+export interface FontFile {
+  file: string;
+  size: number;
 }
 
 export interface ModFile {
@@ -326,6 +336,14 @@ export interface VrApi {
   removeMod(file: string): Promise<void>;
   openModsFolder(): void;
   openModsDialog(): Promise<string[]>;
+
+  listFonts(): Promise<FontFile[]>;
+  readFont(file: string): Promise<Uint8Array>;
+  /** Copies font files into the profile; returns the added file names. */
+  installFonts(paths: string[]): Promise<string[]>;
+  removeFont(file: string): Promise<void>;
+  openFontsFolder(): void;
+  openFontsDialog(): Promise<string[]>;
 
   setDirty(dirty: boolean, prompt: ClosePrompt): void;
   setTitle(title: string): void;

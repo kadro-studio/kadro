@@ -7,6 +7,8 @@
   "author": "Kadro",
   "version": "1.0.0",
   "description": "Glowing colour-cycling outlines on a dark background.",
+  "descriptionRu": "Светящиеся переливающиеся контуры на тёмном фоне.",
+  "descriptionUk": "Світні контури, що переливаються кольорами, на темному тлі.",
   "params": [
     {
       "id": "glow",

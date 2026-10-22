@@ -7,6 +7,9 @@ import { setLang, t, useLang } from './i18n';
 import {
   addMarker,
   copySelection,
+  detachAudio,
+  splitAllTracks,
+  toggleMuteSelection,
   cutSelection,
   deleteSelection,
   duplicateSelection,
@@ -28,7 +31,8 @@ import {
 } from './store/actions';
 import { redo, select, toast, undo, useEditor } from './store/editor';
 import { importViaDialog } from './store/media';
-import { usePrefs } from './store/prefs';
+import { setPrefs, usePrefs } from './store/prefs';
+import { commandFor, comboFromEvent, shortcutLabel } from './keymap';
 import { exportSrt } from './ai/tasks';
 import { importSubtitles } from './store/tools';
 import type { MenuEntry } from './ui/ContextMenu';
@@ -60,184 +64,104 @@ function timelineWidth(): number {
   return document.querySelector('.tl-scroll')?.clientWidth ?? 1000;
 }
 
+/** What each keyboard command does (bindings live in keymap.ts). */
+const RUN: Record<string, () => void> = {
+  newProject: () => void newProject(),
+  openProject: () => void openProjectFile(),
+  save: () => void saveProject(),
+  saveAs: () => void saveProject(true),
+  import: () => void importViaDialog(),
+  export: () => openDialog('export'),
+  snapshot: () => void saveSnapshot(),
+  projectSettings: () => openDialog('settings'),
+  prefs: () => openDialog('prefs'),
+  undo,
+  redo,
+  cut: cutSelection,
+  copy: copySelection,
+  paste: () => paste(),
+  pasteAttrs: () => openDialog('paste-attrs'),
+  duplicate: duplicateSelection,
+  selectAll,
+  delete: () => deleteSelection(false),
+  rippleDelete: () => deleteSelection(true),
+  split: splitAtPlayhead,
+  splitAll: () => splitAllTracks(),
+  muteClips: toggleMuteSelection,
+  detachAudio: () => {
+    for (const id of useEditor.getState().selection) detachAudio(id);
+  },
+  escape: () => {
+    const s = useEditor.getState();
+    if (s.tool !== 'select') useEditor.setState({ tool: 'select' });
+    else select([]);
+  },
+  playPause: () => player.toggle(),
+  play: () => player.play(),
+  loop: toggleLoop,
+  frameBack: () => player.stepFrames(-1),
+  frameForward: () => player.stepFrames(1),
+  secondBack: () => seekBy(-1),
+  secondForward: () => seekBy(1),
+  prevEdit: () => jumpEditPoint(-1),
+  nextEdit: () => jumpEditPoint(1),
+  goStart: () => seekTo(0),
+  goEnd: () => seekTo(projectDuration(useEditor.getState().project)),
+  nudgeLeft: () => nudgeSelection(-1),
+  nudgeRight: () => nudgeSelection(1),
+  nudgeLeft10: () => nudgeSelection(-10),
+  nudgeRight10: () => nudgeSelection(10),
+  marker: () => addMarker(),
+  markIn: () => setMark('in'),
+  markOut: () => setMark('out'),
+  clearMarks,
+  snapping: () => useEditor.setState((s) => ({ snapping: !s.snapping })),
+  zoomIn: () => zoomBy(1.4),
+  zoomOut: () => zoomBy(1 / 1.4),
+  zoomFit: () => zoomToFit(timelineWidth()),
+  freeze: () => void freezeFrame(),
+  reverse: () => {
+    const sel = useEditor.getState().selection;
+    if (sel.length === 1) void reverseClip(sel[0]);
+  },
+  toggleScopes: () => setPrefs({ showScopes: !usePrefs.getState().showScopes }),
+  toolSelect: () => useEditor.setState({ tool: 'select' }),
+  toolForward: () => useEditor.setState({ tool: 'forward' }),
+  toolRipple: () => useEditor.setState({ tool: 'ripple' }),
+  toolRoll: () => useEditor.setState({ tool: 'roll' }),
+  toolSlip: () => useEditor.setState({ tool: 'slip' }),
+  toolSlide: () => useEditor.setState({ tool: 'slide' }),
+  toolRazor: () => useEditor.setState({ tool: 'razor' }),
+};
+
+export function runCommand(id: string): void {
+  RUN[id]?.();
+}
+
+function seekTo(t: number): void {
+  player.pause();
+  player.seek(t);
+}
+
+function seekBy(dt: number): void {
+  seekTo(useEditor.getState().playhead + dt);
+}
+
+export function toggleLoop(): void {
+  const loop = !usePrefs.getState().loopPlayback;
+  setPrefs({ loopPlayback: loop });
+  toast(t(loop ? 'toast.loopOn' : 'toast.loopOff'));
+}
+
 export function handleKeyDown(e: KeyboardEvent): void {
   const target = e.target as HTMLElement | null;
   if (target?.closest('input:not([type=range]):not([type=checkbox]), textarea, select, [contenteditable=true]')) return;
-  const s = useEditor.getState();
-  if (s.dialog) return;
-  const ctrl = e.ctrlKey || e.metaKey;
-  const shift = e.shiftKey;
-  const code = e.code;
-  let handled = true;
-
-  if (ctrl) {
-    switch (code) {
-      case 'KeyZ':
-        if (shift) redo();
-        else undo();
-        break;
-      case 'KeyY':
-        redo();
-        break;
-      case 'KeyC':
-        copySelection();
-        break;
-      case 'KeyX':
-        cutSelection();
-        break;
-      case 'KeyV':
-        if (e.altKey) openDialog('paste-attrs');
-        else paste();
-        break;
-      case 'KeyD':
-        duplicateSelection();
-        break;
-      case 'KeyA':
-        selectAll();
-        break;
-      case 'KeyK':
-        splitAtPlayhead();
-        break;
-      case 'KeyS':
-        void saveProject(shift);
-        break;
-      case 'KeyO':
-        void openProjectFile();
-        break;
-      case 'KeyN':
-        newProject();
-        break;
-      case 'KeyI':
-        void importViaDialog();
-        break;
-      case 'KeyE':
-        openDialog('export');
-        break;
-      case 'Comma':
-        openDialog('prefs');
-        break;
-      case 'KeyR':
-        if (s.selection.length === 1) void reverseClip(s.selection[0]);
-        break;
-      case 'Equal':
-      case 'NumpadAdd':
-        zoomBy(1.4);
-        break;
-      case 'Minus':
-      case 'NumpadSubtract':
-        zoomBy(1 / 1.4);
-        break;
-      case 'Digit0':
-        zoomToFit(timelineWidth());
-        break;
-      default:
-        handled = false;
-    }
-  } else {
-    switch (code) {
-      case 'Space':
-      case 'KeyK':
-        player.toggle();
-        break;
-      case 'KeyL':
-        player.play();
-        break;
-      case 'ArrowLeft':
-        if (e.altKey) nudgeSelection(shift ? -10 : -1);
-        else if (shift) {
-          player.pause();
-          player.seek(s.playhead - 1);
-        } else player.stepFrames(-1);
-        break;
-      case 'ArrowRight':
-        if (e.altKey) nudgeSelection(shift ? 10 : 1);
-        else if (shift) {
-          player.pause();
-          player.seek(s.playhead + 1);
-        } else player.stepFrames(1);
-        break;
-      case 'ArrowUp':
-        jumpEditPoint(-1);
-        break;
-      case 'ArrowDown':
-        jumpEditPoint(1);
-        break;
-      case 'Home':
-        player.pause();
-        player.seek(0);
-        break;
-      case 'End':
-        player.pause();
-        player.seek(projectDuration(s.project));
-        break;
-      case 'KeyS':
-        splitAtPlayhead();
-        break;
-      case 'Delete':
-      case 'Backspace':
-        deleteSelection(shift);
-        break;
-      case 'KeyV':
-        useEditor.setState({ tool: 'select' });
-        break;
-      case 'KeyC':
-        useEditor.setState({ tool: 'razor' });
-        break;
-      case 'KeyA':
-        useEditor.setState({ tool: 'forward' });
-        break;
-      case 'KeyB':
-        useEditor.setState({ tool: 'ripple' });
-        break;
-      case 'KeyR':
-        useEditor.setState({ tool: 'roll' });
-        break;
-      case 'KeyY':
-        useEditor.setState({ tool: 'slip' });
-        break;
-      case 'KeyU':
-        useEditor.setState({ tool: 'slide' });
-        break;
-      case 'KeyF':
-        if (shift) void freezeFrame();
-        else handled = false;
-        break;
-      case 'KeyN':
-        useEditor.setState({ snapping: !s.snapping });
-        break;
-      case 'KeyM':
-        addMarker();
-        break;
-      case 'KeyI':
-        setMark('in');
-        break;
-      case 'KeyO':
-        setMark('out');
-        break;
-      case 'KeyX':
-        if (e.altKey) clearMarks();
-        else handled = false;
-        break;
-      case 'Equal':
-      case 'NumpadAdd':
-        zoomBy(1.4);
-        break;
-      case 'Minus':
-      case 'NumpadSubtract':
-        zoomBy(1 / 1.4);
-        break;
-      case 'Backslash':
-        zoomToFit(timelineWidth());
-        break;
-      case 'Escape':
-        if (s.tool !== 'select') useEditor.setState({ tool: 'select' });
-        else select([]);
-        break;
-      default:
-        handled = false;
-    }
-  }
-  if (handled) e.preventDefault();
+  if (useEditor.getState().dialog) return;
+  const combo = comboFromEvent(e);
+  const id = combo ? commandFor(combo) : null;
+  if (!id || !RUN[id]) return;
+  e.preventDefault();
+  RUN[id]();
 }
 
 export interface MenuDef {
@@ -245,6 +169,9 @@ export interface MenuDef {
   label: string;
   items: () => MenuEntry[];
 }
+
+/** Menu label of a command's first binding. */
+const sc = (id: string): string | undefined => shortcutLabel(id) || undefined;
 
 export function menus(): MenuDef[] {
   const s = useEditor.getState();
@@ -263,20 +190,20 @@ export function menus(): MenuDef[] {
             ]
           : [];
         return [
-          { label: t('menu.new'), shortcut: 'Ctrl+N', onClick: newProject },
-          { label: t('menu.open'), shortcut: 'Ctrl+O', onClick: () => void openProjectFile() },
-          { label: t('menu.save'), shortcut: 'Ctrl+S', onClick: () => void saveProject() },
-          { label: t('menu.saveAs'), shortcut: 'Ctrl+Shift+S', onClick: () => void saveProject(true) },
+          { label: t('menu.new'), shortcut: sc('newProject'), onClick: newProject },
+          { label: t('menu.open'), shortcut: sc('openProject'), onClick: () => void openProjectFile() },
+          { label: t('menu.save'), shortcut: sc('save'), onClick: () => void saveProject() },
+          { label: t('menu.saveAs'), shortcut: sc('saveAs'), onClick: () => void saveProject(true) },
           ...recentItems,
           { separator: true },
-          { label: t('menu.import'), shortcut: 'Ctrl+I', onClick: () => void importViaDialog() },
+          { label: t('menu.import'), shortcut: sc('import'), onClick: () => void importViaDialog() },
           { label: `${t('subs.import')}…`, onClick: () => void importSubtitles() },
           { label: `${t('credits.title')}…`, onClick: () => openDialog('credits') },
-          { label: t('menu.export'), shortcut: 'Ctrl+E', onClick: () => openDialog('export') },
-          { label: t('menu.snapshot'), onClick: () => void saveSnapshot() },
+          { label: t('menu.export'), shortcut: sc('export'), onClick: () => openDialog('export') },
+          { label: t('menu.snapshot'), shortcut: sc('snapshot'), onClick: () => void saveSnapshot() },
           { separator: true },
-          { label: t('menu.projectSettings'), onClick: () => openDialog('settings') },
-          { label: t('menu.prefs'), shortcut: 'Ctrl+,', onClick: () => openDialog('prefs') },
+          { label: t('menu.projectSettings'), shortcut: sc('projectSettings'), onClick: () => openDialog('settings') },
+          { label: t('menu.prefs'), shortcut: sc('prefs'), onClick: () => openDialog('prefs') },
         ];
       },
     },
@@ -284,33 +211,36 @@ export function menus(): MenuDef[] {
       id: 'edit',
       label: t('menu.edit'),
       items: () => [
-        { label: t('menu.undo'), shortcut: 'Ctrl+Z', onClick: undo, disabled: s.past.length === 0 },
-        { label: t('menu.redo'), shortcut: 'Ctrl+Shift+Z', onClick: redo, disabled: s.future.length === 0 },
+        { label: t('menu.undo'), shortcut: sc('undo'), onClick: undo, disabled: s.past.length === 0 },
+        { label: t('menu.redo'), shortcut: sc('redo'), onClick: redo, disabled: s.future.length === 0 },
         { separator: true },
-        { label: t('menu.cut'), shortcut: 'Ctrl+X', onClick: cutSelection, disabled: !hasSel },
-        { label: t('menu.copy'), shortcut: 'Ctrl+C', onClick: copySelection, disabled: !hasSel },
-        { label: t('menu.paste'), shortcut: 'Ctrl+V', onClick: () => paste(), disabled: !s.clipboard },
-        { label: t('menu.duplicate'), shortcut: 'Ctrl+D', onClick: duplicateSelection, disabled: !hasSel },
-        { label: t('menu.delete'), shortcut: 'Del', onClick: () => deleteSelection(false), disabled: !hasSel },
-        { label: t('menu.rippleDelete'), shortcut: 'Shift+Del', onClick: () => deleteSelection(true), disabled: !hasSel },
+        { label: t('menu.cut'), shortcut: sc('cut'), onClick: cutSelection, disabled: !hasSel },
+        { label: t('menu.copy'), shortcut: sc('copy'), onClick: copySelection, disabled: !hasSel },
+        { label: t('menu.paste'), shortcut: sc('paste'), onClick: () => paste(), disabled: !s.clipboard },
+        { label: t('menu.duplicate'), shortcut: sc('duplicate'), onClick: duplicateSelection, disabled: !hasSel },
+        { label: t('menu.delete'), shortcut: sc('delete'), onClick: () => deleteSelection(false), disabled: !hasSel },
+        { label: t('menu.rippleDelete'), shortcut: sc('rippleDelete'), onClick: () => deleteSelection(true), disabled: !hasSel },
         { separator: true },
-        { label: t('menu.split'), shortcut: 'S', onClick: splitAtPlayhead },
-        { label: t('menu.selectAll'), shortcut: 'Ctrl+A', onClick: selectAll },
-        { label: t('menu.addMarker'), shortcut: 'M', onClick: () => addMarker() },
-        { label: t('menu.markIn'), shortcut: 'I', onClick: () => setMark('in') },
-        { label: t('menu.markOut'), shortcut: 'O', onClick: () => setMark('out') },
-        { label: t('menu.clearMarks'), shortcut: 'Alt+X', onClick: clearMarks },
+        { label: t('menu.split'), shortcut: sc('split'), onClick: splitAtPlayhead },
+        { label: t('cmd.splitAll'), shortcut: sc('splitAll'), onClick: () => splitAllTracks() },
+        { label: t('menu.selectAll'), shortcut: sc('selectAll'), onClick: selectAll },
+        { label: t('menu.addMarker'), shortcut: sc('marker'), onClick: () => addMarker() },
+        { label: t('menu.markIn'), shortcut: sc('markIn'), onClick: () => setMark('in') },
+        { label: t('menu.markOut'), shortcut: sc('markOut'), onClick: () => setMark('out') },
+        { label: t('menu.clearMarks'), shortcut: sc('clearMarks'), onClick: clearMarks },
         { separator: true },
-        { label: t('menu.pasteAttrs'), shortcut: 'Ctrl+Alt+V', onClick: () => openDialog('paste-attrs'), disabled: !s.clipboard || !hasSel },
+        { label: t('menu.pasteAttrs'), shortcut: sc('pasteAttrs'), onClick: () => openDialog('paste-attrs'), disabled: !s.clipboard || !hasSel },
       ],
     },
     {
       id: 'view',
       label: t('menu.view'),
       items: () => [
-        { label: t('menu.zoomIn'), shortcut: '+', onClick: () => zoomBy(1.4) },
-        { label: t('menu.zoomOut'), shortcut: '−', onClick: () => zoomBy(1 / 1.4) },
-        { label: t('menu.zoomFit'), shortcut: '\\', onClick: () => zoomToFit(timelineWidth()) },
+        { label: t('menu.zoomIn'), shortcut: sc('zoomIn'), onClick: () => zoomBy(1.4) },
+        { label: t('menu.zoomOut'), shortcut: sc('zoomOut'), onClick: () => zoomBy(1 / 1.4) },
+        { label: t('menu.zoomFit'), shortcut: sc('zoomFit'), onClick: () => zoomToFit(timelineWidth()) },
+        { label: t('cmd.loop'), shortcut: sc('loop'), checked: usePrefs.getState().loopPlayback, onClick: toggleLoop },
+        { label: t('cmd.toggleScopes'), shortcut: sc('toggleScopes'), checked: usePrefs.getState().showScopes, onClick: () => runCommand('toggleScopes') },
         { separator: true },
         { label: 'Українська', checked: useLang.getState().lang === 'uk', onClick: () => setLang('uk') },
         { label: 'Русский', checked: useLang.getState().lang === 'ru', onClick: () => setLang('ru') },

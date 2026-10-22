@@ -26,6 +26,10 @@ export interface Prefs {
   stillDuration: number;
   /** Scroll the timeline to keep the playhead in view during playback. */
   followPlayhead: boolean;
+  /** Playback starts over at the end (of the in/out range when it is set). */
+  loopPlayback: boolean;
+  /** User keyboard shortcuts: command id -> combos (see keymap.ts). */
+  keymap: Record<string, string[]>;
   recent: RecentProject[];
 }
 
@@ -41,6 +45,8 @@ const DEFAULTS: Prefs = {
   libraryKeys: {},
   stillDuration: 5,
   followPlayhead: true,
+  loopPlayback: false,
+  keymap: {},
   recent: [],
 };
 

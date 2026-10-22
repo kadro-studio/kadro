@@ -302,7 +302,16 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
   const hasAudio = clip.type === 'audio' || (clip.type === 'video' && !!p.media?.hasAudio);
   const showStrip = clip.type === 'video' || clip.type === 'image';
   const kfs = keyframeTimes(clip).filter((k) => k >= 0 && k <= clip.duration);
-  const fxActive = clip.filter.id !== 'none' || clip.chroma.enabled || Object.values(clip.adjust).some((v) => v !== 0);
+  const wheelsUsed = Object.values(clip.wheels).some((w) => w.x !== 0 || w.y !== 0 || w.l !== 0);
+  const fxActive =
+    clip.filter.id !== 'none' ||
+    clip.chroma.enabled ||
+    clip.effects.some((e) => e.enabled) ||
+    !!clip.lut ||
+    !!clip.curves ||
+    !!clip.hsl ||
+    wheelsUsed ||
+    Object.values(clip.adjust).some((v) => v !== 0);
   const cls = ['clip', clip.type, p.selected && 'selected', track.locked && 'locked', p.razor && 'razor', clip.muted && 'muted-clip']
     .filter(Boolean)
     .join(' ');

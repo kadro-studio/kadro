@@ -7,6 +7,8 @@
   "author": "Kadro",
   "version": "1.0.0",
   "description": "Maps brightness to a thermal-imaging colour scale.",
+  "descriptionRu": "Переводит яркость в цветовую шкалу тепловизора.",
+  "descriptionUk": "Переводить яскравість у кольорову шкалу тепловізора.",
   "params": [
     {
       "id": "amount",

@@ -7,9 +7,10 @@ import { formatTimecode, parseTimecode } from '../core/time';
 import { measureText } from '../engine/text';
 import { player } from '../engine/player';
 import { useT } from '../i18n';
+import { shortcutLabel, withShortcut } from '../keymap';
 import { commitPreview, previewEdit, select, toast, useEditor } from '../store/editor';
 import { setPrefs, usePrefs } from '../store/prefs';
-import { saveSnapshot } from '../commands';
+import { saveSnapshot, toggleLoop } from '../commands';
 import { openProjectFile } from '../store/actions';
 import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/controls';
@@ -95,7 +96,7 @@ export function Preview() {
               <div>
                 <img className="empty-logo" src="./logo.png" alt="" draggable={false} />
                 <h3>{t('preview.emptyTitle')}</h3>
-                <div>{t('preview.emptyHint')}</div>
+                <div>{t('preview.emptyHint', { key: shortcutLabel('import') || '—' })}</div>
                 <RecentProjects />
               </div>
             </div>
@@ -271,6 +272,8 @@ function Transport({ stageRef }: { stageRef: React.RefObject<HTMLDivElement | nu
   const previewScale = useEditor((s) => s.previewScale);
   const useProxies = usePrefs((p) => p.useProxies);
   const showScopes = usePrefs((p) => p.showScopes);
+  const loop = usePrefs((p) => p.loopPlayback);
+  usePrefs((p) => p.keymap);
 
   return (
     <div className="transport">
@@ -280,13 +283,14 @@ function Transport({ stageRef }: { stageRef: React.RefObject<HTMLDivElement | nu
         <LevelMeter />
       </div>
       <div className="transport-center">
-        <IconButton icon="toStart" title={t('preview.toStart')} onClick={() => player.seek(0)} />
-        <IconButton icon="stepBack" title={t('preview.prevFrame')} onClick={() => player.stepFrames(-1)} />
-        <button className="play-btn" title={playing ? t('preview.pause') : t('preview.play')} onClick={() => player.toggle()}>
+        <IconButton icon="toStart" title={withShortcut(t('preview.toStart'), 'goStart')} onClick={() => player.seek(0)} />
+        <IconButton icon="stepBack" title={withShortcut(t('preview.prevFrame'), 'frameBack')} onClick={() => player.stepFrames(-1)} />
+        <button className="play-btn" title={withShortcut(playing ? t('preview.pause') : t('preview.play'), 'playPause')} onClick={() => player.toggle()}>
           <Icon name={playing ? 'pause' : 'play'} size={18} />
         </button>
-        <IconButton icon="stepFwd" title={t('preview.nextFrame')} onClick={() => player.stepFrames(1)} />
-        <IconButton icon="toEnd" title={t('preview.toEnd')} onClick={() => player.seek(duration)} />
+        <IconButton icon="stepFwd" title={withShortcut(t('preview.nextFrame'), 'frameForward')} onClick={() => player.stepFrames(1)} />
+        <IconButton icon="toEnd" title={withShortcut(t('preview.toEnd'), 'goEnd')} onClick={() => player.seek(duration)} />
+        <IconButton icon="loop" title={withShortcut(t('cmd.loop'), 'loop')} active={loop} onClick={toggleLoop} />
       </div>
       <div className="transport-right">
         <select
@@ -300,8 +304,8 @@ function Transport({ stageRef }: { stageRef: React.RefObject<HTMLDivElement | nu
           <option value={0.25}>{t('preview.quarter')}</option>
         </select>
         <IconButton icon="speed" title={t('preview.useProxies')} active={useProxies} onClick={() => setPrefs({ useProxies: !useProxies })} />
-        <IconButton icon="scopes" title={t('preview.scopes')} active={showScopes} onClick={() => setPrefs({ showScopes: !showScopes })} />
-        <IconButton icon="camera" title={t('menu.snapshot')} onClick={() => void saveSnapshot()} />
+        <IconButton icon="scopes" title={withShortcut(t('preview.scopes'), 'toggleScopes')} active={showScopes} onClick={() => setPrefs({ showScopes: !showScopes })} />
+        <IconButton icon="camera" title={withShortcut(t('menu.snapshot'), 'snapshot')} onClick={() => void saveSnapshot()} />
         <IconButton
           icon="fullscreen"
           title={t('preview.fullscreen')}

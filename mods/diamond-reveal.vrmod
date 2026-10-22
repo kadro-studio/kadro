@@ -7,6 +7,8 @@
   "author": "Kadro",
   "version": "1.0.0",
   "description": "A grid of diamonds grows from the corner and reveals the next clip.",
+  "descriptionRu": "Сетка ромбов растёт из угла и открывает следующий клип.",
+  "descriptionUk": "Сітка ромбів росте з кута й відкриває наступний кліп.",
   "params": [
     {
       "id": "size",

@@ -307,5 +307,7 @@ export function normalizeProject(raw: unknown): Project {
     tracks,
     markers: Array.isArray(src.markers) ? src.markers : [],
     fx: Array.isArray(src.fx) ? src.fx : [],
+    markIn: typeof src.markIn === 'number' ? src.markIn : null,
+    markOut: typeof src.markOut === 'number' ? src.markOut : null,
   };
 }

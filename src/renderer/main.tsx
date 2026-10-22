@@ -22,12 +22,17 @@ import { aiDevice } from './ai/client';
 import './styles.css';
 import { applyTheme } from './store/theme';
 import { usePrefs } from './store/prefs';
+import { loadUserFonts } from './store/userFonts';
+import * as presets from './store/presets';
+import * as userFonts from './store/userFonts';
+import * as keymap from './keymap';
 
 applyTheme(usePrefs.getState().theme);
+void loadUserFonts();
 editor.loadProject(createProject(t('top.untitled')), null);
 
 // Automation/debug handle (used by scripts/smoke.mjs and handy in DevTools).
-(window as unknown as { __vr: unknown }).__vr = { ...actions, ...editor, ...media, ...enhance, ...prefsStore, ...tools, player, runExport, setLang, Compositor };
+(window as unknown as { __vr: unknown }).__vr = { ...actions, ...editor, ...media, ...enhance, ...prefsStore, ...tools, ...presets, ...userFonts, ...keymap, player, runExport, setLang, Compositor };
 (window as unknown as { __vrFx: unknown }).__vrFx = { ...fxRegistry, fxThumbnail };
 (window as unknown as { __vrMods: unknown }).__vrMods = mods;
 (window as unknown as { __vrAi: unknown }).__vrAi = { ...aiTasks, aiDevice };

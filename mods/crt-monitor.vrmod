@@ -7,6 +7,8 @@
   "author": "Kadro",
   "version": "1.0.0",
   "description": "Curved glass, scanlines, RGB mask and rolling brightness of an old monitor.",
+  "descriptionRu": "Выпуклое стекло, строки развёртки, RGB-маска и бегущая яркость старого монитора.",
+  "descriptionUk": "Опукле скло, рядки розгортки, RGB-маска й бігуча яскравість старого монітора.",
   "params": [
     {
       "id": "curve",

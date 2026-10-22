@@ -30,7 +30,7 @@ import '@fontsource/dela-gothic-one/cyrillic-400.css';
 import '@fontsource/ruslan-display';
 import type { Project, TextStyle } from '../core/types';
 
-export type FontCategory = 'sans' | 'serif' | 'display' | 'script' | 'mono' | 'system';
+export type FontCategory = 'custom' | 'sans' | 'serif' | 'display' | 'script' | 'mono' | 'system';
 
 export interface FontInfo {
   family: string;
@@ -79,8 +79,15 @@ export function fontLabel(family: string): string {
   return BUNDLED_FONTS.find((f) => f.family === family)?.label ?? family;
 }
 
+/** Families of the user's own variable fonts (see store/userFonts.ts). */
+const userVariable = new Set<string>();
+
+export function registerVariableFamily(family: string): void {
+  userVariable.add(family);
+}
+
 export function isVariableFont(family: string): boolean {
-  return !!BUNDLED_FONTS.find((f) => f.family === family)?.variable;
+  return userVariable.has(family) || !!BUNDLED_FONTS.find((f) => f.family === family)?.variable;
 }
 
 let systemFonts: Promise<string[]> | null = null;
@@ -121,6 +128,12 @@ const listeners = new Set<() => void>();
 /** Bumped whenever a font finishes loading (part of raster cache keys). */
 export function fontsVersion(): number {
   return version;
+}
+
+/** Fonts were added or removed: text layers redraw. */
+export function fontsChanged(): void {
+  version++;
+  for (const fn of listeners) fn();
 }
 
 export function onFontsLoaded(fn: () => void): () => void {
