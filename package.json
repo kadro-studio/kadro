@@ -5,6 +5,8 @@
   "description": "Kadro — free open-source video editor",
   "license": "MIT",
   "author": "Kadro contributors",
+  "homepage": "https://kadro.studio",
+  "repository": "github:kadro-studio/kadro",
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "node scripts/dev.mjs",

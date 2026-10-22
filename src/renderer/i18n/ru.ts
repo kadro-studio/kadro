@@ -31,6 +31,9 @@ export const ru: Record<I18nKey, string> = {
   'menu.devtools': 'Инструменты разработчика',
   'menu.shortcuts': 'Горячие клавиши',
   'menu.about': 'О программе',
+  'menu.website': 'Сайт Kadro',
+  'menu.support': 'Поддержать Kadro',
+  'menu.reportBug': 'Сообщить о проблеме',
   'menu.zoomIn': 'Увеличить таймлайн',
   'menu.zoomOut': 'Уменьшить таймлайн',
   'menu.zoomFit': 'Вместить таймлайн',
@@ -565,6 +568,7 @@ export const ru: Record<I18nKey, string> = {
   'sc.export': 'Экспорт',
 
   'about.text': 'Бесплатный видеоредактор с открытым исходным кодом. Многодорожечный таймлайн, анимация по ключевым кадрам, цветокоррекция, хромакей, переходы, титры и экспорт в MP4, WebM, ProRes и GIF.',
+  'about.source': 'Исходный код',
   'about.license': 'Распространяется по лицензии MIT. Для декодирования и кодирования использует FFmpeg (LGPL/GPL) как отдельную программу.',
   'prefs.tab.general': 'Общие',
   'prefs.tab.appearance': 'Внешний вид',

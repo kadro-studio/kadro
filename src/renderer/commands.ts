@@ -1,5 +1,6 @@
 // Keyboard shortcuts and menu commands.
 import { api } from './api';
+import { SITE_URL, SOURCE_URL } from '../shared/brand';
 import { projectDuration } from './core/project';
 import { player } from './engine/player';
 import { setLang, t, useLang } from './i18n';
@@ -336,6 +337,11 @@ export function menus(): MenuDef[] {
       label: t('menu.help'),
       items: () => [
         { label: t('menu.shortcuts'), onClick: () => openDialog('shortcuts') },
+        { separator: true },
+        { label: t('menu.website'), onClick: () => window.open(SITE_URL) },
+        { label: t('menu.support'), onClick: () => window.open(`${SITE_URL}#support`) },
+        { label: t('menu.reportBug'), onClick: () => window.open(`${SOURCE_URL}/issues`) },
+        { separator: true },
         { label: t('menu.about'), onClick: () => openDialog('about') },
       ],
     },

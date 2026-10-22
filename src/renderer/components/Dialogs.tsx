@@ -8,7 +8,7 @@ import { AUDIO_ONLY, runExport, type CancelToken, type ExportProgress } from '..
 import { player } from '../engine/player';
 import { useT, type I18nKey } from '../i18n';
 import { api } from '../api';
-import { APP_NAME } from '../../shared/brand';
+import { APP_NAME, SITE_URL, SOURCE_URL } from '../../shared/brand';
 import { markedRange, openDialog } from '../store/actions';
 import { edit, useEditor } from '../store/editor';
 import { Icon } from '../ui/Icon';
@@ -443,9 +443,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title={t('menu.about')} onClose={onClose} footer={<button className="btn primary" onClick={onClose}>{t('common.ok')}</button>}>
       <div className="row" style={{ alignItems: 'center', gap: 12 }}>
-        <div className="brand-logo" style={{ width: 48, height: 48, flex: 'none', fontSize: 22, borderRadius: 12 }}>
-          ▶
-        </div>
+        <img className="brand-logo" src="./logo.png" alt="" draggable={false} style={{ width: 48, height: 48, flex: 'none', borderRadius: 12 }} />
         <div>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{APP_NAME} {info?.version}</div>
           <div className="panel-hint" style={{ margin: 0 }}>
@@ -457,6 +455,17 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
       <p className="panel-hint" style={{ margin: 0 }}>
         {t('about.license')}
       </p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <button className="btn primary" onClick={() => window.open(`${SITE_URL}#support`)}>
+          {t('menu.support')}
+        </button>
+        <button className="btn" onClick={() => window.open(SITE_URL)}>
+          {t('menu.website')}
+        </button>
+        <button className="btn" onClick={() => window.open(SOURCE_URL)}>
+          {t('about.source')}
+        </button>
+      </div>
       {info && (
         <dl className="info-table">
           <dt>Electron</dt>

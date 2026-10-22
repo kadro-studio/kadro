@@ -3,7 +3,7 @@ window.KADRO_SITE = {
   version: '0.1.0',
   // GitHub repository as "account/name". Download, source, release and issue links
   // below are derived from it when left empty.
-  repo: 'Artem362/kadro',
+  repo: 'kadro-studio/kadro',
   links: {
     installer: '',
     portable: '',

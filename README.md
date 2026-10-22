@@ -4,7 +4,7 @@
 
 Без лицензий, водяных знаков, подписок и учётных записей. Проект живёт на добровольной поддержке.
 
-**[Сайт](https://artem362.github.io/kadro/)** · **[Скачать для Windows](https://github.com/Artem362/kadro/releases/latest)**
+**[kadro.studio](https://kadro.studio)** · **[Скачать для Windows](https://github.com/kadro-studio/kadro/releases/latest)**
 
 Electron + React + TypeScript, собственный WebGL2-композитор, FFmpeg для декодирования и кодирования, ИИ-модели, которые работают прямо на компьютере.
 

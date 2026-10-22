@@ -29,6 +29,9 @@ export const en = {
   'menu.devtools': 'Developer tools',
   'menu.shortcuts': 'Keyboard shortcuts',
   'menu.about': 'About',
+  'menu.website': 'Kadro website',
+  'menu.support': 'Support Kadro',
+  'menu.reportBug': 'Report a problem',
   'menu.zoomIn': 'Zoom timeline in',
   'menu.zoomOut': 'Zoom timeline out',
   'menu.zoomFit': 'Fit timeline',
@@ -563,6 +566,7 @@ export const en = {
   'sc.export': 'Export',
 
   'about.text': 'A free, open-source non-linear video editor. Multi-track timeline, keyframe animation, colour grading, chroma key, transitions, text and export to MP4, WebM, ProRes and GIF.',
+  'about.source': 'Source code',
   'about.license': 'Released under the MIT licence. Uses FFmpeg (LGPL/GPL) as a separate program for decoding and encoding.',
   'prefs.tab.general': 'General',
   'prefs.tab.appearance': 'Appearance',
