@@ -428,6 +428,12 @@ a.donate-card:hover {
   border-color: rgba(255, 59, 79, 0.5);
   box-shadow: 0 0 30px rgba(255, 40, 60, 0.18);
 }
+.donate-card small {
+  display: block;
+  margin-top: 4px;
+  color: var(--mute);
+  font-size: 14px;
+}
 .donate-card span {
   color: var(--accent-hi);
   font-weight: 700;

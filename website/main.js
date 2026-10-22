@@ -194,10 +194,23 @@
     }
   }
 
+  const local = (v, lang) => (v && typeof v === 'object' ? (v[lang] ?? v.en) : v);
+
+  const links = { ...site.links };
+  if (site.repo) {
+    const gh = `https://github.com/${site.repo}`;
+    const dl = `${gh}/releases/download/v${site.version}`;
+    links.installer ||= `${dl}/Kadro-Setup-${site.version}.exe`;
+    links.portable ||= `${dl}/Kadro-${site.version}-portable.exe`;
+    links.source ||= gh;
+    links.releases ||= `${gh}/releases`;
+    links.issues ||= `${gh}/issues`;
+  }
+
   function renderLinks(lang) {
     const soon = SOON[lang] ?? SOON.en;
     for (const a of document.querySelectorAll('[data-link]')) {
-      const url = site.links[a.dataset.link];
+      const url = links[a.dataset.link];
       if (url) {
         a.href = url;
         a.classList.remove('disabled');
@@ -218,11 +231,18 @@
         card.target = '_blank';
         card.rel = 'noopener';
       }
+      const text = document.createElement('div');
       const name = document.createElement('strong');
-      name.textContent = d.name;
+      name.textContent = local(d.name, lang);
+      text.append(name);
+      if (d.note) {
+        const sub = document.createElement('small');
+        sub.textContent = local(d.note, lang);
+        text.append(sub);
+      }
       const note = document.createElement('span');
       note.textContent = d.url ? '→' : soon;
-      card.append(name, note);
+      card.append(text, note);
       list.append(card);
     }
   }
