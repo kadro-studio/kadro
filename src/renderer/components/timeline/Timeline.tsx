@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Draft } from 'immer';
-import { clearRange, insertClip, trimBounds, trimEndTo, trimStartTo } from '../../core/edit';
+import { clearRange, insertClip, openGap, splitClip, trimBounds, trimEndTo, trimStartTo } from '../../core/edit';
 import { clipAtTime, clipEnd, displayTracks, findClip, mediaMap, projectDuration, tracksOfKind } from '../../core/project';
 import { clamp, snapToFrame } from '../../core/time';
-import type { Clip, Project, Track } from '../../core/types';
+import type { Clip, Project, ShapeKind, Track } from '../../core/types';
 import { player } from '../../engine/player';
 import { useT } from '../../i18n';
 import {
+  addAdjustmentClip,
   addColorClip,
+  addEffect,
   addMarker,
+  addShapeClip,
   addMediaClip,
   addTextClip,
   addTrack,
@@ -20,15 +23,22 @@ import {
   deleteSelection,
   detachAudio,
   duplicateSelection,
+  freezeFrame,
+  openDialog,
   paste,
   removeMarker,
   removeTrack,
+  reverseClip,
+  selectForward,
   splitAt,
   updateClip,
   zoomBy,
   zoomToFit,
 } from '../../store/actions';
-import { commitPreview, previewEdit, redo, select, undo, useEditor } from '../../store/editor';
+import { commitPreview, previewEdit, redo, select, undo, useEditor, type Tool } from '../../store/editor';
+import { startRipple, startRoll, startSlide, startSlip, type DragContext } from './toolDrags';
+import type { IconName } from '../../ui/Icon';
+import type { I18nKey } from '../../i18n';
 import { importFiles } from '../../store/media';
 import { api } from '../../api';
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu';
@@ -70,6 +80,16 @@ function snapDelta(edges: number[], points: number[], threshold: number): { delt
   return { delta, at };
 }
 
+export const TOOLS: { id: Tool; icon: IconName; label: I18nKey }[] = [
+  { id: 'select', icon: 'cursor', label: 'tl.select' },
+  { id: 'forward', icon: 'forward', label: 'tool.forward' },
+  { id: 'ripple', icon: 'ripple', label: 'tool.ripple' },
+  { id: 'roll', icon: 'roll', label: 'tool.roll' },
+  { id: 'slip', icon: 'slip', label: 'tool.slip' },
+  { id: 'slide', icon: 'slide', label: 'tool.slide' },
+  { id: 'razor', icon: 'razor', label: 'tl.razor' },
+];
+
 function kindIndex(p: Project, track: Track): number {
   return tracksOfKind(p, track.kind).findIndex((tr) => tr.id === track.id);
 }
@@ -106,6 +126,7 @@ export function Timeline() {
   const [view, setView] = useState({ w: 800, scrollLeft: 0 });
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const drag = useRef<DragState | null>(null);
+  const insertOnDrop = useRef(false);
   const pendingScroll = useRef<number | null>(null);
 
   const duration = projectDuration(project);
@@ -193,7 +214,7 @@ export function Timeline() {
   // -------------------------------------------------------------------------
   // Clip move / trim
 
-  const applyMove = (d: Draft<Project>, st: Extract<DragState, { kind: 'move' }>, final: boolean) => {
+  const applyMove = (d: Draft<Project>, st: Extract<DragState, { kind: 'move' }>, final: boolean, insert = false) => {
     const fps = st.base.settings.fps;
     const moved: { clip: Draft<Clip>; target: Draft<Track> }[] = [];
     for (const id of st.ids) {
@@ -209,7 +230,13 @@ export function Timeline() {
     }
     const movedIds = new Set(st.ids);
     for (const { clip, target } of moved) {
-      if (final) clearRange(target, clip.start, clipEnd(clip), movedIds);
+      if (final && insert) {
+        const straddling = target.clips.find((c) => c.start < clip.start - 1e-6 && clipEnd(c) > clip.start + 1e-6);
+        if (straddling) splitClip(target, straddling.id, clip.start, 1 / fps);
+        openGap(target, clip.start, clip.duration);
+      } else if (final) {
+        clearRange(target, clip.start, clipEnd(clip), movedIds);
+      }
       insertClip(target, clip);
     }
   };
@@ -220,6 +247,66 @@ export function Timeline() {
     if (!tr || !clip) return;
     if (st.side === 'l') trimStartTo(clip, newEdge);
     else trimEndTo(clip, newEdge);
+  };
+
+  const toolContext = (): DragContext => ({
+    media,
+    snap: (time, exclude) => {
+      const s = useEditor.getState();
+      if (!s.snapping) return { time, at: null };
+      const { delta, at } = snapDelta([time], snapPoints(s.project, exclude, s.playhead), SNAP_PX / s.pxPerSec);
+      return { time: time + delta, at };
+    },
+  });
+
+  // Rubber-band selection on empty lane space; a plain click moves the playhead.
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const onLanePointerDown = (e: React.PointerEvent, track: Track) => {
+    if (e.button !== 0 || e.target !== e.currentTarget) return;
+    const s = useEditor.getState();
+    if (s.tool === 'forward') {
+      const ids = selectForward(timeAt(e.clientX), e.shiftKey ? track.id : undefined);
+      if (ids.length) startMove(e, ids, ids[0], false);
+      return;
+    }
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const additive = e.shiftKey || e.ctrlKey;
+    const baseSel = additive ? s.selection : [];
+    let moved = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+      moved = true;
+      const left = Math.min(x0, ev.clientX);
+      const top = Math.min(y0, ev.clientY);
+      const right = Math.max(x0, ev.clientX);
+      const bottom = Math.max(y0, ev.clientY);
+      setMarquee({ x: left, y: top, w: right - left, h: bottom - top });
+      const t0 = timeAt(left);
+      const t1 = timeAt(right);
+      const p = useEditor.getState().project;
+      const hit: string[] = [];
+      document.querySelectorAll<HTMLElement>('.track-lane[data-track-id]').forEach((lane) => {
+        const r = lane.getBoundingClientRect();
+        if (r.bottom < top || r.top > bottom) return;
+        const tr = p.tracks.find((x) => x.id === lane.dataset.trackId);
+        if (!tr || tr.locked) return;
+        for (const c of tr.clips) if (c.start < t1 && clipEnd(c) > t0) hit.push(c.id);
+      });
+      select([...new Set([...baseSel, ...hit])]);
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setMarquee(null);
+      if (!moved) {
+        select([]);
+        player.pause();
+        player.seek(timeAt(ev.clientX));
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   };
 
   const onClipPointerDown = (e: React.PointerEvent, clip: Clip, part: 'body' | 'l' | 'r') => {
@@ -236,10 +323,33 @@ export function Timeline() {
       return;
     }
 
+    // Advanced tools handle the gesture themselves; otherwise fall through to select/move/trim.
+    const tools = toolContext();
+    if (part !== 'body' && s.tool === 'ripple') {
+      select([clip.id]);
+      startRipple(e, clip.id, part, tools);
+      return;
+    }
+    if (part !== 'body' && s.tool === 'roll') {
+      select([clip.id]);
+      if (startRoll(e, clip.id, part, tools)) return;
+    }
+    if (part === 'body' && s.tool === 'slip') {
+      select([clip.id]);
+      if (startSlip(e, clip.id, tools)) return;
+    }
+    if (part === 'body' && s.tool === 'slide') {
+      select([clip.id]);
+      startSlide(e, clip.id, tools);
+      return;
+    }
+
     const additive = e.shiftKey || e.ctrlKey || e.metaKey;
     const wasSelected = s.selection.includes(clip.id);
     let ids = s.selection;
-    if (additive) {
+    if (s.tool === 'forward' && part === 'body') {
+      ids = selectForward(clip.start, e.shiftKey ? found.track.id : undefined);
+    } else if (additive) {
       ids = wasSelected ? s.selection.filter((x) => x !== clip.id) : [...s.selection, clip.id];
       select(ids);
       if (wasSelected) return;
@@ -249,27 +359,35 @@ export function Timeline() {
     }
 
     if (part === 'body') {
-      const editable = ids.filter((id) => {
-        const f = findClip(s.project, id);
-        return f && !f.track.locked;
-      });
-      drag.current = {
-        kind: 'move',
-        base: s.project,
-        ids: editable,
-        anchorId: clip.id,
-        startX: e.clientX,
-        startY: e.clientY,
-        moved: false,
-        clickedSelected: wasSelected && !additive,
-        dt: 0,
-        trackDelta: 0,
-      };
+      startMove(e, ids, clip.id, wasSelected && !additive);
     } else {
       select([clip.id]);
-      drag.current = { kind: 'trim', base: s.project, id: clip.id, side: part, startX: e.clientX };
+      beginDrag({ kind: 'trim', base: s.project, id: clip.id, side: part, startX: e.clientX });
     }
+  };
 
+  const startMove = (e: React.PointerEvent, ids: string[], anchorId: string, clickedSelected: boolean) => {
+    const s = useEditor.getState();
+    const editable = ids.filter((id) => {
+      const f = findClip(s.project, id);
+      return f && !f.track.locked;
+    });
+    beginDrag({
+      kind: 'move',
+      base: s.project,
+      ids: editable,
+      anchorId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      clickedSelected,
+      dt: 0,
+      trackDelta: 0,
+    });
+  };
+
+  const beginDrag = (state: DragState) => {
+    drag.current = state;
     const onMove = (ev: PointerEvent) => {
       const st = drag.current;
       if (!st) return;
@@ -332,9 +450,10 @@ export function Timeline() {
       }
     };
 
-    const onUp = () => {
+    const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      insertOnDrop.current = ev.ctrlKey || ev.metaKey;
       const st = drag.current;
       drag.current = null;
       if (!st) return;
@@ -343,7 +462,8 @@ export function Timeline() {
           if (st.clickedSelected) select([st.anchorId]);
           return;
         }
-        commitPreview((d) => applyMove(d, st, true));
+        // Ctrl on release: insert edit (push clips right) instead of overwriting.
+        commitPreview((d) => applyMove(d, st, true, insertOnDrop.current));
       } else {
         commitPreview();
       }
@@ -370,8 +490,20 @@ export function Timeline() {
       { label: t('ctx.cut'), shortcut: 'Ctrl+X', onClick: cutSelection },
       { label: t('ctx.paste'), shortcut: 'Ctrl+V', onClick: () => paste(at), disabled: !s.clipboard },
       { label: t('ctx.duplicate'), shortcut: 'Ctrl+D', onClick: duplicateSelection },
+      { label: `${t('menu.pasteAttrs')}…`, shortcut: 'Ctrl+Alt+V', onClick: () => openDialog('paste-attrs'), disabled: !s.clipboard },
     ];
     if (hasAudio) items.push({ label: t('ctx.detachAudio'), onClick: () => detachAudio(clip.id) });
+    if (clip.type === 'video') items.push({ label: t('tool.freeze'), shortcut: 'Shift+F', onClick: () => void freezeFrame() });
+    if (clip.type === 'video' || clip.type === 'audio') items.push({ label: t('tool.reverse'), shortcut: 'Ctrl+R', onClick: () => void reverseClip(clip.id) });
+    if (clip.type === 'video') items.push({ label: `${t('enh.stabilize')}…`, onClick: () => openDialog('stabilize') });
+    if (hasAudio || clip.type === 'audio') {
+      items.push(
+        { label: `${t('enh.denoise')}…`, onClick: () => openDialog('denoise') },
+        { label: `${t('enh.loudness')}…`, onClick: () => openDialog('loudness') },
+      );
+    }
+    if (clip.type === 'video' || clip.type === 'image') items.push({ label: `✨ ${t('ai.bgTitle')}…`, onClick: () => openDialog('ai-bg') });
+    if (hasAudio || clip.type === 'audio') items.push({ label: `✨ ${t('ai.subsTitle')}…`, onClick: () => openDialog('ai-subs') });
     if (clip.transition.type !== 'none') {
       items.push({ label: t('ctx.removeTransition'), onClick: () => updateClip(clip.id, (c) => void (c.transition.type = 'none')) });
     }
@@ -432,12 +564,31 @@ export function Timeline() {
       time = snapToFrame(time + delta, fps);
     }
     const dt = e.dataTransfer;
-    const opts = { trackId: track?.id, time, overwrite: !!track, newTrack: !track };
+    // Ctrl while dropping: insert edit (push later clips right) instead of overwrite.
+    const insert = !!track && (e.ctrlKey || e.metaKey);
+    const opts = { trackId: track?.id, time, overwrite: !!track && !insert, insert, newTrack: !track };
     const mediaId = dt.getData(DND.media);
     const textId = dt.getData(DND.text);
     const transition = dt.getData(DND.transition);
     const filter = dt.getData(DND.filter);
     const color = dt.getData(DND.color);
+    const effect = dt.getData(DND.effect);
+    const element = dt.getData(DND.element);
+    if (element) {
+      const el = JSON.parse(element) as { kind: 'adjustment' } | { kind: 'shape'; shape: ShapeKind };
+      const where = track?.kind === 'video' ? opts : { time, newTrack: !track };
+      if (el.kind === 'adjustment') addAdjustmentClip(where);
+      else addShapeClip(el.shape, where);
+      return;
+    }
+    if (effect && track) {
+      const target = clipAtTime(track, timeAt(e.clientX));
+      if (target) {
+        addEffect([target.id], effect);
+        select([target.id]);
+      }
+      return;
+    }
     if (mediaId) addMediaClip(mediaId, opts);
     else if (textId) addTextClip(textId, track?.kind === 'video' ? opts : { time, newTrack: !track });
     else if (color) addColorClip(color, track?.kind === 'video' ? opts : { time, newTrack: !track });
@@ -483,8 +634,9 @@ export function Timeline() {
   return (
     <div className="timeline">
       <div className="tl-toolbar">
-        <IconButton icon="cursor" title={t('tl.select')} active={tool === 'select'} onClick={() => useEditor.setState({ tool: 'select' })} />
-        <IconButton icon="razor" title={t('tl.razor')} active={tool === 'razor'} onClick={() => useEditor.setState({ tool: 'razor' })} />
+        {TOOLS.map((x) => (
+          <IconButton key={x.id} icon={x.icon} title={t(x.label)} active={tool === x.id} onClick={() => useEditor.setState({ tool: x.id })} />
+        ))}
         <div className="sep" />
         <IconButton icon="undo" title={`${t('menu.undo')} (Ctrl+Z)`} disabled={!canUndo} onClick={undo} />
         <IconButton icon="redo" title={`${t('menu.redo')} (Ctrl+Shift+Z)`} disabled={!canRedo} onClick={redo} />
@@ -492,6 +644,7 @@ export function Timeline() {
         <IconButton icon="scissors" title={t('tl.split')} onClick={() => splitAt(s().playhead)} />
         <IconButton icon="trash" title={t('tl.delete')} disabled={selection.length === 0} onClick={() => deleteSelection(false)} />
         <IconButton icon="marker" title={t('tl.marker')} onClick={() => addMarker()} />
+        <IconButton icon="mic" title={t('vo.title')} onClick={() => openDialog('voiceover')} />
         <div className="sep" />
         <IconButton icon="magnet" title={t('tl.snap')} active={snapping} onClick={() => useEditor.setState({ snapping: !snapping })} />
         <div className="spacer" />
@@ -512,7 +665,7 @@ export function Timeline() {
         <IconButton icon="fit" title={t('tl.fit')} onClick={() => zoomToFit(view.w - HEADER_W)} />
       </div>
       <div
-        className="tl-scroll"
+        className={`tl-scroll tool-${tool}`}
         ref={scrollRef}
         onPointerDown={(e) => {
           if (e.button === 0 && e.target === e.currentTarget) select([]);
@@ -526,6 +679,16 @@ export function Timeline() {
             <div className="tl-ruler" style={{ width: contentW }} onPointerDown={onRulerDown}>
               <RulerCanvas width={Math.max(1, view.w - HEADER_W)} scrollLeft={view.scrollLeft} pps={pps} fps={project.settings.fps} />
               <RulerPlayhead pps={pps} />
+              {(project.markIn != null || project.markOut != null) && (
+                <div
+                  className="io-range"
+                  style={{
+                    left: (project.markIn ?? 0) * pps,
+                    width: Math.max(2, ((project.markOut ?? Math.max(duration, project.markIn ?? 0)) - (project.markIn ?? 0)) * pps),
+                  }}
+                  title={t('export.range')}
+                />
+              )}
               {project.markers.map((m) => (
                 <div
                   key={m.id}
@@ -554,15 +717,7 @@ export function Timeline() {
                   className={`track-lane ${track.locked ? 'locked' : ''} ${dropTarget === track.id ? 'drop-target' : ''}`}
                   data-track-id={track.id}
                   style={{ width: contentW }}
-                  onPointerDown={(e) => {
-                    if (e.button === 0 && e.target === e.currentTarget) {
-                      select([]);
-                      if (tool === 'select') {
-                        player.pause();
-                        player.seek(timeAt(e.clientX));
-                      }
-                    }
-                  }}
+                  onPointerDown={(e) => onLanePointerDown(e, track)}
                   onContextMenu={(e) => e.target === e.currentTarget && laneMenu(e, track)}
                   {...laneDragProps(track, track.id)}
                 >
@@ -598,6 +753,7 @@ export function Timeline() {
             <div key={m.id} className="marker-line" style={{ left: HEADER_W + m.time * pps, background: m.color }} />
           ))}
           {snapLine !== null && <div className="snap-line" style={{ left: HEADER_W + snapLine * pps }} />}
+          {marquee && <div className="marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
           <PlayheadLine pps={pps} scrollRef={scrollRef} />
           {!hasClips && (
             <div className="tl-empty">

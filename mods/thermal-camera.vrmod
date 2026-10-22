@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "id": "kadro.thermal-camera",
+  "kind": "effect",
+  "name": "Thermal camera",
+  "nameRu": "Тепловизор",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "Maps brightness to a thermal-imaging colour scale.",
+  "params": [
+    { "id": "amount", "name": "Amount", "nameRu": "Сила", "min": 0, "max": 1, "default": 1 }
+  ],
+  "glsl": "vec3 heat(float t) {\n  vec3 a = mix(vec3(0.0, 0.0, 0.2), vec3(0.5, 0.0, 0.6), smoothstep(0.0, 0.3, t));\n  a = mix(a, vec3(1.0, 0.2, 0.0), smoothstep(0.3, 0.6, t));\n  a = mix(a, vec3(1.0, 0.9, 0.0), smoothstep(0.6, 0.85, t));\n  return mix(a, vec3(1.0), smoothstep(0.85, 1.0, t));\n}\nvec4 effect(vec2 uv) {\n  vec4 c = src(uv);\n  return vec4(mix(c.rgb, heat(luma(c.rgb)), amount), c.a);\n}"
+}

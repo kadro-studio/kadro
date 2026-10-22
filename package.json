@@ -1,10 +1,10 @@
 {
-  "name": "videoredact",
-  "productName": "Videoredact",
+  "name": "kadro",
+  "productName": "Kadro",
   "version": "0.1.0",
-  "description": "Open-source non-linear video editor",
+  "description": "Kadro — free open-source video editor",
   "license": "MIT",
-  "author": "Videoredact contributors",
+  "author": "Kadro contributors",
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -12,39 +12,88 @@
     "start": "electron .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "smoke": "node scripts/smoke.mjs",
-    "dist": "npm run build && electron-builder --win"
+    "dist": "npm run build && node scripts/make-icon.mjs && electron-builder --win",
+    "icon": "node scripts/make-icon.mjs"
   },
   "build": {
-    "appId": "org.videoredact.app",
-    "productName": "Videoredact",
+    "appId": "org.kadro.editor",
+    "productName": "Kadro",
+    "copyright": "Copyright © 2026 Kadro contributors",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**",
-      "package.json"
+      "package.json",
+      "!dist/**/*.map",
+      "!node_modules/ffprobe-static/bin/darwin/**",
+      "!node_modules/ffprobe-static/bin/linux/**",
+      "!node_modules/ffprobe-static/bin/win32/ia32/**"
+    ],
+    "extraResources": [
+      {
+        "from": "mods",
+        "to": "mods",
+        "filter": [
+          "*.vrmod"
+        ]
+      }
     ],
     "asarUnpack": [
       "node_modules/ffmpeg-static/**",
       "node_modules/ffprobe-static/**"
     ],
+    "fileAssociations": [
+      {
+        "ext": "vrproj",
+        "name": "Kadro project",
+        "description": "Kadro video project",
+        "icon": "build/icon.ico"
+      }
+    ],
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "executableName": "Kadro"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kadro",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "artifactName": "Kadro-Setup-${version}.exe",
+      "license": "LICENSE"
+    },
+    "portable": {
+      "artifactName": "Kadro-${version}-portable.exe"
     }
   },
   "dependencies": {
     "ffmpeg-static": "^5.3.0",
-    "ffprobe-static": "^3.1.0",
-    "immer": "^11.2.7",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "zustand": "^5.0.15"
+    "ffprobe-static": "^3.1.0"
   },
   "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@huggingface/transformers": "^4.3.1",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -52,8 +101,12 @@
     "electron": "^45.0.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
+    "immer": "^11.2.7",
     "playwright-core": "^1.64.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "zustand": "^5.0.15"
   }
 }

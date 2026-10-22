@@ -2,18 +2,25 @@ import type { Draft } from 'immer';
 import { ANIMATIONS, FILTERS, TRANSITIONS } from '../core/effects';
 import { fillScale } from '../core/geometry';
 import { isAnimated, keyframeAt, propValue, setPropAt, toggleKeyframe, clearKeyframes } from '../core/keyframes';
-import { defaultAdjust, defaultCrop, defaultTransform, findClip, maxClipDuration, mediaMap, projectDuration } from '../core/project';
+import { defaultAdjust, defaultCrop, defaultTransform, defaultWheels, findClip, maxClipDuration, mediaMap, projectDuration } from '../core/project';
 import { setClipSpeed } from '../core/edit';
 import { clipHasAudio } from '../core/scene';
 import { FONT_FAMILIES } from '../core/textPresets';
 import { formatTimecode } from '../core/time';
-import type { Adjust, AnimProp, BlendMode, Clip, MediaAsset, Project, TextAlign } from '../core/types';
+import type { Adjust, AnimProp, BlendMode, Clip, MediaAsset, Project, ShapeKind, ShapeStyle, TextAlign } from '../core/types';
 import { player } from '../engine/player';
-import { useT, type I18nKey } from '../i18n';
-import { deleteSelection, detachAudio, openDialog } from '../store/actions';
-import { commitPreview, edit, previewEdit, useEditor } from '../store/editor';
+import { useLang, useT, type I18nKey } from '../i18n';
+import { addEffect, applyTransition, deleteSelection, detachAudio, moveEffect, openDialog, removeEffect } from '../store/actions';
+import { fxOfKind, useFx } from '../engine/fx/registry';
+import { fxName } from '../engine/fx/types';
+import { commitPreview, edit, previewEdit, toast, useEditor } from '../store/editor';
+import { api } from '../api';
+import { loadLut } from '../engine/lut';
+import { LayoutPicker } from './LayoutPicker';
+import { MAX_VOLUME } from '../store/enhance';
 import {
   ColorField,
+  ColorWheelField,
   IconButton,
   Section,
   SelectField,
@@ -29,6 +36,8 @@ const TYPE_COLOR: Record<Clip['type'], string> = {
   image: 'var(--clip-image)',
   text: 'var(--clip-text)',
   color: 'var(--clip-color)',
+  adjustment: '#5b4bb0',
+  shape: '#2b6f7a',
 };
 
 type ClipRecipe = (c: Draft<Clip>) => void;
@@ -65,6 +74,12 @@ export function Inspector() {
           <span className="title">{t('insp.multi', { n: selection.length })}</span>
         </div>
         <div className="inspector-body">
+          <Section id="layout" title={t('sec.layout')}>
+            <span className="panel-hint" style={{ margin: 0 }}>
+              {t('layout.hint')}
+            </span>
+            <LayoutPicker />
+          </Section>
           <div className="inspector-empty">
             <button className="btn danger" onClick={() => deleteSelection(false)}>
               {t('menu.delete')}
@@ -86,7 +101,7 @@ export function Inspector() {
   return (
     <>
       <div className="inspector-head">
-        <span className="type-dot" style={{ background: TYPE_COLOR[clip.type] }} />
+        <span className="type-dot" style={{ background: TYPE_COLOR[clip.type], color: TYPE_COLOR[clip.type] }} />
         <span className="title" title={clip.name}>
           {clip.type === 'text' && clip.text ? clip.text.content.split('\n')[0] : clip.name}
         </span>
@@ -99,15 +114,29 @@ export function Inspector() {
             <ColorField label={t('p.color')} value={clip.color} onChange={(v, f) => set((c) => void (c.color = v), f)} />
           </Section>
         )}
-        {visual && <TransformSection clip={clip} m={m} local={local} project={project} set={set} />}
+        {clip.type === 'shape' && clip.shape && <ShapeSection clip={clip} set={set} />}
+        {visual && clip.type !== 'adjustment' && <TransformSection clip={clip} m={m} local={local} project={project} set={set} />}
+        {clip.type === 'adjustment' && (
+          <Section id="adjustment" title={t('elements.adjustment')}>
+            <span className="panel-hint" style={{ margin: 0 }}>
+              {t('elements.adjustmentHint')}
+            </span>
+            <SliderField label={t('p.opacity')} value={Math.round(propValue(clip, 'opacity', local) * 100)} min={0} max={100} unit="%" defaultValue={100}
+              onChange={(v, f) => set((c) => setPropAt(c, 'opacity', local, v / 100, 0.5 / project.settings.fps), f)}
+              keyframe={kfControl(clip, 'opacity', local, project.settings.fps)} />
+          </Section>
+        )}
         {visual && <AnimationSection clip={clip} set={set} />}
         {visual && <TransitionSection clip={clip} set={set} />}
         {(clip.type === 'video' || clip.type === 'audio') && <SpeedSection clip={clip} m={m} />}
-        {clipHasAudio(clip, media) && <AudioSection clip={clip} set={set} />}
+        {clipHasAudio(clip, media) && <AudioSection clip={clip} set={set} local={local} fps={project.settings.fps} />}
+        {visual && clip.type !== 'color' && <EffectsSection clip={clip} set={set} />}
+        {visual && clip.type !== 'shape' && <WheelsSection clip={clip} set={set} />}
         {visual && <ColorSection clip={clip} set={set} />}
         {visual && <FilterSection clip={clip} set={set} />}
         {(clip.type === 'video' || clip.type === 'image') && <ChromaSection clip={clip} set={set} />}
         {(clip.type === 'video' || clip.type === 'image') && <CropSection clip={clip} set={set} />}
+        {visual && clip.type !== 'color' && <MaskSection clip={clip} set={set} />}
         {visual && <BlendSection clip={clip} set={set} />}
       </div>
     </>
@@ -255,6 +284,17 @@ function TransformSection({ clip, m, local, project, set }: { clip: Clip; m: Med
         <IconButton icon="flipH" title={t('p.flipH')} active={clip.transform.flipH} onClick={() => set((c) => void (c.transform.flipH = !c.transform.flipH), true)} />
         <IconButton icon="flipV" title={t('p.flipV')} active={clip.transform.flipV} onClick={() => set((c) => void (c.transform.flipV = !c.transform.flipV), true)} />
       </div>
+      {clip.type === 'video' && (
+        <button className="btn small" onClick={() => openDialog('stabilize')}>
+          {t('enh.stabilize')}…
+        </button>
+      )}
+      {clip.type !== 'text' && (
+        <>
+          <span className="field-label">{t('sec.layout')}</span>
+          <LayoutPicker />
+        </>
+      )}
     </Section>
   );
 }
@@ -293,6 +333,111 @@ function ColorSection({ clip, set }: { clip: Clip; set: Setter }) {
           onChange={(v, fin) => set((c) => void (c.adjust[f.key] = v), fin)}
         />
       ))}
+      <div className="field">
+        <label className="field-label">{t('p.lut')}</label>
+        <div className="row">
+          <button
+            className="btn small"
+            title={clip.lut?.path}
+            onClick={async () => {
+              const path = await api.openFileDialog([{ name: 'LUT (.cube)', extensions: ['cube'] }]);
+              if (!path) return;
+              const lut = await loadLut(path);
+              if (!lut) {
+                toast(t('toast.lutFailed'), 'error');
+                return;
+              }
+              set((c) => void (c.lut = { path, name: path.split(/[\\/]/).pop() ?? path, amount: 100 }), true);
+            }}
+          >
+            {clip.lut ? clip.lut.name : t('p.lutLoad')}
+          </button>
+          {clip.lut && <IconButton icon="close" size={14} className="small" title={t('common.reset')} onClick={() => set((c) => void (c.lut = null), true)} />}
+        </div>
+      </div>
+      {clip.lut && (
+        <SliderField label={t('p.amount')} value={clip.lut.amount} min={0} max={100} unit="%" defaultValue={100}
+          onChange={(v, f) => set((c) => void (c.lut && (c.lut.amount = v)), f)} />
+      )}
+    </Section>
+  );
+}
+
+function WheelsSection({ clip, set }: { clip: Clip; set: Setter }) {
+  const t = useT();
+  const keys = ['lift', 'gamma', 'gain'] as const;
+  return (
+    <Section
+      id="wheels"
+      title={t('sec.wheels')}
+      actions={<IconButton icon="reset" size={14} className="small" title={t('common.reset')} onClick={() => set((c) => void (c.wheels = defaultWheels()), true)} />}
+    >
+      <div className="wheels-row">
+        {keys.map((k) => (
+          <ColorWheelField key={k} label={t(`wheel.${k}` as I18nKey)} value={clip.wheels[k]} onChange={(v, f) => set((c) => void (c.wheels[k] = v), f)} />
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+function ShapeSection({ clip, set }: { clip: Clip; set: Setter }) {
+  const t = useT();
+  const s = clip.shape!;
+  const kinds: ShapeKind[] = ['rect', 'ellipse', 'triangle', 'star', 'arrow', 'line', 'bubble'];
+  const setShape = (recipe: (x: Draft<ShapeStyle>) => void, final: boolean) =>
+    set((c) => {
+      if (c.shape) recipe(c.shape);
+    }, final);
+  return (
+    <Section id="shape" title={t('sec.shape')}>
+      <SelectField label={t('p.type')} value={s.kind} options={kinds.map((k) => ({ value: k, label: t(`shape.${k}` as I18nKey) }))}
+        onChange={(v) => setShape((x) => void (x.kind = v), true)} />
+      <SliderField label={t('p.width')} value={s.width} min={2} max={8000} softMax={2000} unit="px" onChange={(v, f) => setShape((x) => void (x.width = v), f)} />
+      <SliderField label={t('p.height')} value={s.height} min={2} max={8000} softMax={2000} unit="px" onChange={(v, f) => setShape((x) => void (x.height = v), f)} />
+      <ColorField label={t('p.fillColor')} value={s.fill} onChange={(v, f) => setShape((x) => void (x.fill = v), f)} />
+      <SliderField label={t('p.fillOpacity')} value={s.fillOpacity} min={0} max={100} unit="%" defaultValue={100}
+        onChange={(v, f) => setShape((x) => void (x.fillOpacity = v), f)} />
+      <ColorField label={t('p.stroke')} value={s.stroke} onChange={(v, f) => setShape((x) => void (x.stroke = v), f)} />
+      <SliderField label={t('p.strokeWidth')} value={s.strokeWidth} min={0} max={100} defaultValue={0}
+        onChange={(v, f) => setShape((x) => void (x.strokeWidth = v), f)} />
+      {(s.kind === 'rect' || s.kind === 'bubble') && (
+        <SliderField label={t('p.radius')} value={s.radius} min={0} max={500} softMax={200} defaultValue={0}
+          onChange={(v, f) => setShape((x) => void (x.radius = v), f)} />
+      )}
+    </Section>
+  );
+}
+
+function MaskSection({ clip, set }: { clip: Clip; set: Setter }) {
+  const t = useT();
+  const m = clip.mask;
+  const pct = (v: number) => Math.round(v * 1000) / 10;
+  const field = (key: 'x' | 'y' | 'width' | 'height' | 'feather', label: I18nKey, def: number) => (
+    <SliderField key={key} label={t(label)} value={pct(m[key])} min={0} max={100} step={0.5} unit="%" defaultValue={def * 100}
+      onChange={(v, f) => set((c) => void (c.mask[key] = v / 100), f)} />
+  );
+  return (
+    <Section id="mask" title={t('sec.mask')}>
+      <div className="seg">
+        {(['none', 'rect', 'ellipse'] as const).map((s) => (
+          <button key={s} className={m.shape === s ? 'active' : ''} onClick={() => set((c) => void (c.mask.shape = s), true)}>
+            {t(`mask.${s}` as I18nKey)}
+          </button>
+        ))}
+      </div>
+      {m.shape !== 'none' && (
+        <>
+          {field('x', 'p.x', 0.5)}
+          {field('y', 'p.y', 0.5)}
+          {field('width', 'p.width', 0.6)}
+          {field('height', 'p.height', 0.6)}
+          <SliderField label={t('p.rotation')} value={m.rotation} min={-180} max={180} unit="°" defaultValue={0}
+            onChange={(v, f) => set((c) => void (c.mask.rotation = v), f)} />
+          {field('feather', 'p.feather', 0.05)}
+          <ToggleField label={t('p.invert')} value={m.invert} onChange={(v) => set((c) => void (c.mask.invert = v), true)} />
+        </>
+      )}
     </Section>
   );
 }
@@ -423,18 +568,100 @@ function AnimationSection({ clip, set }: { clip: Clip; set: Setter }) {
 
 function TransitionSection({ clip, set }: { clip: Clip; set: Setter }) {
   const t = useT();
+  const lang = useLang((s) => s.lang);
+  const defs = useFx((s) => s.defs);
+  const shader = defs[clip.transition.type];
+  const options = [
+    ...TRANSITIONS.map((x) => ({ value: x as string, label: t(`transition.${x}` as I18nKey) })),
+    ...fxOfKind(defs, 'transition').map((d) => ({ value: d.id, label: `${fxName(d, lang)}${d.source !== 'builtin' ? ' (mod)' : ''}` })),
+  ];
   return (
     <Section id="transition" title={t('sec.transition')}>
-      <SelectField
-        label={t('p.type')}
-        value={clip.transition.type}
-        options={TRANSITIONS.map((x) => ({ value: x as string, label: t(`transition.${x}` as I18nKey) }))}
-        onChange={(v) => set((c) => void (c.transition.type = v), true)}
-      />
+      <SelectField label={t('p.type')} value={clip.transition.type} options={options} onChange={(v) => applyTransition(clip.id, v)} />
       {clip.transition.type !== 'none' && (
         <SliderField label={t('p.duration')} value={clip.transition.duration} min={0.1} max={Math.max(0.1, Math.min(5, clip.duration))} step={0.05} unit="s"
           onChange={(v, f) => set((c) => void (c.transition.duration = v), f)} />
       )}
+      {shader?.params.map((p) => (
+        <SliderField
+          key={p.id}
+          label={fxName(p, lang)}
+          value={clip.transition.params?.[p.id] ?? p.default}
+          min={p.min}
+          max={p.max}
+          step={p.step ?? (p.max - p.min) / 100}
+          defaultValue={p.default}
+          onChange={(v, f) =>
+            set((c) => {
+              c.transition.params = { ...(c.transition.params ?? {}), [p.id]: v };
+            }, f)
+          }
+        />
+      ))}
+    </Section>
+  );
+}
+
+function EffectsSection({ clip, set }: { clip: Clip; set: Setter }) {
+  const t = useT();
+  const lang = useLang((s) => s.lang);
+  const defs = useFx((s) => s.defs);
+  const errors = useFx((s) => s.errors);
+  const add = (
+    <select className="select compact" value="" onChange={(e) => e.target.value && addEffect([clip.id], e.target.value)} title={t('fx.add')}>
+      <option value="">+ {t('fx.add')}</option>
+      {fxOfKind(defs, 'effect').map((d) => (
+        <option key={d.id} value={d.id}>
+          {fxName(d, lang)}
+        </option>
+      ))}
+    </select>
+  );
+  return (
+    <Section id="effects" title={t('sec.effects')} actions={add}>
+      {clip.effects.length === 0 && <span className="panel-hint" style={{ margin: 0 }}>{t('fx.none')}</span>}
+      {clip.effects.map((e, i) => {
+        const def = defs[e.type];
+        return (
+          <div className="fx-item" key={e.id}>
+            <div className="fx-item-head">
+              <input
+                type="checkbox"
+                className="switch"
+                checked={e.enabled}
+                title={t('p.enable')}
+                onChange={(ev) => set((c) => void (c.effects.find((x) => x.id === e.id)!.enabled = ev.target.checked), true)}
+              />
+              <span title={def ? errors[def.id] : undefined}>
+                {def ? fxName(def, lang) : `${e.type} — ${t('fx.missing')}`}
+                {def && errors[def.id] ? ' ⚠' : ''}
+              </span>
+              <IconButton icon="chevronUp" size={14} className="small" title="↑" disabled={i === 0} onClick={() => moveEffect(clip.id, e.id, -1)} />
+              <IconButton icon="chevronDown" size={14} className="small" title="↓" disabled={i === clip.effects.length - 1} onClick={() => moveEffect(clip.id, e.id, 1)} />
+              <IconButton icon="close" size={14} className="small" title={t('ctx.delete')} onClick={() => removeEffect(clip.id, e.id)} />
+            </div>
+            {def &&
+              e.enabled &&
+              def.params.map((p) => (
+                <SliderField
+                  key={p.id}
+                  label={fxName(p, lang)}
+                  value={e.params[p.id] ?? p.default}
+                  min={p.min}
+                  max={p.max}
+                  step={p.step ?? (p.max - p.min) / 100}
+                  defaultValue={p.default}
+                  onChange={(v, f) =>
+                    set((c) => {
+                      const x = c.effects.find((q) => q.id === e.id);
+                      if (x) x.params[p.id] = v;
+                    }, f)
+                  }
+                />
+              ))}
+          </div>
+        );
+      })}
     </Section>
   );
 }
@@ -467,23 +694,49 @@ function SpeedSection({ clip, m }: { clip: Clip; m: MediaAsset | undefined }) {
   );
 }
 
-function AudioSection({ clip, set }: { clip: Clip; set: Setter }) {
+function AudioSection({ clip, set, local, fps }: { clip: Clip; set: Setter; local: number; fps: number }) {
   const t = useT();
   const maxFade = Math.max(0, Math.min(10, clip.duration / 2));
+  const tol = 0.5 / fps;
+  const band = (key: 'low' | 'mid' | 'high', label: I18nKey) => (
+    <SliderField key={key} label={t(label)} value={clip.audioFx[key]} min={-12} max={12} step={0.5} unit="dB" defaultValue={0}
+      onChange={(v, f) => set((c) => void (c.audioFx[key] = v), f)} />
+  );
   return (
     <Section id="audio" title={t('sec.audio')}>
-      <SliderField label={t('p.volume')} value={Math.round(clip.volume * 100)} min={0} max={200} unit="%" defaultValue={100}
-        onChange={(v, f) => set((c) => void (c.volume = v / 100), f)} />
+      <SliderField
+        label={t('p.volume')}
+        value={Math.round(propValue(clip, 'volume', local) * 100)}
+        min={0}
+        max={MAX_VOLUME * 100}
+        softMax={200}
+        unit="%"
+        defaultValue={100}
+        onChange={(v, f) => set((c) => setPropAt(c, 'volume', local, v / 100, tol), f)}
+        keyframe={kfControl(clip, 'volume', local, fps)}
+      />
+      {band('low', 'p.eqLow')}
+      {band('mid', 'p.eqMid')}
+      {band('high', 'p.eqHigh')}
+      <ToggleField label={t('p.compressor')} value={clip.audioFx.compressor} onChange={(v) => set((c) => void (c.audioFx.compressor = v), true)} />
       <SliderField label={t('p.fadeIn')} value={clip.fadeIn} min={0} max={maxFade} step={0.1} unit="s" defaultValue={0}
         onChange={(v, f) => set((c) => void (c.fadeIn = v), f)} />
       <SliderField label={t('p.fadeOut')} value={clip.fadeOut} min={0} max={maxFade} step={0.1} unit="s" defaultValue={0}
         onChange={(v, f) => set((c) => void (c.fadeOut = v), f)} />
       <ToggleField label={t('p.mute')} value={clip.muted} onChange={(v) => set((c) => void (c.muted = v), true)} />
-      {clip.type === 'video' && (
-        <button className="btn small" onClick={() => detachAudio(clip.id)}>
-          {t('p.detachAudio')}
+      <div className="row wrap">
+        <button className="btn small" onClick={() => openDialog('denoise')}>
+          {t('enh.denoise')}…
         </button>
-      )}
+        <button className="btn small" onClick={() => openDialog('loudness')}>
+          {t('enh.loudness')}…
+        </button>
+        {clip.type === 'video' && (
+          <button className="btn small" onClick={() => detachAudio(clip.id)}>
+            {t('p.detachAudio')}
+          </button>
+        )}
+      </div>
     </Section>
   );
 }

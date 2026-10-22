@@ -1,8 +1,8 @@
 // Resolves what is visible/audible at a given time. Used identically by the
 // live preview and by export, which keeps the two in sync.
-import { clipAnimModifier, transitionModifiers } from './effects';
+import { clipAnimModifier, TRANSITIONS, transitionModifiers } from './effects';
 import { propValue } from './keyframes';
-import { combine, type Mask, type Modifier } from './modifiers';
+import { combine, identity, type Mask, type Modifier } from './modifiers';
 import { adjacentBefore, clipAtTime, clipEnd } from './project';
 import type { Clip, MediaAsset, Project, Track } from './types';
 import type { AudioSegment } from '../../shared/api';
@@ -24,6 +24,22 @@ export interface LayerPlan {
   mask: Mask | null;
   reveal: number;
   tail: boolean;
+  /** Set on both layers of a shader transition: they are mixed by its shader. */
+  group: TransitionGroup | null;
+}
+
+export interface TransitionGroup {
+  /** Id of the incoming clip; identifies the pair. */
+  key: string;
+  type: string;
+  progress: number;
+  params: Record<string, number> | undefined;
+  role: 'from' | 'to';
+}
+
+/** Transitions implemented with layer modifiers; anything else is a shader transition. */
+export function isModifierTransition(type: string): boolean {
+  return (TRANSITIONS as readonly string[]).includes(type);
 }
 
 function planFor(
@@ -55,6 +71,7 @@ function planFor(
     mask: mod.mask,
     reveal: mod.reveal,
     tail,
+    group: null,
   };
 }
 
@@ -71,10 +88,18 @@ export function resolveScene(p: Project, t: number, media: Map<string, MediaAsse
     const tr = clip.transition;
     const d = Math.min(tr.duration, clip.duration);
     if (tr.type !== 'none' && d > 0 && local < d) {
-      const { a, b } = transitionModifiers(tr.type, local / d, aspect);
       const prev = adjacentBefore(track, clip, p.settings.fps);
-      if (prev && prev.type !== 'audio') layers.push(planFor(p, prev, track, t, a, media, true));
-      layers.push(planFor(p, clip, track, t, combine(anim, b), media, false));
+      if (isModifierTransition(tr.type)) {
+        const { a, b } = transitionModifiers(tr.type, local / d, aspect);
+        if (prev && prev.type !== 'audio') layers.push(planFor(p, prev, track, t, a, media, true));
+        layers.push(planFor(p, clip, track, t, combine(anim, b), media, false));
+      } else {
+        const group = { key: clip.id, type: tr.type, progress: local / d, params: tr.params };
+        if (prev && prev.type !== 'audio') {
+          layers.push({ ...planFor(p, prev, track, t, identity(), media, true), group: { ...group, role: 'from' } });
+        }
+        layers.push({ ...planFor(p, clip, track, t, anim, media, false), group: { ...group, role: 'to' } });
+      }
     } else {
       layers.push(planFor(p, clip, track, t, anim, media, false));
     }
@@ -96,27 +121,63 @@ export function clipHasAudio(clip: Clip, media: Map<string, MediaAsset>): boolea
   return media.get(clip.mediaId)?.hasAudio ?? false;
 }
 
+/** True when some track is soloed, so non-solo tracks are silent. */
+export function soloActive(p: Project): boolean {
+  return p.tracks.some((tr) => tr.solo);
+}
+
+function trackAudible(track: Track, solo: boolean): boolean {
+  return !track.muted && (!solo || !!track.solo);
+}
+
 /** Linear gain of a clip at clip-local time (0 when muted). */
-export function clipGain(clip: Clip, track: Track, local: number): number {
-  if (clip.muted || track.muted) return 0;
-  let g = clip.volume * track.volume;
+export function clipGain(clip: Clip, track: Track, local: number, solo = false): number {
+  if (clip.muted || !trackAudible(track, solo)) return 0;
+  let g = propValue(clip, 'volume', local) * track.volume;
   if (clip.fadeIn > 0 && local < clip.fadeIn) g *= Math.max(0, local / clip.fadeIn);
   const remaining = clip.duration - local;
   if (clip.fadeOut > 0 && remaining < clip.fadeOut) g *= Math.max(0, remaining / clip.fadeOut);
   return g;
 }
 
+/** Restricts an audio plan to [start, end) and rebases it to start at 0. */
+export function trimAudioPlan(segments: AudioSegment[], start: number, end: number): AudioSegment[] {
+  const out: AudioSegment[] = [];
+  for (const s of segments) {
+    const a = Math.max(start, s.start);
+    const b = Math.min(end, s.start + s.duration);
+    if (b - a <= 1e-3) continue;
+    const cutHead = a - s.start;
+    const cutTail = s.start + s.duration - b;
+    out.push({
+      ...s,
+      sourceIn: s.sourceIn + cutHead * s.speed,
+      sourceDuration: (b - a) * s.speed,
+      start: a - start,
+      duration: b - a,
+      fadeIn: Math.max(0, s.fadeIn - cutHead),
+      fadeOut: Math.max(0, s.fadeOut - cutTail),
+      volumeKeys: s.volumeKeys?.map((k) => ({ t: k.t - cutHead, v: k.v })),
+    });
+  }
+  return out;
+}
+
 /** Audio segments to be mixed for export. */
 export function audioPlan(p: Project, media: Map<string, MediaAsset>): AudioSegment[] {
   const out: AudioSegment[] = [];
+  const solo = soloActive(p);
   for (const track of p.tracks) {
-    if (track.muted) continue;
+    if (!trackAudible(track, solo)) continue;
     for (const clip of track.clips) {
       if (clip.muted || !clipHasAudio(clip, media) || !clip.mediaId) continue;
       const m = media.get(clip.mediaId);
       if (!m) continue;
-      const volume = clip.volume * track.volume;
-      if (volume <= 0) continue;
+      const keys = clip.keyframes.volume;
+      const animated = !!keys && keys.length > 0;
+      const volume = (animated ? 1 : clip.volume) * track.volume;
+      if (volume <= 0 || (animated && keys.every((k) => k.v <= 0))) continue;
+      const fx = clip.audioFx;
       out.push({
         path: m.path,
         sourceIn: clip.in,
@@ -127,6 +188,9 @@ export function audioPlan(p: Project, media: Map<string, MediaAsset>): AudioSegm
         volume,
         fadeIn: Math.min(clip.fadeIn, clip.duration),
         fadeOut: Math.min(clip.fadeOut, clip.duration),
+        volumeKeys: animated ? keys.map((k) => ({ t: k.t, v: k.v })) : undefined,
+        eq: fx.low || fx.mid || fx.high ? { low: fx.low, mid: fx.mid, high: fx.high } : undefined,
+        compressor: fx.compressor || undefined,
       });
     }
   }

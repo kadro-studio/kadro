@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import type { HwEncoder } from '../shared/api';
 
 /** Binaries inside app.asar cannot be executed; electron-builder unpacks them next to it. */
 function unpacked(p: string): string {
@@ -50,6 +51,8 @@ export interface RunOptions {
   onStderr?: (text: string) => void;
   /** Keep stdout chunks in the result (default true unless onStdout given). */
   collectStdout?: boolean;
+  /** Working directory (lets filter arguments use bare file names). */
+  cwd?: string;
 }
 
 /** Runs a process to completion and collects its output. */
@@ -57,7 +60,7 @@ export function run(bin: string, args: string[], opts: RunOptions = {}): Promise
   return new Promise((resolve, reject) => {
     let child: ChildProcess;
     try {
-      child = spawn(bin, args, { windowsHide: true });
+      child = spawn(bin, args, { windowsHide: true, cwd: opts.cwd });
     } catch (e) {
       reject(e);
       return;
@@ -88,6 +91,28 @@ export function tailLog(stderr: string, lines = 6): string {
     .filter(Boolean)
     .slice(-lines)
     .join('\n');
+}
+
+const HW_TEST_CODEC: Record<HwEncoder, string> = { nvenc: 'h264_nvenc', qsv: 'h264_qsv', amf: 'h264_amf' };
+let hwProbe: Promise<HwEncoder[]> | null = null;
+
+/** GPU encoders that work here. ffmpeg lists them even without the hardware, so each is test-run. */
+export function hwEncoders(): Promise<HwEncoder[]> {
+  hwProbe ??= Promise.all(
+    (Object.entries(HW_TEST_CODEC) as [HwEncoder, string][]).map(async ([name, codec]) => {
+      try {
+        const r = await run(ffmpegPath(), [
+          '-hide_banner', '-loglevel', 'error',
+          '-f', 'lavfi', '-i', 'color=black:s=256x256:d=0.1',
+          '-c:v', codec, '-f', 'null', '-',
+        ]);
+        return r.code === 0 ? name : null;
+      } catch {
+        return null;
+      }
+    }),
+  ).then((list) => list.filter((x): x is HwEncoder => x !== null));
+  return hwProbe;
 }
 
 export async function ffmpegVersion(): Promise<string> {

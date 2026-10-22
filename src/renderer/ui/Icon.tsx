@@ -59,6 +59,15 @@ const PATHS = {
   camera: 'M3.5 8h4l1.5-2.5h6L16.5 8h4v11h-17zM12 16.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z',
   more: 'M6 12h.01M12 12h.01M18 12h.01',
   grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
+  forward: 'M4 4v16M8 12h12M16 8l4 4-4 4',
+  ripple: 'M8 4H5v16h3M11 12h9M17 9l3 3-3 3',
+  roll: 'M12 4v16M9 8l-4 4 4 4M15 8l4 4-4 4',
+  slip: 'M3 6h18v12H3zM8 12h8M10 10l-2 2 2 2M14 10l2 2-2 2',
+  slide: 'M8 6h8v12H8zM2 12h4M18 12h4M4 10l-2 2 2 2M20 10l2 2-2 2',
+  freeze: 'M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5',
+  reverse: 'M20 6v12M16 12H4M8 8l-4 4 4 4',
+  mic: 'M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21M8.5 21h7',
+  scopes: 'M3 4h18v16H3zM3 15l4-5 3 3 4-6 3 4 4-3',
 } satisfies Record<string, string>;
 
 const FILLED = new Set<string>(['play', 'pause', 'stepBack', 'stepFwd', 'toStart', 'toEnd']);

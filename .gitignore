@@ -3,5 +3,6 @@ dist/
 release/
 test-media/
 smoke-out/
+src/renderer/public/ort/
 *.log
 .DS_Store

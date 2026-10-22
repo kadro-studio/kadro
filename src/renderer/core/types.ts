@@ -3,10 +3,41 @@ import type { MediaKind } from '../../shared/api';
 export type { MediaKind };
 
 export type TrackKind = 'video' | 'audio';
-export type ClipType = 'video' | 'audio' | 'image' | 'text' | 'color';
+/** 'adjustment' applies its effects and colour to everything below it; 'shape' is a vector graphic. */
+export type ClipType = 'video' | 'audio' | 'image' | 'text' | 'color' | 'adjustment' | 'shape';
+
+export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'star' | 'arrow' | 'line' | 'bubble';
+
+export interface ShapeStyle {
+  kind: ShapeKind;
+  /** Project pixels. */
+  width: number;
+  height: number;
+  fill: string;
+  /** 0..100 */
+  fillOpacity: number;
+  stroke: string;
+  strokeWidth: number;
+  /** Corner radius for rectangles / bubbles, px. */
+  radius: number;
+}
+
+/** One colour wheel: x, y in -1..1 (hue/strength), l = brightness -1..1. */
+export interface Wheel {
+  x: number;
+  y: number;
+  l: number;
+}
+
+/** Lift / gamma / gain primary correction (shadows, midtones, highlights). */
+export interface ColorWheels {
+  lift: Wheel;
+  gamma: Wheel;
+  gain: Wheel;
+}
 export type BlendMode = 'normal' | 'add' | 'multiply' | 'screen';
 export type Ease = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'hold';
-export type AnimProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity';
+export type AnimProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity' | 'volume';
 
 export interface Keyframe {
   /** Seconds from clip start. */
@@ -70,11 +101,68 @@ export interface ClipAnim {
 export interface ClipTransition {
   type: string;
   duration: number;
+  /** Parameters of shader transitions (built-in or mod). */
+  params?: Record<string, number>;
 }
 
 export interface ClipFilter {
   id: string;
   amount: number;
+}
+
+export type MaskShape = 'none' | 'rect' | 'ellipse';
+
+/** Shape mask in the clip's own content space (0..1 across the uncropped image). */
+export interface ClipMask {
+  shape: MaskShape;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Degrees. */
+  rotation: number;
+  /** 0..1 */
+  feather: number;
+  invert: boolean;
+}
+
+/** 3D colour lookup table (.cube) applied after colour correction. */
+export interface ClipLut {
+  path: string;
+  name: string;
+  /** 0..100 */
+  amount: number;
+}
+
+/** Per-clip audio processing (dB for the EQ bands). */
+export interface AudioFx {
+  low: number;
+  mid: number;
+  high: number;
+  compressor: boolean;
+}
+
+/** A shader effect instance in a clip's effect stack. */
+export interface ClipEffect {
+  /** Instance id (a clip can use the same effect twice). */
+  id: string;
+  /** Effect definition id (built-in or mod). */
+  type: string;
+  enabled: boolean;
+  params: Record<string, number>;
+}
+
+/** Effect/transition definition embedded in a project (keeps mod-based projects portable). */
+export interface EmbeddedFx {
+  id: string;
+  kind: 'effect' | 'transition';
+  name: string;
+  nameRu?: string;
+  author?: string;
+  version?: string;
+  description?: string;
+  params: { id: string; name: string; nameRu?: string; min: number; max: number; default: number; step?: number }[];
+  glsl: string;
 }
 
 export type TextAlign = 'left' | 'center' | 'right';
@@ -117,7 +205,11 @@ export interface Clip {
   transform: Transform;
   crop: Crop;
   adjust: Adjust;
+  wheels: ColorWheels;
   filter: ClipFilter;
+  effects: ClipEffect[];
+  mask: ClipMask;
+  lut: ClipLut | null;
   chroma: ChromaKey;
   blend: BlendMode;
   animIn: ClipAnim;
@@ -130,8 +222,10 @@ export interface Clip {
   fadeIn: number;
   fadeOut: number;
   muted: boolean;
+  audioFx: AudioFx;
 
   text: TextStyle | null;
+  shape: ShapeStyle | null;
   color: string;
 }
 
@@ -142,6 +236,10 @@ export interface Track {
   muted: boolean;
   hidden: boolean;
   locked: boolean;
+  /** When any track is soloed, only soloed tracks are heard. */
+  solo?: boolean;
+  /** Custom lane height in px (default by kind). */
+  height?: number;
   volume: number;
   clips: Clip[];
 }
@@ -172,6 +270,10 @@ export interface MediaAsset {
   hasAudio: boolean;
   hasVideo: boolean;
   size: number;
+  /** Video colour matrix from the file (e.g. bt709); missing in older projects. */
+  colorSpace?: string | null;
+  /** Transparent video (e.g. AI background removal results). */
+  hasAlpha?: boolean;
 }
 
 export interface Project {
@@ -182,6 +284,11 @@ export interface Project {
   /** Video tracks are stored bottom-up (index 0 renders first); audio tracks top-down. */
   tracks: Track[];
   markers: Marker[];
+  /** Definitions of mod effects/transitions used by the project. */
+  fx?: EmbeddedFx[];
+  /** In/out marks (I / O keys): export and range playback can use them. */
+  markIn?: number | null;
+  markOut?: number | null;
 }
 
 /** Session-only media state (not saved, not part of undo history). */
@@ -190,7 +297,17 @@ export interface MediaRuntime {
   thumb: string | null;
   filmstrip: { path: string; count: number; tileW: number; tileH: number; interval: number } | null;
   proxyPath: string | null;
+  /** Chromium cannot play the original: the proxy is always used for preview. */
+  proxyRequired: boolean;
+  /** An editing proxy is being built in the background (media stays usable). */
+  optimizing: boolean;
   progress: number;
   error: string | null;
   hasWaveform: boolean;
+}
+
+/** File the live preview should play for a media asset. */
+export function previewPath(m: MediaAsset, rt: MediaRuntime | undefined, useProxies: boolean): string {
+  if (rt?.proxyPath && (rt.proxyRequired || useProxies)) return rt.proxyPath;
+  return m.path;
 }

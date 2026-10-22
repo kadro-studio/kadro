@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kadro — бесплатный видеоредактор без водяных знаков</title>
+    <meta
+      name="description"
+      content="Kadro — бесплатный видеоредактор с открытым кодом для Windows. Без водяных знаков, подписок и регистрации. Таймлайн, цветокоррекция, хромакей, ИИ-субтитры и удаление фона."
+    />
+    <meta property="og:title" content="Kadro — бесплатный видеоредактор" />
+    <meta property="og:description" content="Без водяных знаков, подписок и регистрации. Открытый код." />
+    <meta property="og:image" content="assets/screenshot-ru.webp" />
+    <meta name="theme-color" content="#08080a" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="#top">
+          <img src="assets/logo.png" alt="" width="30" height="30" />
+          <span>Kadro</span>
+        </a>
+        <nav class="nav-links">
+          <a href="#features" data-i18n="nav.features">Возможности</a>
+          <a href="#free" data-i18n="nav.free">Бесплатно навсегда</a>
+          <a href="#support" data-i18n="nav.support">Поддержать</a>
+          <a href="#faq" data-i18n="nav.faq">Вопросы</a>
+        </nav>
+        <div class="nav-actions">
+          <button class="lang" id="lang" type="button" aria-label="Language">EN</button>
+          <a class="btn btn-primary btn-sm" href="#download" data-i18n="nav.download">Скачать</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="glow"></div>
+        <div class="wrap hero-inner">
+          <div class="badge" data-i18n="hero.badge">Открытый код · MIT · версия <span data-version>0.1.0</span></div>
+          <h1 data-i18n="hero.title">Монтаж без водяных знаков, подписок и лицензий</h1>
+          <p class="lead" data-i18n="hero.lead">
+            Kadro — бесплатный видеоредактор для Windows. Всё, за что другие просят деньги: многодорожечный таймлайн, цветокоррекция, хромакей,
+            ИИ-субтитры и удаление фона — доступно каждому и навсегда.
+          </p>
+          <div class="cta" id="download">
+            <a class="btn btn-primary btn-lg" data-link="installer" href="#">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16" /></svg>
+              <span data-i18n="cta.installer">Скачать для Windows</span>
+            </a>
+            <a class="btn btn-ghost btn-lg" data-link="portable" href="#" data-i18n="cta.portable">Portable-версия</a>
+          </div>
+          <p class="meta" data-i18n="cta.meta">Windows 10 / 11 · 64-бит · около 160 МБ · без регистрации</p>
+          <figure class="shot">
+            <img data-shot src="assets/screenshot-ru.webp" alt="Kadro" width="1600" height="900" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="strip">
+        <div class="wrap strip-inner">
+          <span data-i18n="strip.1">Без водяных знаков</span>
+          <span data-i18n="strip.2">Без регистрации</span>
+          <span data-i18n="strip.3">Без подписки</span>
+          <span data-i18n="strip.4">Работает офлайн</span>
+          <span data-i18n="strip.5">Открытый код</span>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="wrap">
+          <h2 data-i18n="features.title">Инструменты профессионального уровня</h2>
+          <p class="section-lead" data-i18n="features.lead">То, что обычно спрятано в дорогих тарифах, в Kadro есть сразу.</p>
+          <div class="grid">
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18M8 3v6M15 9v6M10 15v6" /></svg>
+              </div>
+              <h3 data-i18n="f1.t">Настоящий таймлайн</h3>
+              <p data-i18n="f1.d">Неограниченные дорожки, ripple-, roll-, slip- и slide-правка, маркеры, точки входа и выхода, соло и блокировка дорожек.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 000 18" /></svg>
+              </div>
+              <h3 data-i18n="f2.t">Цвет как в студии</h3>
+              <p data-i18n="f2.d">Цветовые круги, LUT (.cube), корректирующие слои, видеоскопы, хромакей и маски.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.3L20 9l-4.4 3.8L17 18l-5-3-5 3 1.4-5.2L4 9l5.8-.7z" /></svg>
+              </div>
+              <h3 data-i18n="f3.t">ИИ прямо на компьютере</h3>
+              <p data-i18n="f3.d">Автосубтитры и удаление фона работают локально: без облака, кредитов и отправки ваших видео куда-либо.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" /></svg>
+              </div>
+              <h3 data-i18n="f4.t">Чистый звук</h3>
+              <p data-i18n="f4.d">Шумоподавление, нормализация громкости по EBU R128, эквалайзер, компрессор и запись голоса.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M4 20L16 8M14 6l4 4M18 3v3M16.5 4.5h3" /></svg>
+              </div>
+              <h3 data-i18n="f5.t">Эффекты и моды</h3>
+              <p data-i18n="f5.d">Шейдерные эффекты и переходы, стабилизация, компоновки «картинка в картинке» и свои моды на GLSL.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z" /></svg>
+              </div>
+              <h3 data-i18n="f6.t">Быстрый экспорт</h3>
+              <p data-i18n="f6.d">Аппаратное кодирование NVENC, Quick Sync и AMF. MP4, WebM, ProRes, GIF — до 4K.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="free">
+        <div class="wrap two-col">
+          <div>
+            <h2 data-i18n="free.title">Бесплатно — значит бесплатно</h2>
+            <p data-i18n="free.p1">
+              Kadro не продаёт лицензии и не прячет функции за платной версией. Нет водяного знака на экспорте, нет пробного периода и нет
+              учётной записи. Все получают одну и ту же программу.
+            </p>
+            <p data-i18n="free.p2">
+              Исходный код открыт под лицензией MIT: его можно проверить, изменить и собрать самому. Программа не собирает данные и работает без
+              интернета — сеть нужна только один раз, чтобы скачать ИИ-модели.
+            </p>
+          </div>
+          <table class="compare">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Kadro</th>
+                <th data-i18n="cmp.paid">Платные редакторы</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-i18n="cmp.price">Цена</td>
+                <td class="yes" data-i18n="cmp.free">0 ₽</td>
+                <td data-i18n="cmp.sub">подписка или лицензия</td>
+              </tr>
+              <tr>
+                <td data-i18n="cmp.wm">Водяной знак</td>
+                <td class="yes" data-i18n="cmp.no">нет</td>
+                <td data-i18n="cmp.wmFree">в бесплатной версии</td>
+              </tr>
+              <tr>
+                <td data-i18n="cmp.ai">ИИ-функции</td>
+                <td class="yes" data-i18n="cmp.local">локально, без лимитов</td>
+                <td data-i18n="cmp.credits">в облаке, за кредиты</td>
+              </tr>
+              <tr>
+                <td data-i18n="cmp.acc">Учётная запись</td>
+                <td class="yes" data-i18n="cmp.notNeeded">не нужна</td>
+                <td data-i18n="cmp.needed">обязательна</td>
+              </tr>
+              <tr>
+                <td data-i18n="cmp.code">Открытый код</td>
+                <td class="yes" data-i18n="cmp.yes">да</td>
+                <td data-i18n="cmp.no2">нет</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="support">
+        <div class="wrap">
+          <h2 data-i18n="support.title">Поддержать проект</h2>
+          <p class="section-lead" data-i18n="support.lead">
+            Донаты добровольны и ничего не открывают — у всех одинаковая программа. Они помогают тратить больше времени на новые функции.
+          </p>
+          <div class="donate" id="donate-list"></div>
+          <p class="hint" data-i18n="support.other">Ещё можно помочь бесплатно: рассказать о Kadro, сообщить об ошибке или сделать мод.</p>
+        </div>
+      </section>
+
+      <section class="section alt" id="faq">
+        <div class="wrap narrow">
+          <h2 data-i18n="faq.title">Вопросы</h2>
+          <details>
+            <summary data-i18n="q1">Это правда бесплатно? В чём подвох?</summary>
+            <p data-i18n="a1">Подвоха нет. Kadro — проект с открытым кодом, который живёт на добровольной поддержке пользователей.</p>
+          </details>
+          <details>
+            <summary data-i18n="q2">Windows пишет «Система Windows защитила ваш компьютер». Что делать?</summary>
+            <p data-i18n="a2">
+              Так SmartScreen реагирует на новые программы без платной цифровой подписи. Нажмите «Подробнее» → «Выполнить в любом случае». Исходный
+              код открыт, и установщик можно собрать самому.
+            </p>
+          </details>
+          <details>
+            <summary data-i18n="q3">Нужен ли интернет?</summary>
+            <p data-i18n="a3">Нет. Только при первом использовании ИИ-функций программа один раз скачивает модели (от 40 до 250 МБ).</p>
+          </details>
+          <details>
+            <summary data-i18n="q4">Какие системы поддерживаются?</summary>
+            <p data-i18n="a4">Windows 10 и 11 (64-бит). Сборки для macOS и Linux планируются.</p>
+          </details>
+          <details>
+            <summary data-i18n="q5">Можно ли использовать для коммерческих проектов?</summary>
+            <p data-i18n="a5">Да. Всё, что вы смонтировали, принадлежит вам, без каких-либо отчислений и пометок.</p>
+          </details>
+          <details>
+            <summary data-i18n="q6">Как сделать свой эффект?</summary>
+            <p data-i18n="a6">Эффекты и переходы пишутся на GLSL в файлах .vrmod. Инструкция — в MODS.md в репозитории.</p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div class="brand small">
+          <img src="assets/logo.png" alt="" width="22" height="22" />
+          <span>Kadro</span>
+        </div>
+        <nav>
+          <a data-link="source" href="#" data-i18n="footer.source">Исходный код</a>
+          <a data-link="releases" href="#" data-i18n="footer.releases">Все версии</a>
+          <a data-link="issues" href="#" data-i18n="footer.issues">Сообщить об ошибке</a>
+        </nav>
+        <p data-i18n="footer.note">MIT. FFmpeg используется как отдельная программа под собственной лицензией.</p>
+      </div>
+    </footer>
+
+    <script src="config.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>

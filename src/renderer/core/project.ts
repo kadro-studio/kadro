@@ -1,6 +1,11 @@
 import type {
   Adjust,
+  AudioFx,
   ChromaKey,
+  ClipMask,
+  ColorWheels,
+  ShapeKind,
+  ShapeStyle,
   Clip,
   ClipType,
   Crop,
@@ -44,6 +49,32 @@ export function defaultAdjust(): Adjust {
   };
 }
 
+export function defaultWheels(): ColorWheels {
+  return { lift: { x: 0, y: 0, l: 0 }, gamma: { x: 0, y: 0, l: 0 }, gain: { x: 0, y: 0, l: 0 } };
+}
+
+export function defaultShape(kind: ShapeKind = 'rect'): ShapeStyle {
+  const square = kind === 'ellipse' || kind === 'star' || kind === 'triangle';
+  return {
+    kind,
+    width: kind === 'line' || kind === 'arrow' ? 600 : square ? 400 : 640,
+    height: kind === 'line' ? 12 : kind === 'arrow' ? 160 : square ? 400 : 360,
+    fill: '#4d8dff',
+    fillOpacity: 100,
+    stroke: '#ffffff',
+    strokeWidth: 0,
+    radius: kind === 'bubble' ? 40 : 0,
+  };
+}
+
+export function defaultMask(): ClipMask {
+  return { shape: 'none', x: 0.5, y: 0.5, width: 0.6, height: 0.6, rotation: 0, feather: 0.05, invert: false };
+}
+
+export function defaultAudioFx(): AudioFx {
+  return { low: 0, mid: 0, high: 0, compressor: false };
+}
+
 export function defaultChroma(): ChromaKey {
   return { enabled: false, color: '#00ff00', similarity: 40, smoothness: 10, spill: 50 };
 }
@@ -85,7 +116,11 @@ export function makeClip(type: ClipType, partial: Partial<Clip> = {}): Clip {
     transform: defaultTransform(),
     crop: defaultCrop(),
     adjust: defaultAdjust(),
+    wheels: defaultWheels(),
     filter: { id: 'none', amount: 100 },
+    effects: [],
+    mask: defaultMask(),
+    lut: null,
     chroma: defaultChroma(),
     blend: 'normal',
     animIn: { type: 'none', duration: 0.5 },
@@ -96,7 +131,9 @@ export function makeClip(type: ClipType, partial: Partial<Clip> = {}): Clip {
     fadeIn: 0,
     fadeOut: 0,
     muted: false,
+    audioFx: defaultAudioFx(),
     text: null,
+    shape: null,
     color: '#1e88e5',
     ...partial,
   };
@@ -228,10 +265,25 @@ export function normalizeProject(raw: unknown): Project {
             adjust: { ...def.adjust, ...(c.adjust ?? {}) },
             filter: { ...def.filter, ...(c.filter ?? {}) },
             chroma: { ...def.chroma, ...(c.chroma ?? {}) },
+            mask: { ...def.mask, ...(c.mask ?? {}) },
+            lut:
+              c.lut && typeof c.lut.path === 'string'
+                ? { path: c.lut.path, name: c.lut.name ?? c.lut.path, amount: typeof c.lut.amount === 'number' ? c.lut.amount : 100 }
+                : null,
+            audioFx: { ...def.audioFx, ...(c.audioFx ?? {}) },
+            wheels: {
+              lift: { ...def.wheels.lift, ...(c.wheels?.lift ?? {}) },
+              gamma: { ...def.wheels.gamma, ...(c.wheels?.gamma ?? {}) },
+              gain: { ...def.wheels.gain, ...(c.wheels?.gain ?? {}) },
+            },
+            shape: c.type === 'shape' ? { ...defaultShape(c.shape?.kind), ...(c.shape ?? {}) } : null,
             animIn: { ...def.animIn, ...(c.animIn ?? {}) },
             animOut: { ...def.animOut, ...(c.animOut ?? {}) },
             transition: { ...def.transition, ...(c.transition ?? {}) },
             keyframes: { ...(c.keyframes ?? {}) },
+            effects: Array.isArray(c.effects)
+              ? c.effects.filter((e) => e && typeof e.type === 'string').map((e) => ({ id: e.id ?? uid(), type: e.type, enabled: e.enabled !== false, params: { ...(e.params ?? {}) } }))
+              : [],
             text: c.type === 'text' ? { ...defaultTextStyle(), ...(c.text ?? {}) } : null,
           };
         });
@@ -248,5 +300,6 @@ export function normalizeProject(raw: unknown): Project {
     media,
     tracks,
     markers: Array.isArray(src.markers) ? src.markers : [],
+    fx: Array.isArray(src.fx) ? src.fx : [],
   };
 }

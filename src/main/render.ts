@@ -5,8 +5,17 @@
 //    stdin, mixes the audio plan with filters and writes the output file.
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
-import { ffmpegPath, tailLog } from './ffmpeg';
-import type { AudioSegment, DecoderSpec, ExportResult, ExportSpec } from '../shared/api';
+import { ffmpegPath, hwEncoders, tailLog } from './ffmpeg';
+import {
+  AUDIO_FX,
+  frameBytes,
+  type AudioSegment,
+  type DecoderSpec,
+  type ExportResult,
+  type ExportSpec,
+  type HwEncoder,
+  type MatteSpec,
+} from '../shared/api';
 
 let nextId = 1;
 const newId = (prefix: string) => `${prefix}${nextId++}`;
@@ -33,10 +42,12 @@ class FrameReader {
       if (this.buffered > this.highWater) out.pause();
       this.wake();
     });
-    out.on('end', () => {
+    const finish = () => {
       this.ended = true;
       this.wake();
-    });
+    };
+    out.on('end', finish);
+    out.on('close', finish);
     proc.on('error', () => {
       this.ended = true;
       this.wake();
@@ -77,29 +88,38 @@ interface Decoder {
 
 const decoders = new Map<string, Decoder>();
 
+/** Hardware-accelerated decoding ('auto' falls back to software when unsupported). */
+const DECODE_HWACCEL = process.env.VR_DECODE_HWACCEL ?? 'none';
+
 export function decoderOpen(spec: DecoderSpec): string {
   const w = Math.max(2, Math.round(spec.width / 2) * 2);
   const h = Math.max(2, Math.round(spec.height / 2) * 2);
   const speed = spec.speed > 0 ? spec.speed : 1;
+  // Frames stay in YUV (source colour matrix, limited range): a third of the
+  // RGBA size, and the GPU converts them during compositing.
+  const format = spec.format ?? 'yuv420p';
   const vf = [
     `setpts=(PTS-STARTPTS)/${speed.toFixed(6)}`,
     `fps=${spec.fps}`,
-    `scale=${w}:${h}:flags=bicubic`,
-    'format=rgba',
+    format === 'rgba' ? `scale=${w}:${h}:flags=bicubic` : `scale=${w}:${h}:flags=bicubic:out_range=tv`,
+    `format=${format}`,
   ].join(',');
-  const args = [
-    '-hide_banner', '-loglevel', 'error',
+  const args = ['-hide_banner', '-loglevel', 'error'];
+  if (DECODE_HWACCEL !== 'none' && format !== 'yuva420p') args.push('-hwaccel', DECODE_HWACCEL);
+  // ffmpeg's native VP9 decoder drops the alpha plane; libvpx keeps it.
+  if (format === 'yuva420p') args.push('-c:v', 'libvpx-vp9');
+  args.push(
     '-ss', Math.max(0, spec.sourceIn).toFixed(6),
     '-i', spec.path,
     '-an', '-sn',
     '-vf', vf,
     '-t', (spec.duration + 2 / spec.fps).toFixed(6),
-    '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1',
-  ];
+    '-f', 'rawvideo', '-pix_fmt', format, 'pipe:1',
+  );
   const proc = spawn(ffmpegPath(), args, { windowsHide: true });
   proc.stderr?.resume();
   const id = newId('dec');
-  decoders.set(id, { proc, reader: new FrameReader(proc, w * h * 4) });
+  decoders.set(id, { proc, reader: new FrameReader(proc, frameBytes(w, h, format)) });
   return id;
 }
 
@@ -123,6 +143,7 @@ export function decoderClose(id: string): void {
 interface Job {
   proc: ChildProcess;
   spec: ExportSpec;
+  encoder: string;
   stderr: string;
   exited: Promise<number | null>;
   failed: boolean;
@@ -145,6 +166,37 @@ function atempoChain(speed: number): string[] {
   return parts;
 }
 
+/** Piecewise-linear ffmpeg expression of volume keyframes (t = segment time). */
+function volumeExpr(keys: { t: number; v: number }[], scale: number): string {
+  const k = [...keys].sort((a, b) => a.t - b.t);
+  const n = (x: number) => x.toFixed(6);
+  let expr = n(k[k.length - 1].v);
+  for (let i = k.length - 2; i >= 0; i--) {
+    const a = k[i];
+    const b = k[i + 1];
+    const span = Math.max(1e-6, b.t - a.t);
+    expr = `if(lt(t,${n(b.t)}),${n(a.v)}+(${n(b.v - a.v)})*(t-${n(a.t)})/${n(span)},${expr})`;
+  }
+  return `${n(scale)}*if(lt(t,${n(k[0].t)}),${n(k[0].v)},${expr})`;
+}
+
+/** EQ and compressor matching the preview's Web Audio nodes (RBJ shelves with S=1). */
+function audioFxFilters(seg: AudioSegment): string[] {
+  const f: string[] = [];
+  const eq = seg.eq;
+  if (eq?.low) f.push(`bass=g=${eq.low}:f=${AUDIO_FX.lowFreq}:t=s:w=1`);
+  if (eq?.mid) f.push(`equalizer=f=${AUDIO_FX.midFreq}:t=q:w=${AUDIO_FX.midQ}:g=${eq.mid}`);
+  if (eq?.high) f.push(`treble=g=${eq.high}:f=${AUDIO_FX.highFreq}:t=s:w=1`);
+  if (seg.compressor) {
+    const threshold = Math.pow(10, AUDIO_FX.compThresholdDb / 20);
+    f.push(
+      `acompressor=threshold=${threshold.toFixed(5)}:ratio=${AUDIO_FX.compRatio}:attack=${AUDIO_FX.compAttack * 1000}` +
+        `:release=${AUDIO_FX.compRelease * 1000}:knee=2:makeup=2`,
+    );
+  }
+  return f;
+}
+
 /** Inputs and a filter graph that mixes all audio segments into [aout]. */
 function audioGraph(segments: AudioSegment[], firstInput: number, total: number) {
   const inputs: string[] = [];
@@ -154,7 +206,9 @@ function audioGraph(segments: AudioSegment[], firstInput: number, total: number)
     const idx = firstInput + i;
     inputs.push('-ss', seg.sourceIn.toFixed(6), '-t', seg.sourceDuration.toFixed(6), '-i', seg.path);
     const f = ['aresample=48000', 'aformat=sample_fmts=fltp:channel_layouts=stereo', ...atempoChain(seg.speed), 'asetpts=PTS-STARTPTS'];
-    if (Math.abs(seg.volume - 1) > 1e-4) f.push(`volume=${seg.volume.toFixed(4)}`);
+    f.push(...audioFxFilters(seg));
+    if (seg.volumeKeys?.length) f.push(`volume='${volumeExpr(seg.volumeKeys, seg.volume)}':eval=frame`);
+    else if (Math.abs(seg.volume - 1) > 1e-4) f.push(`volume=${seg.volume.toFixed(4)}`);
     if (seg.fadeIn > 0) f.push(`afade=t=in:st=0:d=${seg.fadeIn.toFixed(4)}`);
     if (seg.fadeOut > 0) f.push(`afade=t=out:st=${Math.max(0, seg.duration - seg.fadeOut).toFixed(4)}:d=${seg.fadeOut.toFixed(4)}`);
     f.push(`atrim=0:${seg.duration.toFixed(6)}`);
@@ -174,25 +228,59 @@ function audioGraph(segments: AudioSegment[], firstInput: number, total: number)
   return { inputs, filter: chains.join(';') };
 }
 
-const CRF: Record<string, Record<ExportSpec['quality'], number>> = {
-  x264: { high: 17, medium: 21, low: 26 },
-  x265: { high: 20, medium: 25, low: 30 },
-  vp9: { high: 26, medium: 32, low: 38 },
-};
+type Quality = ExportSpec['quality'];
+const pick = (q: Quality, high: number | string, medium: number | string, low: number | string) =>
+  String(q === 'high' ? high : q === 'medium' ? medium : low);
 
-function buildArgs(spec: ExportSpec): string[] {
+function chooseEncoder(spec: ExportSpec, available: HwEncoder[]): HwEncoder | null {
+  if (spec.encoder === 'cpu') return null;
+  if (spec.encoder === 'auto') return (['nvenc', 'qsv', 'amf'] as HwEncoder[]).find((e) => available.includes(e)) ?? null;
+  return available.includes(spec.encoder) ? spec.encoder : null;
+}
+
+/** Encoder arguments for H.264/HEVC on the GPU or the CPU. */
+function videoCodecArgs(codec: 'h264' | 'hevc', hw: HwEncoder | null, q: Quality): string[] {
+  const hevc = codec === 'hevc';
+  switch (hw) {
+    case 'nvenc':
+      return ['-c:v', `${codec}_nvenc`, '-preset', pick(q, 'p6', 'p5', 'p3'), '-tune', 'hq', '-rc', 'vbr',
+        '-cq', hevc ? pick(q, 21, 26, 31) : pick(q, 19, 23, 28), '-b:v', '0', '-spatial-aq', '1'];
+    case 'qsv':
+      return ['-c:v', `${codec}_qsv`, '-preset', pick(q, 'slow', 'medium', 'faster'),
+        '-global_quality', hevc ? pick(q, 22, 26, 31) : pick(q, 20, 24, 29), '-look_ahead', '0'];
+    case 'amf': {
+      const qp = Number(hevc ? pick(q, 22, 26, 31) : pick(q, 19, 23, 28));
+      return ['-c:v', `${codec}_amf`, '-quality', pick(q, 'quality', 'balanced', 'speed'), '-rc', 'cqp',
+        '-qp_i', String(qp), '-qp_p', String(qp + 2), '-qp_b', String(qp + 4)];
+    }
+    default:
+      return hevc
+        ? ['-c:v', 'libx265', '-preset', pick(q, 'fast', 'faster', 'veryfast'), '-crf', pick(q, 20, 25, 30)]
+        : ['-c:v', 'libx264', '-preset', pick(q, 'medium', 'faster', 'veryfast'), '-crf', pick(q, 17, 21, 25)];
+  }
+}
+
+const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
+
+function buildArgs(spec: ExportSpec, hwAvailable: HwEncoder[]): { args: string[]; encoder: string } {
   const hasVideo = !['mp3', 'wav'].includes(spec.format);
   const hasAudio = spec.format !== 'gif';
+  const yuvInput = hasVideo && spec.pixelFormat === 'yuv420p' && spec.format !== 'gif';
   const args = ['-hide_banner', '-loglevel', 'error', '-y'];
   const filters: string[] = [];
+  let encoder: string = spec.format;
 
   if (hasVideo) {
-    args.push('-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${spec.width}x${spec.height}`, '-r', String(spec.fps), '-i', 'pipe:0');
-    // WebGL readPixels returns rows bottom-up.
+    args.push('-f', 'rawvideo', '-pix_fmt', yuvInput ? 'yuv420p' : 'rgba', '-s', `${spec.width}x${spec.height}`, '-r', String(spec.fps));
+    if (yuvInput) args.push(...BT709);
+    args.push('-i', 'pipe:0');
     if (spec.format === 'gif') {
+      // RGBA readback rows are bottom-up.
       filters.push('[0:v]vflip,split[g0][g1];[g0]palettegen=stats_mode=diff[pal];[g1][pal]paletteuse=dither=bayer:bayer_scale=4[vout]');
+    } else if (yuvInput) {
+      filters.push('[0:v]null[vout]');
     } else {
-      filters.push('[0:v]vflip[vout]');
+      filters.push('[0:v]vflip,scale=out_color_matrix=bt709:out_range=tv[vout]');
     }
   }
   if (hasAudio) {
@@ -207,20 +295,25 @@ function buildArgs(spec: ExportSpec): string[] {
   const q = spec.quality;
   switch (spec.format) {
     case 'mp4':
-      args.push('-c:v', 'libx264', '-preset', q === 'high' ? 'slow' : q === 'medium' ? 'medium' : 'veryfast',
-        '-crf', String(CRF.x264[q]), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart');
+    case 'mp4-hevc': {
+      const codec = spec.format === 'mp4' ? 'h264' : 'hevc';
+      const hw = chooseEncoder(spec, hwAvailable);
+      const codecArgs = videoCodecArgs(codec, hw, q);
+      encoder = codecArgs[1];
+      args.push(...codecArgs, '-pix_fmt', 'yuv420p', ...BT709);
+      if (codec === 'hevc') args.push('-tag:v', 'hvc1');
+      args.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart');
       break;
-    case 'mp4-hevc':
-      args.push('-c:v', 'libx265', '-preset', q === 'low' ? 'veryfast' : 'medium', '-crf', String(CRF.x265[q]),
-        '-pix_fmt', 'yuv420p', '-tag:v', 'hvc1', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart');
-      break;
+    }
     case 'webm':
-      args.push('-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', String(CRF.vp9[q]), '-row-mt', '1', '-deadline', 'good',
-        '-cpu-used', q === 'high' ? '2' : '4', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', '-b:a', '160k');
+      encoder = 'libvpx-vp9';
+      args.push('-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', pick(q, 28, 32, 38), '-row-mt', '1', '-tile-columns', '2',
+        '-deadline', q === 'low' ? 'realtime' : 'good', '-cpu-used', pick(q, 3, 5, 8),
+        '-pix_fmt', 'yuv420p', ...BT709, '-c:a', 'libopus', '-b:a', '160k');
       break;
     case 'mov-prores':
-      args.push('-c:v', 'prores_ks', '-profile:v', q === 'high' ? '3' : q === 'medium' ? '2' : '0',
-        '-pix_fmt', 'yuv422p10le', '-c:a', 'pcm_s16le');
+      encoder = 'prores_ks';
+      args.push('-c:v', 'prores_ks', '-profile:v', pick(q, 3, 2, 0), '-pix_fmt', 'yuv422p10le', ...BT709, '-c:a', 'pcm_s16le');
       break;
     case 'gif':
       args.push('-loop', '0');
@@ -233,15 +326,43 @@ function buildArgs(spec: ExportSpec): string[] {
       break;
   }
   args.push('-t', spec.duration.toFixed(6), spec.outPath);
-  return args;
+  return { args, encoder };
 }
 
-export function exportStart(spec: ExportSpec): string {
-  const args = buildArgs(spec);
+export async function exportStart(spec: ExportSpec): Promise<string> {
+  const { args, encoder } = buildArgs(spec, await hwEncoders());
+  return startJob(args, spec.outPath, encoder);
+}
+
+/**
+ * Bakes grey matte frames (sent with exportFrame) into a VP9 WebM with alpha:
+ * the source range keeps its full resolution, the matte is scaled up to it.
+ */
+export function matteStart(spec: MatteSpec): string {
+  const args = [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-ss', spec.sourceIn.toFixed(6), '-t', spec.duration.toFixed(6), '-i', spec.source,
+    '-f', 'rawvideo', '-pix_fmt', 'gray', '-s', `${spec.matteWidth}x${spec.matteHeight}`, '-r', String(spec.fps), '-i', 'pipe:0',
+    '-filter_complex',
+    `[0:v]fps=${spec.fps},format=yuv420p[src];[1:v][src]scale2ref=flags=bicubic[m][s];[s][m]alphamerge,format=yuva420p[v]`,
+    '-map', '[v]',
+  ];
+  if (spec.withAudio) args.push('-map', '0:a:0?', '-c:a', 'libopus', '-b:a', '160k');
+  args.push(
+    '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '28', '-row-mt', '1',
+    '-deadline', 'good', '-cpu-used', '4', '-auto-alt-ref', '0',
+    '-t', spec.duration.toFixed(6), spec.outPath,
+  );
+  return startJob(args, spec.outPath, 'libvpx-vp9');
+}
+
+function startJob(args: string[], outPath: string, encoder: string): string {
+  const spec = { outPath } as ExportSpec;
   const proc = spawn(ffmpegPath(), args, { windowsHide: true });
   const job: Job = {
     proc,
     spec,
+    encoder,
     stderr: '',
     failed: false,
     exited: new Promise((resolve) => {
@@ -292,7 +413,7 @@ export async function exportFinish(id: string): Promise<ExportResult> {
   job.proc.stdin?.end();
   const code = await job.exited;
   jobs.delete(id);
-  if (code === 0 && !job.failed) return { ok: true };
+  if (code === 0 && !job.failed) return { ok: true, encoder: job.encoder };
   return { ok: false, error: tailLog(job.stderr) || `ffmpeg exited with code ${code}` };
 }
 

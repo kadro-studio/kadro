@@ -7,6 +7,8 @@ import type { MediaAsset } from '../core/types';
 import { setWaveform } from '../engine/waveforms';
 import { t } from '../i18n';
 import { edit, setRuntime, toast, useEditor } from './editor';
+import { usePrefs } from './prefs';
+import { installMods } from './mods';
 
 const PLAYABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1', 'theora']);
 const PLAYABLE_AUDIO = new Set(['aac', 'mp3', 'opus', 'vorbis', 'flac', 'pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le', 'pcm_u8']);
@@ -82,17 +84,47 @@ export async function analyzeMedia(asset: MediaAsset, info: MediaProbe | null = 
 
   try {
     if (await needsProxy(asset, info)) {
-      setRuntime(asset.id, { status: 'proxying', progress: 0 });
+      setRuntime(asset.id, { status: 'proxying', progress: 0, proxyRequired: true });
       const proxyPath = await api.proxy(asset.path, asset.kind, asset.duration);
       setRuntime(asset.id, { proxyPath, status: 'ready', progress: 1 });
     } else {
-      setRuntime(asset.id, { status: 'ready' });
+      setRuntime(asset.id, { status: 'ready', proxyRequired: false });
+      if (usePrefs.getState().autoProxy && isHeavy(asset)) void createEditingProxy(asset.id);
     }
   } catch (e) {
     setRuntime(asset.id, { status: 'error', error: errText(e) });
     toast(t('toast.proxyFailed', { name: asset.name, err: errText(e) }), 'error');
   }
   await Promise.allSettled([thumbP, stripP, waveP]);
+}
+
+/** Media above 1080p decodes too slowly for smooth multi-track preview. */
+export function isHeavy(m: MediaAsset): boolean {
+  return m.kind === 'video' && Math.max(m.width, m.height) > 1920;
+}
+
+/**
+ * Builds a 1080p proxy in the background. The original stays usable meanwhile;
+ * preview switches over when it is ready, export keeps using the original.
+ */
+export async function createEditingProxy(mediaId: string): Promise<void> {
+  const m = useEditor.getState().project.media.find((x) => x.id === mediaId);
+  const rt = useEditor.getState().runtime[mediaId];
+  if (!m || m.kind !== 'video' || rt?.optimizing || rt?.proxyPath) return;
+  setRuntime(mediaId, { optimizing: true, progress: 0 });
+  try {
+    const proxyPath = await api.proxy(m.path, m.kind, m.duration);
+    setRuntime(mediaId, { proxyPath, optimizing: false, progress: 1 });
+  } catch (e) {
+    setRuntime(mediaId, { optimizing: false });
+    toast(t('toast.proxyFailed', { name: m.name, err: errText(e) }), 'error');
+  }
+}
+
+/** Drops an editing proxy so preview plays the original again. */
+export function removeEditingProxy(mediaId: string): void {
+  const rt = useEditor.getState().runtime[mediaId];
+  if (rt && !rt.proxyRequired) setRuntime(mediaId, { proxyPath: null });
 }
 
 function assetFromProbe(info: MediaProbe, path: string): MediaAsset {
@@ -108,11 +140,17 @@ function assetFromProbe(info: MediaProbe, path: string): MediaAsset {
     hasAudio: info.hasAudio,
     hasVideo: info.hasVideo,
     size: info.size,
+    colorSpace: info.colorSpace,
+    hasAlpha: info.hasAlpha,
   };
 }
 
 /** Imports files into the project; returns the assets (existing ones are reused). */
-export async function importFiles(paths: string[]): Promise<MediaAsset[]> {
+export async function importFiles(allPaths: string[]): Promise<MediaAsset[]> {
+  // Mod files dropped anywhere are installed rather than imported as media.
+  const modPaths = allPaths.filter((p) => p.toLowerCase().endsWith('.vrmod'));
+  if (modPaths.length) void installMods(modPaths);
+  const paths = allPaths.filter((p) => !p.toLowerCase().endsWith('.vrmod'));
   const result: MediaAsset[] = [];
   for (const path of paths) {
     const existing = useEditor.getState().project.media.find((m) => samePath(m.path, path));
@@ -173,7 +211,8 @@ export function startProxyProgressListener(): () => void {
   return api.onProxyProgress((path, progress) => {
     const s = useEditor.getState();
     for (const m of s.project.media) {
-      if (samePath(m.path, path) && s.runtime[m.id]?.status === 'proxying') setRuntime(m.id, { progress });
+      const rt = s.runtime[m.id];
+      if (samePath(m.path, path) && (rt?.status === 'proxying' || rt?.optimizing)) setRuntime(m.id, { progress });
     }
   });
 }

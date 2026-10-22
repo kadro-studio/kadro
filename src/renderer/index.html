@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: media:; media-src 'self' blob: media:; connect-src 'self' ws: media:; font-src 'self' data:"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: media:; media-src 'self' blob: media:; connect-src 'self' ws: media: blob: data: https://huggingface.co https://*.huggingface.co https://*.hf.co; font-src 'self' data:"
     />
-    <title>Videoredact</title>
+    <title>Kadro</title>
   </head>
   <body>
     <div id="root"></div>

@@ -1,6 +1,21 @@
 import type { AnimProp, Clip, Ease, Keyframe } from './types';
 
-export const ANIM_PROPS: AnimProp[] = ['x', 'y', 'scale', 'rotation', 'opacity'];
+export const ANIM_PROPS: AnimProp[] = ['x', 'y', 'scale', 'rotation', 'opacity', 'volume'];
+
+/** Static (non-animated) value of a property. */
+function baseValue(clip: Clip, prop: AnimProp): number {
+  return prop === 'volume' ? clip.volume : clip.transform[prop];
+}
+
+function setBase(clip: Clip, prop: AnimProp, v: number): void {
+  if (prop === 'volume') clip.volume = v;
+  else clip.transform[prop] = v;
+}
+
+/** Volume keyframes are linear so ffmpeg can reproduce them exactly on export. */
+function newEase(prop: AnimProp): Ease {
+  return prop === 'volume' ? 'linear' : 'easeInOut';
+}
 
 export function applyEase(ease: Ease, p: number): number {
   switch (ease) {
@@ -37,7 +52,7 @@ export function evalKeyframes(kfs: Keyframe[], t: number): number {
 export function propValue(clip: Clip, prop: AnimProp, localT: number): number {
   const kfs = clip.keyframes[prop];
   if (kfs && kfs.length > 0) return evalKeyframes(kfs, localT);
-  return clip.transform[prop];
+  return baseValue(clip, prop);
 }
 
 export function isAnimated(clip: Clip, prop: AnimProp): boolean {
@@ -55,13 +70,13 @@ export function keyframeAt(clip: Clip, prop: AnimProp, localT: number, tol: numb
 export function setPropAt(clip: Clip, prop: AnimProp, localT: number, value: number, tol: number): void {
   const kfs = clip.keyframes[prop];
   if (!kfs || kfs.length === 0) {
-    clip.transform[prop] = value;
+    setBase(clip, prop, value);
     return;
   }
   const existing = kfs.find((k) => Math.abs(k.t - localT) <= tol);
   if (existing) existing.v = value;
   else {
-    kfs.push({ t: localT, v: value, ease: 'easeInOut' });
+    kfs.push({ t: localT, v: value, ease: newEase(prop) });
     kfs.sort((a, b) => a.t - b.t);
   }
 }
@@ -75,11 +90,11 @@ export function toggleKeyframe(clip: Clip, prop: AnimProp, localT: number, tol: 
     kfs.splice(idx, 1);
     if (kfs.length === 0) {
       delete clip.keyframes[prop];
-      clip.transform[prop] = current;
+      setBase(clip, prop, current);
       return;
     }
   } else {
-    kfs.push({ t: localT, v: current, ease: 'easeInOut' });
+    kfs.push({ t: localT, v: current, ease: newEase(prop) });
     kfs.sort((a, b) => a.t - b.t);
   }
   clip.keyframes[prop] = kfs;
@@ -88,7 +103,7 @@ export function toggleKeyframe(clip: Clip, prop: AnimProp, localT: number, tol: 
 export function clearKeyframes(clip: Clip, prop: AnimProp, localT: number): void {
   const v = propValue(clip, prop, localT);
   delete clip.keyframes[prop];
-  clip.transform[prop] = v;
+  setBase(clip, prop, v);
 }
 
 /** Shifts all keyframes by dt (used when the clip's start is trimmed). Mutates. */

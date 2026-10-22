@@ -147,6 +147,71 @@ export function setClipSpeed(p: Project, clipId: string, speed: number, media: M
   shiftClipsAfter(track, oldEnd, clipEnd(clip) - oldEnd, clip.id);
 }
 
+// ---------------------------------------------------------------------------
+// Advanced trims. All of these mutate drafts and leave the track sorted.
+
+/** Ripple trim of the tail: later clips on the track follow the edge. */
+export function rippleTrimEnd(track: Track, clipId: string, newEnd: number): void {
+  const clip = track.clips.find((c) => c.id === clipId);
+  if (!clip) return;
+  const oldEnd = clipEnd(clip);
+  const delta = newEnd - oldEnd;
+  trimEndTo(clip, newEnd);
+  for (const c of track.clips) if (c.id !== clipId && c.start >= oldEnd - EPS) c.start += delta;
+  sortClips(track);
+}
+
+/**
+ * Ripple trim of the head by `delta` seconds of timeline: the clip keeps its
+ * position, its content starts later/earlier, and later clips close up.
+ */
+export function rippleTrimStart(track: Track, clipId: string, delta: number): void {
+  const clip = track.clips.find((c) => c.id === clipId);
+  if (!clip) return;
+  const oldEnd = clipEnd(clip);
+  clip.in = Math.max(0, clip.in + delta * clip.speed);
+  clip.duration -= delta;
+  shiftKeyframes(clip, -delta);
+  for (const c of track.clips) if (c.id !== clipId && c.start >= oldEnd - EPS) c.start -= delta;
+  sortClips(track);
+}
+
+/** Rolling edit: moves the cut between two adjacent clips. */
+export function rollEdit(track: Track, leftId: string, rightId: string, cut: number): void {
+  const left = track.clips.find((c) => c.id === leftId);
+  const right = track.clips.find((c) => c.id === rightId);
+  if (!left || !right) return;
+  trimEndTo(left, cut);
+  trimStartTo(right, cut);
+  sortClips(track);
+}
+
+/** Slip: shows a different part of the source without moving the clip. */
+export function slipClip(clip: Clip, sourceDelta: number, media: MediaAsset | undefined): void {
+  const max = media && media.duration > 0 ? Math.max(0, media.duration - clip.duration * clip.speed) : Infinity;
+  clip.in = Math.min(max, Math.max(0, clip.in + sourceDelta));
+}
+
+/** Slide: moves a clip between its neighbours, which give up or take the difference. */
+export function slideClip(track: Track, clipId: string, newStart: number, prevId: string | null, nextId: string | null): void {
+  const clip = track.clips.find((c) => c.id === clipId);
+  if (!clip) return;
+  const prev = prevId ? track.clips.find((c) => c.id === prevId) : undefined;
+  const next = nextId ? track.clips.find((c) => c.id === nextId) : undefined;
+  clip.start = newStart;
+  if (prev) trimEndTo(prev, newStart);
+  if (next) trimStartTo(next, newStart + clip.duration);
+  sortClips(track);
+}
+
+/** Insert edit: opens a gap of `duration` at `time` on a track. */
+export function openGap(track: Track, time: number, duration: number): void {
+  for (const c of track.clips) {
+    if (c.start >= time - EPS) c.start += duration;
+  }
+  sortClips(track);
+}
+
 /** Extent a clip edge can be trimmed to, given neighbours and source length. */
 export function trimBounds(
   track: Track,

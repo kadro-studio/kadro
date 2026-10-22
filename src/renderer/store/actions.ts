@@ -5,6 +5,7 @@ import {
   createProject,
   DEFAULT_IMAGE_DURATION,
   DEFAULT_TEXT_DURATION,
+  defaultShape,
   defaultTextStyle,
   findClip,
   findTrack,
@@ -17,15 +18,28 @@ import {
   tracksOfKind,
   uid,
 } from '../core/project';
-import { clearRange, closeGaps, cloneClip, insertClip, placeClip, removeClips, rippleDelete, setClipSpeed, splitClip } from '../core/edit';
+import {
+  clearRange,
+  closeGaps,
+  cloneClip,
+  insertClip,
+  openGap,
+  placeClip,
+  removeClips,
+  rippleDelete,
+  setClipSpeed,
+  splitClip,
+} from '../core/edit';
 import { TEXT_PRESETS } from '../core/textPresets';
 import { clamp, EPS, snapToFrame } from '../core/time';
-import type { Clip, ClipType, MediaAsset, Project, Track, TrackKind } from '../core/types';
+import type { Clip, ClipType, MediaAsset, Project, ShapeKind, Track, TrackKind } from '../core/types';
+import type { I18nKey } from '../i18n';
 import { clipHasAudio } from '../core/scene';
 import { clearWaveforms } from '../engine/waveforms';
 import { api } from '../api';
+import { APP_NAME } from '../../shared/brand';
 import { t } from '../i18n';
-import { analyzeMedia, errText } from './media';
+import { analyzeMedia, errText, importFiles } from './media';
 import {
   commitPreview,
   edit,
@@ -35,8 +49,13 @@ import {
   select,
   toast,
   useEditor,
+  type DialogKind,
   type LeftTab,
 } from './editor';
+import { forgetRecent, rememberRecent } from './prefs';
+import { clearAutosave } from './autosave';
+import { getFx } from '../engine/fx/registry';
+import { registerProjectFx, withEmbeddedFx } from './fxProject';
 
 const st = () => useEditor.getState();
 const fps = () => st().project.settings.fps;
@@ -82,6 +101,8 @@ export interface PlaceOptions {
   overwrite?: boolean;
   /** Put the clip on a newly created track. */
   newTrack?: boolean;
+  /** Insert edit on the target track: later clips move right to make room. */
+  insert?: boolean;
 }
 
 function placeNewClip(clip: Clip, kind: TrackKind, opts: PlaceOptions): void {
@@ -97,6 +118,14 @@ function placeNewClip(clip: Clip, kind: TrackKind, opts: PlaceOptions): void {
     if (opts.trackId) {
       const target = trackIn(d, opts.trackId);
       if (target && target.kind === kind && !target.locked) track = target;
+    }
+    if (track && opts.insert) {
+      // Split whatever straddles the insertion point, then push the rest right.
+      const straddling = track.clips.find((c) => c.start < clip.start - EPS && clipEnd(c) > clip.start + EPS);
+      if (straddling) splitClip(track, straddling.id, clip.start, frameLen());
+      openGap(track, clip.start, clip.duration);
+      insertClip(track, clip);
+      return;
     }
     if (track && opts.overwrite) {
       placeClip(track, clip);
@@ -151,6 +180,17 @@ export function addTextClip(presetId: string, opts: PlaceOptions = {}): void {
   });
   clip.transform.x = Math.round(preset.x * width);
   clip.transform.y = Math.round(preset.y * height);
+  placeNewClip(clip, 'video', opts);
+}
+
+/** Adjustment layer: effects and colour on it apply to all tracks below. */
+export function addAdjustmentClip(opts: PlaceOptions = {}): void {
+  const clip = makeClip('adjustment', { name: t('elements.adjustment'), duration: DEFAULT_IMAGE_DURATION });
+  placeNewClip(clip, 'video', opts);
+}
+
+export function addShapeClip(kind: ShapeKind, opts: PlaceOptions = {}): void {
+  const clip = makeClip('shape', { name: t(`shape.${kind}` as I18nKey), duration: DEFAULT_IMAGE_DURATION, shape: defaultShape(kind) });
   placeNewClip(clip, 'video', opts);
 }
 
@@ -287,6 +327,53 @@ export function paste(time = st().playhead): void {
   select(newIds);
 }
 
+export type AttrGroup = 'transform' | 'color' | 'effects' | 'mask' | 'animation' | 'audio';
+export const ATTR_GROUPS: AttrGroup[] = ['transform', 'color', 'effects', 'mask', 'animation', 'audio'];
+
+/** Copies chosen attribute groups of the copied clip onto the selected clips. */
+export function pasteAttributes(groups: AttrGroup[]): void {
+  const src = st().clipboard?.clips[0]?.clip;
+  const ids = editableSelection();
+  if (!src || ids.length === 0) return;
+  const g = new Set(groups);
+  const clone = <T,>(v: T): T => structuredClone(v);
+  updateClips(ids, (c) => {
+    if (c.id === src.id) return;
+    if (g.has('transform')) {
+      c.transform = clone(src.transform);
+      for (const p of ['x', 'y', 'scale', 'rotation', 'opacity'] as const) {
+        if (src.keyframes[p]) c.keyframes[p] = clone(src.keyframes[p]);
+        else delete c.keyframes[p];
+      }
+    }
+    if (g.has('color')) {
+      c.adjust = clone(src.adjust);
+      c.filter = clone(src.filter);
+      c.lut = clone(src.lut);
+      c.chroma = clone(src.chroma);
+      c.blend = src.blend;
+    }
+    if (g.has('effects')) c.effects = src.effects.map((e) => ({ ...clone(e), id: uid() }));
+    if (g.has('mask')) {
+      c.mask = clone(src.mask);
+      c.crop = clone(src.crop);
+    }
+    if (g.has('animation')) {
+      c.animIn = clone(src.animIn);
+      c.animOut = clone(src.animOut);
+      c.transition = clone(src.transition);
+    }
+    if (g.has('audio')) {
+      c.volume = src.volume;
+      c.fadeIn = src.fadeIn;
+      c.fadeOut = src.fadeOut;
+      c.audioFx = clone(src.audioFx);
+      if (src.keyframes.volume) c.keyframes.volume = clone(src.keyframes.volume);
+      else delete c.keyframes.volume;
+    }
+  });
+}
+
 export function selectAll(): void {
   const p = st().project;
   select(p.tracks.filter((tr) => !tr.locked).flatMap((tr) => tr.clips.map((c) => c.id)));
@@ -325,12 +412,51 @@ export function setSpeed(clipId: string, speed: number): void {
   edit((d) => setClipSpeed(d, clipId, clamp(speed, 0.1, 16), media));
 }
 
+function defaultParams(type: string): Record<string, number> | undefined {
+  const def = getFx(type);
+  return def ? Object.fromEntries(def.params.map((p) => [p.id, p.default])) : undefined;
+}
+
 export function applyTransition(clipId: string, type: string): void {
   const f = findClip(st().project, clipId);
   if (!f || f.clip.type === 'audio' || f.track.locked) return;
   updateClip(clipId, (c) => {
     c.transition.type = type;
+    c.transition.params = defaultParams(type);
     if (c.transition.duration <= 0) c.transition.duration = 0.6;
+  });
+}
+
+/** Appends a shader effect to the stack of each given clip. */
+export function addEffect(clipIds: string[], type: string): void {
+  const def = getFx(type);
+  if (!def || def.kind !== 'effect') return;
+  const p = st().project;
+  const ids = clipIds.filter((id) => {
+    const f = findClip(p, id);
+    return f && f.clip.type !== 'audio' && f.clip.type !== 'color' && !f.track.locked;
+  });
+  if (ids.length === 0) {
+    toast(t('toast.selectClipFirst'));
+    return;
+  }
+  updateClips(ids, (c) => {
+    c.effects.push({ id: uid(), type, enabled: true, params: defaultParams(type) ?? {} });
+  });
+}
+
+export function removeEffect(clipId: string, effectId: string): void {
+  updateClip(clipId, (c) => {
+    c.effects = c.effects.filter((e) => e.id !== effectId);
+  });
+}
+
+export function moveEffect(clipId: string, effectId: string, dir: -1 | 1): void {
+  updateClip(clipId, (c) => {
+    const i = c.effects.findIndex((e) => e.id === effectId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= c.effects.length) return;
+    [c.effects[i], c.effects[j]] = [c.effects[j], c.effects[i]];
   });
 }
 
@@ -348,6 +474,121 @@ export function applyFilter(clipIds: string[], filterId: string): void {
     c.filter.id = filterId;
     if (c.filter.amount <= 0) c.filter.amount = 100;
   });
+}
+
+/** Moves the selected clips by whole frames when nothing is in the way. */
+export function nudgeSelection(frames: number): void {
+  const ids = new Set(editableSelection());
+  if (ids.size === 0) return;
+  const dt = frames * frameLen();
+  const p = st().project;
+  for (const tr of p.tracks) {
+    for (const c of tr.clips) {
+      if (!ids.has(c.id)) continue;
+      const start = c.start + dt;
+      if (start < -EPS) return;
+      const blocked = tr.clips.some((o) => !ids.has(o.id) && o.start < start + c.duration - EPS && clipEnd(o) > start + EPS);
+      if (blocked) return;
+    }
+  }
+  edit((d) => {
+    for (const tr of d.tracks) {
+      for (const c of tr.clips) if (ids.has(c.id)) c.start = Math.max(0, snapToFrame(c.start + dt, fps()));
+      tr.clips.sort((a, b) => a.start - b.start);
+    }
+  });
+}
+
+/** Selects every clip starting at/after `time` (one track or all unlocked tracks). */
+export function selectForward(time: number, trackId?: string): string[] {
+  const p = st().project;
+  const ids = p.tracks
+    .filter((tr) => !tr.locked && (!trackId || tr.id === trackId))
+    .flatMap((tr) => tr.clips.filter((c) => clipEnd(c) > time + EPS && c.start >= time - frameLen()).map((c) => c.id));
+  select(ids);
+  return ids;
+}
+
+function clipUnderPlayhead(types: Clip['type'][]): { clip: Clip; track: Track } | null {
+  const s = st();
+  const t0 = s.playhead;
+  const inside = (c: Clip) => types.includes(c.type) && t0 >= c.start && t0 < clipEnd(c);
+  for (const id of s.selection) {
+    const f = findClip(s.project, id);
+    if (f && inside(f.clip) && !f.track.locked) return f;
+  }
+  // Otherwise the topmost video track wins.
+  const video = tracksOfKind(s.project, 'video').reverse();
+  for (const tr of [...video, ...tracksOfKind(s.project, 'audio')]) {
+    if (tr.locked) continue;
+    const c = tr.clips.find(inside);
+    if (c) return { clip: c, track: tr };
+  }
+  return null;
+}
+
+/** Inserts a still of the current frame, pushing the rest of the track right. */
+export async function freezeFrame(seconds = 3): Promise<void> {
+  const f = clipUnderPlayhead(['video']);
+  if (!f) {
+    toast(t('toast.noClipAtPlayhead'));
+    return;
+  }
+  const m = st().project.media.find((x) => x.id === f.clip.mediaId);
+  if (!m) return;
+  const at = snapToFrame(st().playhead, fps());
+  const sourceTime = Math.min(m.duration - 0.5 / fps(), f.clip.in + (at - f.clip.start) * f.clip.speed);
+  try {
+    const png = await api.extractFrame(m.path, Math.max(0, sourceTime));
+    const [still] = await importFiles([png]);
+    if (!still) return;
+    const freeze = makeClip('image', {
+      name: `${t('tool.freeze')} · ${m.name}`,
+      mediaId: still.id,
+      start: at,
+      duration: seconds,
+      transform: structuredClone(f.clip.transform),
+      crop: structuredClone(f.clip.crop),
+      adjust: structuredClone(f.clip.adjust),
+      filter: structuredClone(f.clip.filter),
+      chroma: structuredClone(f.clip.chroma),
+      blend: f.clip.blend,
+      keyframes: {},
+    });
+    edit((d) => {
+      const tr = trackIn(d, f.track.id);
+      if (!tr) return;
+      splitClip(tr, f.clip.id, at, frameLen());
+      openGap(tr, at, seconds);
+      insertClip(tr, freeze);
+    });
+    select([freeze.id]);
+  } catch (e) {
+    toast(errText(e), 'error');
+  }
+}
+
+/** Replaces a clip's media with a reversed copy of the range it uses. */
+export async function reverseClip(clipId: string): Promise<void> {
+  const p = st().project;
+  const f = findClip(p, clipId);
+  if (!f || (f.clip.type !== 'video' && f.clip.type !== 'audio')) return;
+  const m = p.media.find((x) => x.id === f.clip.mediaId);
+  if (!m) return;
+  toast(t('toast.reversing', { name: m.name }));
+  try {
+    const out = await api.reverseRange(m.path, f.clip.in, f.clip.duration * f.clip.speed, m.hasAudio);
+    const [rev] = await importFiles([out]);
+    if (!rev) return;
+    updateClip(clipId, (c) => {
+      c.mediaId = rev.id;
+      c.in = 0;
+      c.name = `${m.name} (${t('tool.reverse').toLowerCase()})`;
+    });
+    toast(t('toast.reversed'), 'success');
+  } catch (e) {
+    toast(errText(e), 'error');
+  }
 }
 
 export function closeTrackGaps(trackId: string): void {
@@ -376,7 +617,7 @@ export function removeTrack(trackId: string): void {
   });
 }
 
-export function setTrackFlag(trackId: string, flag: 'muted' | 'hidden' | 'locked', value: boolean): void {
+export function setTrackFlag(trackId: string, flag: 'muted' | 'hidden' | 'locked' | 'solo', value: boolean): void {
   edit((d) => {
     const tr = trackIn(d, trackId);
     if (tr) tr[flag] = value;
@@ -397,6 +638,35 @@ export function addMarker(time = st().playhead): void {
     d.markers.push({ id: uid(), time: tt, label: '', color: '#ffb300' });
     d.markers.sort((a, b) => a.time - b.time);
   });
+}
+
+/** Sets the in (I) or out (O) mark at the playhead; an inverted range is fixed up. */
+export function setMark(which: 'in' | 'out', time = st().playhead): void {
+  const tt = snapToFrame(time, fps());
+  edit((d) => {
+    if (which === 'in') d.markIn = tt;
+    else d.markOut = tt;
+    if (d.markIn != null && d.markOut != null && d.markOut <= d.markIn) {
+      if (which === 'in') d.markOut = null;
+      else d.markIn = null;
+    }
+  });
+}
+
+export function clearMarks(): void {
+  edit((d) => {
+    d.markIn = null;
+    d.markOut = null;
+  });
+}
+
+/** The marked range, completed with the project bounds when one mark is missing. */
+export function markedRange(): { start: number; end: number } | null {
+  const p = st().project;
+  if (p.markIn == null && p.markOut == null) return null;
+  const end = p.markOut ?? projectDuration(p);
+  const start = p.markIn ?? 0;
+  return end > start ? { start, end } : null;
 }
 
 export function removeMarker(id: string): void {
@@ -463,11 +733,18 @@ export async function openProjectFile(path?: string): Promise<void> {
   if (!confirmDiscard()) return;
   const file = path ?? (await api.openProjectDialog());
   if (!file) return;
+  if (!(await api.exists(file))) {
+    forgetRecent(file);
+    toast(t('toast.openFailed', { err: file }), 'error');
+    return;
+  }
   try {
     const text = await api.readText(file);
     const project = normalizeProject(JSON.parse(text));
     clearWaveforms();
+    registerProjectFx(project);
     loadProject(project, file);
+    rememberRecent(file, project.name);
     for (const m of project.media) void analyzeMedia(m);
   } catch (e) {
     toast(t('toast.openFailed', { err: errText(e) }), 'error');
@@ -480,12 +757,14 @@ export async function saveProject(saveAs = false): Promise<boolean> {
   let file = s.filePath;
   if (!file || saveAs) {
     const base = (s.project.name || t('top.untitled')).replace(/[\\/:*?"<>|]/g, '_');
-    file = await api.saveFileDialog(`${base}.vrproj`, [{ name: 'Videoredact project', extensions: ['vrproj'] }]);
+    file = await api.saveFileDialog(`${base}.vrproj`, [{ name: `${APP_NAME} project`, extensions: ['vrproj'] }]);
     if (!file) return false;
   }
   try {
-    await api.writeText(file, JSON.stringify(s.project, null, 1));
+    await api.writeText(file, JSON.stringify(withEmbeddedFx(s.project), null, 1), true);
     markSaved(file);
+    rememberRecent(file, s.project.name);
+    clearAutosave();
     toast(t('toast.saved'), 'success');
     return true;
   } catch (e) {
@@ -494,6 +773,6 @@ export async function saveProject(saveAs = false): Promise<boolean> {
   }
 }
 
-export function openDialog(dialog: 'export' | 'settings' | 'about' | 'shortcuts' | null): void {
+export function openDialog(dialog: DialogKind): void {
   useEditor.setState({ dialog });
 }

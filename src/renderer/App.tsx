@@ -7,10 +7,13 @@ import { Preview } from './components/Preview';
 import { TopBar } from './components/TopBar';
 import { Timeline } from './components/timeline/Timeline';
 import { api } from './api';
+import { APP_NAME } from '../shared/brand';
 import { useT, useLang } from './i18n';
-import { syncDirtyFlag } from './store/actions';
-import { isDirty, useEditor } from './store/editor';
+import { openProjectFile, syncDirtyFlag } from './store/actions';
+import { isDirty, toast, useEditor } from './store/editor';
 import { importFiles, startProxyProgressListener } from './store/media';
+import { pendingRecovery, startAutosave } from './store/autosave';
+import { reloadMods } from './store/mods';
 import { ContextMenuHost } from './ui/ContextMenu';
 
 interface Layout {
@@ -89,15 +92,30 @@ export function App() {
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     const stop = startProxyProgressListener();
+    const stopAutosave = startAutosave();
+    void reloadMods();
+    void pendingRecovery().then((data) => data && useEditor.setState({ recovery: data }));
+    void api.takeOpenFile().then((file) => {
+      if (file) void openProjectFile(file);
+    });
+    const stopOpen = api.onOpenFile((file) => void openProjectFile(file));
+    const onRejection = (e: PromiseRejectionEvent) => {
+      console.error(e.reason);
+      toast(t('toast.unexpected', { err: e.reason instanceof Error ? e.reason.message : String(e.reason) }), 'error');
+    };
+    window.addEventListener('unhandledrejection', onRejection);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('unhandledrejection', onRejection);
       stop();
+      stopAutosave();
+      stopOpen();
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const file = filePath ? filePath.split(/[\\/]/).pop() : name;
-    api.setTitle(`${dirty ? '● ' : ''}${file} — Videoredact`);
+    api.setTitle(`${dirty ? '● ' : ''}${file} — ${APP_NAME}`);
     syncDirtyFlag();
   }, [name, filePath, dirty, lang]);
 

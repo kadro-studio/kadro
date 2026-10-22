@@ -1,15 +1,30 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { fxOfKind, useFx } from '../engine/fx/registry';
+import { fxThumbnail } from '../engine/fx/thumbs';
+import { fxName, type FxDef } from '../engine/fx/types';
+import { ModsPanel } from './ModsPanel';
 import { mediaUrl } from '../../shared/api';
 import { FILTERS, TRANSITIONS } from '../core/effects';
 import { TEXT_PRESETS } from '../core/textPresets';
 import { formatBytes, formatDuration } from '../core/time';
 import type { MediaAsset } from '../core/types';
-import { useT, type I18nKey } from '../i18n';
+import { useLang, useT, type I18nKey } from '../i18n';
 import { api } from '../api';
-import { addColorClip, addMediaClip, addTextClip, applyFilter, applyTransition, setLeftTab } from '../store/actions';
+import {
+  addAdjustmentClip,
+  addColorClip,
+  addEffect,
+  addMediaClip,
+  addShapeClip,
+  addTextClip,
+  applyFilter,
+  applyTransition,
+  setLeftTab,
+} from '../store/actions';
+import type { ShapeKind } from '../core/types';
 import { toast, useEditor, type LeftTab } from '../store/editor';
-import { importFiles, importViaDialog, relinkMedia, removeMedia } from '../store/media';
-import { openContextMenu } from '../ui/ContextMenu';
+import { createEditingProxy, importFiles, importViaDialog, relinkMedia, removeEditingProxy, removeMedia } from '../store/media';
+import { openContextMenu, type MenuEntry } from '../ui/ContextMenu';
 import { Icon, type IconName } from '../ui/Icon';
 import { DND } from './dnd';
 
@@ -17,31 +32,39 @@ const TABS: { id: LeftTab; icon: IconName; label: I18nKey }[] = [
   { id: 'media', icon: 'folder', label: 'tab.media' },
   { id: 'text', icon: 'text', label: 'tab.text' },
   { id: 'transitions', icon: 'transition', label: 'tab.transitions' },
-  { id: 'filters', icon: 'sparkles', label: 'tab.filters' },
+  { id: 'effects', icon: 'wand', label: 'tab.effects' },
+  { id: 'filters', icon: 'palette', label: 'tab.filters' },
   { id: 'elements', icon: 'shapes', label: 'tab.elements' },
+  { id: 'mods', icon: 'layers', label: 'tab.mods' },
 ];
 
 export function LeftPanel() {
   const t = useT();
   const tab = useEditor((s) => s.leftTab);
+  const current = TABS.find((x) => x.id === tab) ?? TABS[0];
   return (
-    <>
-      <div className="tabs">
+    <div className="left-layout">
+      <nav className="rail">
         {TABS.map((x) => (
-          <button key={x.id} className={`tab ${tab === x.id ? 'active' : ''}`} onClick={() => setLeftTab(x.id)}>
-            <Icon name={x.icon} size={18} />
-            {t(x.label)}
+          <button key={x.id} className={`rail-btn ${tab === x.id ? 'active' : ''}`} onClick={() => setLeftTab(x.id)} title={t(x.label)}>
+            <Icon name={x.icon} size={19} />
+            <span className="rail-label">{t(x.label)}</span>
           </button>
         ))}
+      </nav>
+      <div className="left-content">
+        <div className="panel-title">{t(current.label)}</div>
+        <div className="panel-body">
+          {tab === 'media' && <MediaPanel />}
+          {tab === 'text' && <TextPanel />}
+          {tab === 'transitions' && <TransitionsPanel />}
+          {tab === 'effects' && <EffectsPanel />}
+          {tab === 'filters' && <FiltersPanel />}
+          {tab === 'elements' && <ElementsPanel />}
+          {tab === 'mods' && <ModsPanel />}
+        </div>
       </div>
-      <div className="panel-body">
-        {tab === 'media' && <MediaPanel />}
-        {tab === 'text' && <TextPanel />}
-        {tab === 'transitions' && <TransitionsPanel />}
-        {tab === 'filters' && <FiltersPanel />}
-        {tab === 'elements' && <ElementsPanel />}
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -102,8 +125,17 @@ function MediaCard({ m, used }: { m: MediaAsset; used: boolean }) {
 
   const menu = (e: React.MouseEvent) => {
     e.preventDefault();
+    const proxyItems: MenuEntry[] = [];
+    if (m.kind === 'video' && status === 'ready' && !rt?.proxyRequired) {
+      proxyItems.push(
+        rt?.proxyPath
+          ? { label: t('media.dropProxy'), onClick: () => removeEditingProxy(m.id) }
+          : { label: t('media.makeProxy'), onClick: () => void createEditingProxy(m.id), disabled: rt?.optimizing },
+      );
+    }
     openContextMenu(e.clientX, e.clientY, [
       { label: t('media.add'), onClick: () => addMediaClip(m.id), disabled: status === 'missing' },
+      ...proxyItems,
       { label: t('media.relink'), onClick: () => void relinkMedia(m.id) },
       { separator: true },
       { label: t('media.remove'), onClick: () => removeMedia(m.id) },
@@ -128,7 +160,13 @@ function MediaCard({ m, used }: { m: MediaAsset; used: boolean }) {
       <div className="media-badge">
         <Icon name={icon} size={11} />
         {m.kind !== 'image' && formatDuration(m.duration)}
+        {rt?.proxyPath && !rt.proxyRequired && <span title={t('media.proxyBadge')}>· P</span>}
       </div>
+      {rt?.optimizing && (
+        <div className="media-optimizing" title={t('media.optimizing', { p: Math.round(rt.progress * 100) })}>
+          <div style={{ width: `${rt.progress * 100}%` }} />
+        </div>
+      )}
       {status !== 'missing' && (
         <button
           className="media-add"
@@ -286,28 +324,78 @@ function transitionAStyle(type: string): CSSProperties {
   return {};
 }
 
+/** Card for a shader effect or transition, previewed with the real shader. */
+export function FxCard({ def, active, onClick }: { def: FxDef; active?: boolean; onClick: () => void }) {
+  const lang = useLang((s) => s.lang);
+  const error = useFx((s) => s.errors[def.id]);
+  const [thumb, setThumb] = useState<string | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setThumb(fxThumbnail(def)), 0);
+    return () => clearTimeout(timer);
+  }, [def]);
+  return (
+    <button
+      className={`preset-card ${active ? 'active' : ''}`}
+      draggable
+      onDragStart={(e) => e.dataTransfer.setData(def.kind === 'effect' ? DND.effect : DND.transition, def.id)}
+      onClick={onClick}
+      title={[def.description, def.author && `© ${def.author}`, error].filter(Boolean).join('\n')}
+    >
+      <div className="preset-visual">
+        {thumb ? <img src={thumb} alt="" className="fx-thumb" /> : <Icon name="wand" size={24} />}
+        {def.source !== 'builtin' && <span className="fx-badge">MOD</span>}
+        {error && <span className="fx-badge error">!</span>}
+      </div>
+      <div className="preset-label">{fxName(def, lang)}</div>
+    </button>
+  );
+}
+
+function EffectsPanel() {
+  const t = useT();
+  const selection = useEditor((s) => s.selection);
+  const defs = useFx((s) => s.defs);
+  return (
+    <>
+      <p className="panel-hint">{t('effects.hint')}</p>
+      <div className="preset-grid">
+        {fxOfKind(defs, 'effect').map((def) => (
+          <FxCard key={def.id} def={def} onClick={() => addEffect(selection, def.id)} />
+        ))}
+      </div>
+    </>
+  );
+}
+
 function TransitionsPanel() {
   const t = useT();
   const selection = useEditor((s) => s.selection);
+  const defs = useFx((s) => s.defs);
   const selectedType = useEditor((s) => {
     const id = s.selection[0];
     for (const tr of s.project.tracks) for (const c of tr.clips) if (c.id === id) return c.transition.type;
     return null;
   });
+  const apply = (type: string) => {
+    if (selection.length === 0) toast(t('toast.selectClipFirst'));
+    for (const id of selection) applyTransition(id, type);
+  };
   return (
     <>
       <p className="panel-hint">{t('transitions.hint')}</p>
       <div className="preset-grid">
+        {fxOfKind(defs, 'transition').map((def) => (
+          <FxCard key={def.id} def={def} active={selectedType === def.id} onClick={() => apply(def.id)} />
+        ))}
+      </div>
+      <div className="preset-grid" style={{ marginTop: 8 }}>
         {TRANSITIONS.filter((x) => x !== 'none').map((type) => (
           <button
             key={type}
             className={`preset-card ${selectedType === type ? 'active' : ''}`}
             draggable
             onDragStart={(e) => e.dataTransfer.setData(DND.transition, type)}
-            onClick={() => {
-              if (selection.length === 0) toast(t('toast.selectClipFirst'));
-              for (const id of selection) applyTransition(id, type);
-            }}
+            onClick={() => apply(type)}
           >
             <div className="preset-visual">
               <div className="transition-visual" style={{ overflow: 'hidden', borderRadius: 3 }}>
@@ -360,10 +448,60 @@ function FiltersPanel() {
 
 const COLORS = ['#000000', '#ffffff', '#1e88e5', '#e53935', '#43a047', '#fdd835', '#8e24aa', '#fb8c00', '#00acc1', '#ec407a', '#6d4c41', '#37474f'];
 
+const SHAPES: ShapeKind[] = ['rect', 'ellipse', 'triangle', 'star', 'arrow', 'line', 'bubble'];
+
+function ShapeIcon({ kind }: { kind: ShapeKind }) {
+  const p: Record<ShapeKind, string> = {
+    rect: 'M8 14h48v36H8z',
+    ellipse: 'M32 12a24 20 0 1 0 0.01 0z',
+    triangle: 'M32 10l26 44H6z',
+    star: 'M32 8l7 16 17 1-13 11 4 17-15-9-15 9 4-17-13-11 17-1z',
+    arrow: 'M6 26h34V14l18 18-18 18V38H6z',
+    line: 'M6 29h52v6H6z',
+    bubble: 'M10 10h44a6 6 0 016 6v22a6 6 0 01-6 6H24l-10 10V44h-4a6 6 0 01-6-6V16a6 6 0 016-6z',
+  };
+  return (
+    <svg viewBox="0 0 64 64" width="56" height="56">
+      <path d={p[kind]} fill="#4d8dff" />
+    </svg>
+  );
+}
+
 function ElementsPanel() {
   const t = useT();
   return (
     <>
+      <div className="mods-section-title" style={{ marginTop: 0 }}>
+        {t('elements.adjustment')}
+      </div>
+      <button
+        className="preset-card adjustment-card"
+        draggable
+        onDragStart={(e) => e.dataTransfer.setData(DND.element, JSON.stringify({ kind: 'adjustment' }))}
+        onClick={() => addAdjustmentClip()}
+      >
+        <div className="preset-label">
+          <Icon name="layers" size={16} /> {t('elements.adjustmentHint')}
+        </div>
+      </button>
+      <div className="mods-section-title">{t('elements.shapes')}</div>
+      <div className="preset-grid">
+        {SHAPES.map((kind) => (
+          <button
+            key={kind}
+            className="preset-card"
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData(DND.element, JSON.stringify({ kind: 'shape', shape: kind }))}
+            onClick={() => addShapeClip(kind)}
+          >
+            <div className="preset-visual">
+              <ShapeIcon kind={kind} />
+            </div>
+            <div className="preset-label">{t(`shape.${kind}` as I18nKey)}</div>
+          </button>
+        ))}
+      </div>
+      <div className="mods-section-title">{t('elements.colors')}</div>
       <p className="panel-hint">{t('elements.hint')}</p>
       <div className="preset-grid">
         {COLORS.map((c) => (

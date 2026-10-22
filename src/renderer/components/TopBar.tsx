@@ -6,6 +6,7 @@ import { openDialog } from '../store/actions';
 import { isDirty, useEditor } from '../store/editor';
 import { MenuItems } from '../ui/ContextMenu';
 import { Icon } from '../ui/Icon';
+import { APP_NAME } from '../../shared/brand';
 
 export function TopBar() {
   const t = useT();
@@ -32,13 +33,15 @@ export function TopBar() {
   }, [open]);
 
   const fileName = filePath ? filePath.split(/[\\/]/).pop() : null;
+  // The bar doubles as the window title bar: empty areas drag the window,
+  // and the right padding keeps clear of the native caption buttons.
   return (
     <div className="topbar">
       <div className="brand">
-        <div className="brand-logo">▶</div>
-        <span>Videoredact</span>
+        <img className="brand-logo" src="./logo.png" alt="" draggable={false} />
+        <span className="brand-name">{APP_NAME}</span>
       </div>
-      <div className="row" ref={rootRef} style={{ flex: 'none', gap: 2 }}>
+      <div className="menus" ref={rootRef}>
         {menus().map((m) => (
           <div className="menu-root" key={m.id}>
             <button
@@ -57,19 +60,17 @@ export function TopBar() {
         ))}
       </div>
       <div className="top-title">
-        {name}
-        {fileName && <span style={{ color: 'var(--text-mute)' }}> — {fileName}</span>}
-        {dirty && (
-          <span className="dirty" title={t('top.unsaved')}>
-            ●
-          </span>
-        )}
+        <div className="title-pill">
+          <span className="title-name">{name}</span>
+          {fileName && <span className="title-file">{fileName}</span>}
+          {dirty && <span className="dirty" title={t('top.unsaved')} />}
+        </div>
       </div>
       <div className="top-actions">
         <button className="icon-btn" title={t('menu.projectSettings')} onClick={() => openDialog('settings')}>
           <Icon name="settings" />
         </button>
-        <button className="btn primary" onClick={() => openDialog('export')}>
+        <button className="btn primary export-btn" onClick={() => openDialog('export')}>
           <Icon name="export" size={16} />
           {t('top.export')}
         </button>

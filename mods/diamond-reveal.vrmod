@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "id": "kadro.diamond-reveal",
+  "kind": "transition",
+  "name": "Diamond grid",
+  "nameRu": "Ромбы",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "A grid of diamonds grows from the corner and reveals the next clip.",
+  "params": [
+    { "id": "size", "name": "Diamonds", "nameRu": "Ромбы", "min": 3, "max": 30, "default": 10, "step": 1 }
+  ],
+  "glsl": "vec4 transition(vec2 uv) {\n  vec2 g = uv * vec2(size * ratio, size);\n  vec2 f = abs(fract(g) - 0.5);\n  float d = f.x + f.y;\n  float delay = (uv.x + 1.0 - uv.y) * 0.5;\n  float grow = clamp(progress * 2.0 - delay, 0.0, 1.0);\n  return d < grow ? toColor(uv) : fromColor(uv);\n}"
+}

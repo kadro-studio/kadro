@@ -1,22 +1,36 @@
+import '@fontsource-variable/inter';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { createProject } from './core/project';
 import { setLang, t } from './i18n';
 import * as actions from './store/actions';
 import * as editor from './store/editor';
 import * as media from './store/media';
+import * as enhance from './store/enhance';
 import { player } from './engine/player';
 import { runExport } from './engine/exporter';
+import { Compositor } from './engine/gl';
+import * as fxRegistry from './engine/fx/registry';
+import { fxThumbnail } from './engine/fx/thumbs';
+import * as mods from './store/mods';
+import * as aiTasks from './ai/tasks';
+import { aiDevice } from './ai/client';
 import './styles.css';
 
 editor.loadProject(createProject(t('top.untitled')), null);
 
 // Automation/debug handle (used by scripts/smoke.mjs and handy in DevTools).
-(window as unknown as { __vr: unknown }).__vr = { ...actions, ...editor, ...media, player, runExport, setLang };
+(window as unknown as { __vr: unknown }).__vr = { ...actions, ...editor, ...media, ...enhance, player, runExport, setLang, Compositor };
+(window as unknown as { __vrFx: unknown }).__vrFx = { ...fxRegistry, fxThumbnail };
+(window as unknown as { __vrMods: unknown }).__vrMods = mods;
+(window as unknown as { __vrAi: unknown }).__vrAi = { ...aiTasks, aiDevice };
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

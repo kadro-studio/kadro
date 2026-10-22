@@ -9,8 +9,13 @@ import {
   cutSelection,
   deleteSelection,
   duplicateSelection,
+  clearMarks,
   editPoints,
+  freezeFrame,
+  setMark,
   newProject,
+  nudgeSelection,
+  reverseClip,
   openDialog,
   openProjectFile,
   paste,
@@ -22,6 +27,8 @@ import {
 } from './store/actions';
 import { redo, select, toast, undo, useEditor } from './store/editor';
 import { importViaDialog } from './store/media';
+import { usePrefs } from './store/prefs';
+import { exportSrt } from './ai/tasks';
 import type { MenuEntry } from './ui/ContextMenu';
 
 export async function saveSnapshot(): Promise<void> {
@@ -77,7 +84,8 @@ export function handleKeyDown(e: KeyboardEvent): void {
         cutSelection();
         break;
       case 'KeyV':
-        paste();
+        if (e.altKey) openDialog('paste-attrs');
+        else paste();
         break;
       case 'KeyD':
         duplicateSelection();
@@ -103,6 +111,12 @@ export function handleKeyDown(e: KeyboardEvent): void {
       case 'KeyE':
         openDialog('export');
         break;
+      case 'Comma':
+        openDialog('prefs');
+        break;
+      case 'KeyR':
+        if (s.selection.length === 1) void reverseClip(s.selection[0]);
+        break;
       case 'Equal':
       case 'NumpadAdd':
         zoomBy(1.4);
@@ -127,13 +141,15 @@ export function handleKeyDown(e: KeyboardEvent): void {
         player.play();
         break;
       case 'ArrowLeft':
-        if (shift) {
+        if (e.altKey) nudgeSelection(shift ? -10 : -1);
+        else if (shift) {
           player.pause();
           player.seek(s.playhead - 1);
         } else player.stepFrames(-1);
         break;
       case 'ArrowRight':
-        if (shift) {
+        if (e.altKey) nudgeSelection(shift ? 10 : 1);
+        else if (shift) {
           player.pause();
           player.seek(s.playhead + 1);
         } else player.stepFrames(1);
@@ -165,11 +181,40 @@ export function handleKeyDown(e: KeyboardEvent): void {
       case 'KeyC':
         useEditor.setState({ tool: 'razor' });
         break;
+      case 'KeyA':
+        useEditor.setState({ tool: 'forward' });
+        break;
+      case 'KeyB':
+        useEditor.setState({ tool: 'ripple' });
+        break;
+      case 'KeyR':
+        useEditor.setState({ tool: 'roll' });
+        break;
+      case 'KeyY':
+        useEditor.setState({ tool: 'slip' });
+        break;
+      case 'KeyU':
+        useEditor.setState({ tool: 'slide' });
+        break;
+      case 'KeyF':
+        if (shift) void freezeFrame();
+        else handled = false;
+        break;
       case 'KeyN':
         useEditor.setState({ snapping: !s.snapping });
         break;
       case 'KeyM':
         addMarker();
+        break;
+      case 'KeyI':
+        setMark('in');
+        break;
+      case 'KeyO':
+        setMark('out');
+        break;
+      case 'KeyX':
+        if (e.altKey) clearMarks();
+        else handled = false;
         break;
       case 'Equal':
       case 'NumpadAdd':
@@ -206,18 +251,30 @@ export function menus(): MenuDef[] {
     {
       id: 'file',
       label: t('menu.file'),
-      items: () => [
-        { label: t('menu.new'), shortcut: 'Ctrl+N', onClick: newProject },
-        { label: t('menu.open'), shortcut: 'Ctrl+O', onClick: () => void openProjectFile() },
-        { label: t('menu.save'), shortcut: 'Ctrl+S', onClick: () => void saveProject() },
-        { label: t('menu.saveAs'), shortcut: 'Ctrl+Shift+S', onClick: () => void saveProject(true) },
-        { separator: true },
-        { label: t('menu.import'), shortcut: 'Ctrl+I', onClick: () => void importViaDialog() },
-        { label: t('menu.export'), shortcut: 'Ctrl+E', onClick: () => openDialog('export') },
-        { label: t('menu.snapshot'), onClick: () => void saveSnapshot() },
-        { separator: true },
-        { label: t('menu.projectSettings'), onClick: () => openDialog('settings') },
-      ],
+      items: () => {
+        const recent = usePrefs.getState().recent.slice(0, 6);
+        const recentItems: MenuEntry[] = recent.length
+          ? [
+              { separator: true },
+              { label: t('menu.recent'), onClick: () => undefined, disabled: true },
+              ...recent.map((r) => ({ label: `   ${r.name}`, shortcut: r.path.split(/[\\/]/).pop(), onClick: () => void openProjectFile(r.path) })),
+            ]
+          : [];
+        return [
+          { label: t('menu.new'), shortcut: 'Ctrl+N', onClick: newProject },
+          { label: t('menu.open'), shortcut: 'Ctrl+O', onClick: () => void openProjectFile() },
+          { label: t('menu.save'), shortcut: 'Ctrl+S', onClick: () => void saveProject() },
+          { label: t('menu.saveAs'), shortcut: 'Ctrl+Shift+S', onClick: () => void saveProject(true) },
+          ...recentItems,
+          { separator: true },
+          { label: t('menu.import'), shortcut: 'Ctrl+I', onClick: () => void importViaDialog() },
+          { label: t('menu.export'), shortcut: 'Ctrl+E', onClick: () => openDialog('export') },
+          { label: t('menu.snapshot'), onClick: () => void saveSnapshot() },
+          { separator: true },
+          { label: t('menu.projectSettings'), onClick: () => openDialog('settings') },
+          { label: t('menu.prefs'), shortcut: 'Ctrl+,', onClick: () => openDialog('prefs') },
+        ];
+      },
     },
     {
       id: 'edit',
@@ -236,6 +293,11 @@ export function menus(): MenuDef[] {
         { label: t('menu.split'), shortcut: 'S', onClick: splitAtPlayhead },
         { label: t('menu.selectAll'), shortcut: 'Ctrl+A', onClick: selectAll },
         { label: t('menu.addMarker'), shortcut: 'M', onClick: () => addMarker() },
+        { label: t('menu.markIn'), shortcut: 'I', onClick: () => setMark('in') },
+        { label: t('menu.markOut'), shortcut: 'O', onClick: () => setMark('out') },
+        { label: t('menu.clearMarks'), shortcut: 'Alt+X', onClick: clearMarks },
+        { separator: true },
+        { label: t('menu.pasteAttrs'), shortcut: 'Ctrl+Alt+V', onClick: () => openDialog('paste-attrs'), disabled: !s.clipboard || !hasSel },
       ],
     },
     {
@@ -250,6 +312,19 @@ export function menus(): MenuDef[] {
         { label: 'English', checked: useLang.getState().lang === 'en', onClick: () => setLang('en') },
         { separator: true },
         { label: t('menu.devtools'), shortcut: 'F12', onClick: () => api.toggleDevTools() },
+      ],
+    },
+    {
+      id: 'ai',
+      label: t('menu.ai'),
+      items: () => [
+        { label: t('ai.subsTitle'), onClick: () => openDialog('ai-subs') },
+        { label: t('ai.bgTitle'), onClick: () => openDialog('ai-bg'), disabled: !hasSel },
+        { separator: true },
+        {
+          label: t('ai.exportSrt'),
+          onClick: () => void exportSrt().then((ok) => !ok && toast(t('ai.noSubs'))),
+        },
       ],
     },
     {

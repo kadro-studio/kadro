@@ -53,6 +53,15 @@ export function SliderField({
     else setText(fmt(value, step));
   };
 
+  // Filled part of the track: from the zero point for bipolar ranges, else from the start.
+  const hi = softMax ?? max;
+  const pct = (v: number) => `${(Math.min(1, Math.max(0, (v - min) / (hi - min || 1))) * 100).toFixed(2)}%`;
+  const origin = min < 0 && hi > 0 ? 0 : min;
+  const fill = {
+    '--fill-a': pct(Math.min(origin, value)),
+    '--fill-b': pct(Math.max(origin, value)),
+  } as React.CSSProperties;
+
   return (
     <div className="field slider-field">
       <label
@@ -69,6 +78,7 @@ export function SliderField({
           max={softMax ?? max}
           step={step}
           value={Math.min(softMax ?? max, value)}
+          style={fill}
           onChange={(e) => onChange(Number(e.target.value), false)}
           onPointerUp={(e) => onChange(Number((e.target as HTMLInputElement).value), true)}
           onKeyUp={(e) => onChange(Number((e.target as HTMLInputElement).value), true)}
@@ -249,6 +259,65 @@ export function Section({ id, title, children, actions }: { id: string; title: s
       </header>
       {open && <div className="section-body">{children}</div>}
     </section>
+  );
+}
+
+/** Hue/strength wheel (x, y in -1..1) with a brightness slider; double-click resets. */
+export function ColorWheelField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: { x: number; y: number; l: number };
+  onChange: OnValue<{ x: number; y: number; l: number }>;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const pick = (e: React.PointerEvent | PointerEvent, final: boolean) => {
+    const r = ref.current!.getBoundingClientRect();
+    let x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    let y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+    const len = Math.hypot(x, y);
+    if (len > 1) {
+      x /= len;
+      y /= len;
+    }
+    onChange({ ...value, x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }, final);
+  };
+  const r = Math.min(1, Math.hypot(value.x, value.y));
+  return (
+    <div className="wheel-field">
+      <div
+        ref={ref}
+        className="wheel"
+        title={label}
+        onDoubleClick={() => onChange({ x: 0, y: 0, l: 0 }, true)}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          pick(e, false);
+          const move = (ev: PointerEvent) => pick(ev, false);
+          const up = (ev: PointerEvent) => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            pick(ev, true);
+          };
+          window.addEventListener('pointermove', move);
+          window.addEventListener('pointerup', up);
+        }}
+      >
+        <div className="wheel-dot" style={{ left: `${50 + value.x * 50}%`, top: `${50 - value.y * 50}%`, opacity: r > 0.01 ? 1 : 0.6 }} />
+      </div>
+      <span className="field-label">{label}</span>
+      <input
+        type="range"
+        min={-100}
+        max={100}
+        value={Math.round(value.l * 100)}
+        onChange={(e) => onChange({ ...value, l: Number(e.target.value) / 100 }, false)}
+        onPointerUp={(e) => onChange({ ...value, l: Number((e.target as HTMLInputElement).value) / 100 }, true)}
+        onDoubleClick={() => onChange({ ...value, l: 0 }, true)}
+      />
+    </div>
   );
 }
 

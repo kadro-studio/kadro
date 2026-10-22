@@ -1,45 +1,102 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ExportFormat, ExportQuality, AppInfo } from '../../shared/api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { AppInfo, AutosaveData, EncoderChoice, ExportFormat, ExportQuality, ExportResult, HwEncoder } from '../../shared/api';
+import { setPrefs, usePrefs } from '../store/prefs';
+import { restoreAutosave } from '../store/autosave';
 import { projectDuration } from '../core/project';
 import { formatDuration } from '../core/time';
 import { AUDIO_ONLY, runExport, type CancelToken, type ExportProgress } from '../engine/exporter';
 import { player } from '../engine/player';
-import { useT, type I18nKey } from '../i18n';
+import { setLang, useLang, useT, type I18nKey } from '../i18n';
 import { api } from '../api';
-import { openDialog } from '../store/actions';
+import { APP_NAME } from '../../shared/brand';
+import { markedRange, openDialog } from '../store/actions';
 import { edit, useEditor } from '../store/editor';
 import { Icon } from '../ui/Icon';
-import { IconButton } from '../ui/controls';
-
-function Modal({ title, onClose, children, footer, width }: { title: string; onClose?: () => void; children: ReactNode; footer?: ReactNode; width?: number }) {
-  useEffect(() => {
-    if (!onClose) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className="modal" style={width ? { width } : undefined}>
-        <header>
-          {title}
-          {onClose && <IconButton icon="close" title="" onClick={onClose} />}
-        </header>
-        <div className="modal-body">{children}</div>
-        {footer && <footer>{footer}</footer>}
-      </div>
-    </div>
-  );
-}
+import { Modal } from './Modal';
+import { BackgroundDialog, SubtitlesDialog } from './AiDialog';
+import { EnhanceDialog, PasteAttributesDialog, VoiceoverDialog } from './ToolDialogs';
 
 export function Dialogs() {
   const dialog = useEditor((s) => s.dialog);
+  const recovery = useEditor((s) => s.recovery);
   const close = () => openDialog(null);
+  if (recovery) return <RecoveryDialog data={recovery} />;
   if (dialog === 'export') return <ExportDialog onClose={close} />;
   if (dialog === 'settings') return <SettingsDialog onClose={close} />;
   if (dialog === 'about') return <AboutDialog onClose={close} />;
   if (dialog === 'shortcuts') return <ShortcutsDialog onClose={close} />;
+  if (dialog === 'prefs') return <PrefsDialog onClose={close} />;
+  if (dialog === 'ai-subs') return <SubtitlesDialog onClose={close} />;
+  if (dialog === 'ai-bg') return <BackgroundDialog onClose={close} />;
+  if (dialog === 'paste-attrs') return <PasteAttributesDialog onClose={close} />;
+  if (dialog === 'voiceover') return <VoiceoverDialog onClose={close} />;
+  if (dialog === 'stabilize' || dialog === 'denoise' || dialog === 'loudness') return <EnhanceDialog kind={dialog} onClose={close} />;
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Crash recovery and preferences
+
+function RecoveryDialog({ data }: { data: AutosaveData }) {
+  const t = useT();
+  const dismiss = () => {
+    useEditor.setState({ recovery: null });
+    void api.autosaveClear();
+  };
+  return (
+    <Modal
+      title={t('recovery.title')}
+      footer={
+        <>
+          <button className="btn" onClick={dismiss}>
+            {t('recovery.discard')}
+          </button>
+          <button className="btn primary" onClick={() => restoreAutosave(data)}>
+            {t('recovery.restore')}
+          </button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>{t('recovery.text', { name: data.meta.name, time: new Date(data.savedAt).toLocaleString() })}</p>
+      {data.meta.filePath && <p className="panel-hint" style={{ margin: 0, userSelect: 'text' }}>{data.meta.filePath}</p>}
+    </Modal>
+  );
+}
+
+function PrefsDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const lang = useLang((s) => s.lang);
+  const prefs = usePrefs();
+  return (
+    <Modal title={t('prefs.title')} onClose={onClose} footer={<button className="btn primary" onClick={onClose}>{t('common.ok')}</button>}>
+      <div className="field">
+        <label className="field-label">{t('menu.language')}</label>
+        <select className="select" value={lang} onChange={(e) => setLang(e.target.value as 'ru' | 'en')}>
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div className="field">
+        <label className="field-label">{t('prefs.autosave')}</label>
+        <select className="select" value={prefs.autosaveMinutes} onChange={(e) => setPrefs({ autosaveMinutes: Number(e.target.value) })}>
+          <option value={0}>{t('prefs.off')}</option>
+          {[1, 2, 5, 10].map((m) => (
+            <option key={m} value={m}>
+              {t('prefs.everyMinutes', { n: m })}
+            </option>
+          ))}
+        </select>
+      </div>
+      <label className="field toggle-field">
+        <span className="field-label">{t('prefs.autoProxy')}</span>
+        <input type="checkbox" className="switch" checked={prefs.autoProxy} onChange={(e) => setPrefs({ autoProxy: e.target.checked })} />
+      </label>
+      <label className="field toggle-field">
+        <span className="field-label">{t('preview.useProxies')}</span>
+        <input type="checkbox" className="switch" checked={prefs.useProxies} onChange={(e) => setPrefs({ useProxies: e.target.checked })} />
+      </label>
+    </Modal>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -48,6 +105,7 @@ export function Dialogs() {
 const FORMATS: ExportFormat[] = ['mp4', 'mp4-hevc', 'webm', 'mov-prores', 'gif', 'mp3', 'wav'];
 const EXT: Record<ExportFormat, string> = { mp4: 'mp4', 'mp4-hevc': 'mp4', webm: 'webm', 'mov-prores': 'mov', gif: 'gif', mp3: 'mp3', wav: 'wav' };
 const HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
+const HW_NAMES: Record<HwEncoder, string> = { nvenc: 'NVIDIA NVENC', qsv: 'Intel Quick Sync', amf: 'AMD AMF' };
 
 function even(n: number): number {
   return Math.max(2, Math.round(n / 2) * 2);
@@ -66,12 +124,20 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   const [outPath, setOutPath] = useState('');
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null);
+  const [result, setResult] = useState<ExportResult | null>(null);
   const token = useRef<CancelToken>({ cancelled: false });
+  const encoder = usePrefs((p) => p.encoder);
+  const marked = useEditor((s) => (s.project.markIn != null || s.project.markOut != null ? markedRange() : null));
+  const [useRange, setUseRange] = useState(!!marked);
+  const [hw, setHw] = useState<HwEncoder[]>([]);
+  useEffect(() => {
+    void api.hwEncoders().then(setHw);
+  }, []);
 
   const width = even((s.width * height) / s.height);
   const h = even(height);
   const audioOnly = AUDIO_ONLY.includes(format);
+  const usesEncoderChoice = format === 'mp4' || format === 'mp4-hevc';
 
   useEffect(() => {
     player.pause();
@@ -112,7 +178,8 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
     setRunning(true);
     setResult(null);
     setProgress(null);
-    const r = await runExport({ outPath: target, format, width, height: h, fps, quality }, setProgress, token.current);
+    const range = useRange && marked ? marked : undefined;
+    const r = await runExport({ outPath: target, format, width, height: h, fps, quality, encoder, range }, setProgress, token.current);
     setRunning(false);
     if (r.error === 'cancelled') {
       setProgress(null);
@@ -205,9 +272,49 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
             </div>
           </>
         )}
+        {marked && (
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label className="field-label">{t('export.range')}</label>
+            <div className="seg">
+              <button className={!useRange ? 'active' : ''} disabled={running} onClick={() => setUseRange(false)}>
+                {t('export.rangeAll')}
+              </button>
+              <button className={useRange ? 'active' : ''} disabled={running} onClick={() => setUseRange(true)}>
+                {t('export.rangeMarked', { a: formatDuration(marked.start), b: formatDuration(marked.end) })}
+              </button>
+            </div>
+          </div>
+        )}
+        {usesEncoderChoice && (
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label className="field-label">{t('export.encoder')}</label>
+            <select
+              className="select"
+              value={encoder}
+              disabled={running}
+              onChange={(e) => setPrefs({ encoder: e.target.value as EncoderChoice })}
+            >
+              <option value="auto">
+                {t('export.enc.auto')}
+                {hw.length ? ` — ${HW_NAMES[hw[0]]}` : ` — ${t('export.enc.cpu')}`}
+              </option>
+              <option value="cpu">{t('export.enc.cpu')}</option>
+              {hw.map((x) => (
+                <option key={x} value={x}>
+                  {HW_NAMES[x]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <div className="panel-hint" style={{ margin: 0 }}>
-        {t('export.summary', { duration: formatDuration(duration), w: audioOnly ? '—' : width, h: audioOnly ? '—' : h, fps: audioOnly ? '—' : fps })}
+        {t('export.summary', {
+          duration: formatDuration(useRange && marked ? marked.end - marked.start : duration),
+          w: audioOnly ? '—' : width,
+          h: audioOnly ? '—' : h,
+          fps: audioOnly ? '—' : fps,
+        })}
       </div>
       {(running || progress) && !result && (
         <div className="export-status">
@@ -223,7 +330,18 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
       {result?.ok && (
         <div className="success-box">
           <Icon name="check" size={20} />
-          <span style={{ flex: 1 }}>{t('export.done')}</span>
+          <span style={{ flex: 1 }}>
+            {t('export.done')}
+            {result.stats && (
+              <span className="panel-hint" style={{ display: 'block', margin: 0 }}>
+                {t('export.doneStats', {
+                  time: formatDuration(result.stats.seconds),
+                  fps: (result.stats.frames / Math.max(0.001, result.stats.seconds)).toFixed(1),
+                  encoder: result.encoder ?? '',
+                })}
+              </span>
+            )}
+          </span>
           <button className="btn small" onClick={() => api.showItemInFolder(outPath)}>
             {t('export.showFile')}
           </button>
@@ -361,7 +479,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
           ▶
         </div>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Videoredact {info?.version}</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{APP_NAME} {info?.version}</div>
           <div className="panel-hint" style={{ margin: 0 }}>
             {t('app.tagline')}
           </div>
@@ -401,6 +519,12 @@ const SHORTCUTS: { key: I18nKey; keys: string[] }[] = [
   { key: 'sc.duplicate', keys: ['Ctrl+D'] },
   { key: 'sc.selectAll', keys: ['Ctrl+A'] },
   { key: 'sc.tools', keys: ['V', 'C'] },
+  { key: 'sc.moreTools', keys: ['A', 'B', 'R', 'Y', 'U'] },
+  { key: 'sc.nudge', keys: ['Alt+←', 'Alt+→'] },
+  { key: 'sc.freeze', keys: ['Shift+F'] },
+  { key: 'sc.reverse', keys: ['Ctrl+R'] },
+  { key: 'sc.insertDrop', keys: ['Ctrl'] },
+  { key: 'sc.marquee', keys: ['Drag'] },
   { key: 'sc.snap', keys: ['N'] },
   { key: 'sc.marker', keys: ['M'] },
   { key: 'sc.zoom', keys: ['+', '−', 'Ctrl+Wheel'] },

@@ -6,15 +6,41 @@ import type { Clip, MediaAsset, MediaRuntime, Track } from '../../core/types';
 import { getWaveform } from '../../engine/waveforms';
 import { useT } from '../../i18n';
 import { renameTrack, setTrackFlag } from '../../store/actions';
-import { useEditor } from '../../store/editor';
+import { commitPreview, previewEdit, useEditor } from '../../store/editor';
 import { Icon, type IconName } from '../../ui/Icon';
 import { IconButton } from '../../ui/controls';
 
 export const HEADER_W = 168;
 export const RULER_H = 28;
 
+export const TRACK_MIN_H = 30;
+export const TRACK_MAX_H = 180;
+
 export function trackHeight(track: Track): number {
-  return track.kind === 'video' ? 68 : 54;
+  return track.height ?? (track.kind === 'video' ? 68 : 54);
+}
+
+/** Drag on the header's bottom edge to resize the lane; double-click resets it. */
+function beginTrackResize(e: React.PointerEvent, track: Track): void {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const startY = e.clientY;
+  const h0 = trackHeight(track);
+  const onMove = (ev: PointerEvent) => {
+    const h = Math.round(Math.min(TRACK_MAX_H, Math.max(TRACK_MIN_H, h0 + ev.clientY - startY)));
+    previewEdit((d) => {
+      const tr = d.tracks.find((x) => x.id === track.id);
+      if (tr) tr.height = h;
+    });
+  };
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    commitPreview();
+  };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +122,10 @@ export function TrackHeader({ track, height, onContextMenu }: { track: Track; he
   return (
     <div className="track-header" style={{ width: HEADER_W, height }} onContextMenu={onContextMenu}>
       <div className="track-name" onDoubleClick={() => (setName(track.name), setEditing(true))}>
-        <span className="track-kind" style={{ background: track.kind === 'video' ? 'var(--clip-video)' : 'var(--clip-audio)' }} />
+        <span
+          className="track-kind"
+          style={{ background: `var(--clip-${track.kind})`, '--kind-glow': `var(--clip-${track.kind})` } as React.CSSProperties}
+        />
         {editing ? (
           <input
             autoFocus
@@ -134,6 +163,13 @@ export function TrackHeader({ track, height, onContextMenu }: { track: Track; he
         active={track.muted}
         onClick={() => setTrackFlag(track.id, 'muted', !track.muted)}
       />
+      <button
+        className={`solo-btn ${track.solo ? 'active' : ''}`}
+        title={t('tl.solo')}
+        onClick={() => setTrackFlag(track.id, 'solo', !track.solo)}
+      >
+        S
+      </button>
       <IconButton
         icon={track.locked ? 'lock' : 'unlock'}
         size={15}
@@ -141,6 +177,17 @@ export function TrackHeader({ track, height, onContextMenu }: { track: Track; he
         title={t('tl.lock')}
         active={track.locked}
         onClick={() => setTrackFlag(track.id, 'locked', !track.locked)}
+      />
+      <div
+        className="track-resize"
+        title={t('tl.resizeTrack')}
+        onPointerDown={(e) => beginTrackResize(e, track)}
+        onDoubleClick={() =>
+          commitPreview((d) => {
+            const tr = d.tracks.find((x) => x.id === track.id);
+            if (tr) delete tr.height;
+          })
+        }
       />
     </div>
   );
@@ -155,6 +202,8 @@ const TYPE_ICON: Record<Clip['type'], IconName> = {
   image: 'image',
   text: 'text',
   color: 'shapes',
+  adjustment: 'layers',
+  shape: 'shapes',
 };
 
 function Waveform({ clip, pps, color, waveVersion }: { clip: Clip; pps: number; color: string; waveVersion: number }) {
@@ -272,6 +321,7 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
       <div className="clip-body">
         {showStrip && <Filmstrip clip={clip} rt={p.rt} pps={pps} height={bodyH} />}
         {clip.type === 'color' && <div className="clip-strip" style={{ background: clip.color, opacity: 0.85 }} />}
+        {clip.type === 'shape' && clip.shape && <div className="clip-strip" style={{ background: clip.shape.fill, opacity: 0.6 }} />}
         {hasAudio && <Waveform clip={clip} pps={pps} color={clip.type === 'audio' ? '#a5f3d0' : 'rgba(255,255,255,0.8)'} waveVersion={p.waveVersion} />}
       </div>
       {clip.transition.type !== 'none' && <div className="clip-transition" style={{ width: Math.min(clip.transition.duration, clip.duration) * pps }} />}

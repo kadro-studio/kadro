@@ -6,7 +6,7 @@
 // <media-dir> must contain clipA.mp4, clipB.mp4, green.mp4, tone.mp3, still.png, hevc.mkv
 // (see README for the ffmpeg commands that generate them).
 import { _electron as electron } from 'playwright-core';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -96,7 +96,7 @@ const ids = await win.evaluate(() => {
   });
   vr.splitAt(3, [a]);
   vr.updateClip(text, (c) => {
-    c.text.content = 'Videoredact\nтест';
+    c.text.content = 'Kadro\nтест';
   });
   vr.select([img]);
   return { a, b, img, green, tone, text };
@@ -250,14 +250,162 @@ if (onA2 !== 1) problems.push('drag & drop from media bin failed');
 await win.waitForTimeout(400);
 await win.screenshot({ path: path.join(outDir, '05b-russian-ui.png') });
 
+log('pro features: effects, shader transition, mask, LUT, audio FX, volume keys, mods');
+// A small warm-looking 3D LUT written on the fly.
+const lutPath = path.join(outDir, 'warm.cube');
+{
+  const n = 9;
+  const lines = ['TITLE "warm"', `LUT_3D_SIZE ${n}`];
+  for (let b = 0; b < n; b++) for (let g = 0; g < n; g++) for (let r = 0; r < n; r++) {
+    const R = Math.min(1, (r / (n - 1)) * 1.1);
+    const G = g / (n - 1);
+    const B = (b / (n - 1)) * 0.8;
+    lines.push(`${R.toFixed(4)} ${G.toFixed(4)} ${B.toFixed(4)}`);
+  }
+  fs.writeFileSync(lutPath, lines.join('\n'));
+}
+const catalogMod = path.join(root, 'mods', 'thermal-camera.vrmod');
+const pro = await win.evaluate(
+  async ({ ids, lutPath, catalogMod }) => {
+    const vr = window.__vr;
+    const s = vr.useEditor.getState();
+    const clips = s.project.tracks.flatMap((t) => t.clips);
+    const v1 = s.project.tracks.find((t) => t.name === 'V1');
+    const second = v1.clips[1];
+    const hevc = v1.clips.find((c) => c.start >= 10.9);
+    vr.addEffect([second.id], 'fx.vhs');
+    vr.addEffect([ids.b], 'fx.rgbSplit');
+    vr.applyTransition(hevc.id, 'tr.heart');
+    vr.updateClip(ids.img, (c) => {
+      c.mask = { shape: 'ellipse', x: 0.5, y: 0.5, width: 0.8, height: 0.8, rotation: 0, feather: 0.1, invert: false };
+    });
+    await window.__vr.player.seek(0);
+    vr.updateClip(ids.b, (c) => {
+      c.lut = { path: lutPath, name: 'warm.cube', amount: 100 };
+    });
+    vr.updateClip(ids.tone, (c) => {
+      c.audioFx = { low: 6, mid: -3, high: 2, compressor: true };
+      c.keyframes.volume = [
+        { t: 0, v: 0.2, ease: 'linear' },
+        { t: 3, v: 1, ease: 'linear' },
+      ];
+    });
+    await window.__vrMods.installMods([catalogMod]);
+    const modOk = !!window.__vrFx.getFx('kadro.thermal-camera');
+    vr.addEffect([ids.green], 'kadro.thermal-camera');
+    // Autosave round trip.
+    await window.api.autosaveWrite('{"name":"t"}', { filePath: null, name: 't' });
+    const rec = await window.api.autosaveRead();
+    await window.api.autosaveClear();
+    return { modOk, autosaveOk: rec?.meta?.name === 't', clipCount: clips.length };
+  },
+  { ids, lutPath, catalogMod },
+);
+log('pro setup', JSON.stringify(pro));
+if (!pro.modOk) problems.push('catalog mod did not install');
+if (!pro.autosaveOk) problems.push('autosave round trip failed');
+await seek(11.4, '05c-heart-transition.png');
+await frameStats('t=11.4 heart');
+await seek(8, '05d-mod-thermal.png');
+
+log('freeze frame + reverse');
+const editRes = await win.evaluate(async (ids) => {
+  const vr = window.__vr;
+  const before = vr.useEditor.getState().project.tracks.flatMap((t) => t.clips).length;
+  vr.player.seek(4);
+  vr.select([]);
+  await vr.freezeFrame(1);
+  const afterFreeze = vr.useEditor.getState().project.tracks.flatMap((t) => t.clips).length;
+  await vr.reverseClip(ids.b);
+  const b = vr.useEditor.getState().project.tracks.flatMap((t) => t.clips).find((c) => c.id === ids.b);
+  const m = vr.useEditor.getState().project.media.find((x) => x.id === b.mediaId);
+  return { before, afterFreeze, reversedMedia: m?.name };
+}, ids);
+log('edit tools', JSON.stringify(editRes));
+if (editRes.afterFreeze < editRes.before + 2) problems.push('freeze frame did not insert a still');
+if (!/rev/i.test(editRes.reversedMedia ?? '')) problems.push('reverse did not swap media');
+
+log('elements, layouts, solo, track height, enhancement');
+const toolsRes = await win.evaluate(async (ids) => {
+  const vr = window.__vr;
+  const all = () => vr.useEditor.getState().project.tracks.flatMap((t) => t.clips);
+  const find = (id) => all().find((c) => c.id === id);
+  const out = {};
+  // Adjustment layer with colour wheels and a shape on new tracks.
+  vr.addAdjustmentClip({ time: 0, newTrack: true });
+  const adj = vr.useEditor.getState().selection[0];
+  vr.updateClip(adj, (c) => {
+    c.wheels.gain = { x: 0.3, y: 0, l: 0.1 };
+    c.adjust.saturation = -40;
+  });
+  vr.addShapeClip('star', { time: 0, newTrack: true });
+  out.shape = find(vr.useEditor.getState().selection[0])?.shape?.kind;
+  // Split screen of the still and the keyed clip.
+  vr.select([ids.img, ids.green]);
+  vr.applyLayout('split-v');
+  const img = find(ids.img);
+  const green = find(ids.green);
+  out.layout = { imgX: img.transform.x, greenX: green.transform.x, imgCrop: +img.crop.left.toFixed(3), greenScale: +green.transform.scale.toFixed(3) };
+  vr.undo();
+  // Solo and custom track height.
+  const a1 = vr.useEditor.getState().project.tracks.find((t) => t.name === 'A1').id;
+  vr.setTrackFlag(a1, 'solo', true);
+  out.solo = vr.useEditor.getState().project.tracks.filter((t) => t.solo).length;
+  vr.setTrackFlag(a1, 'solo', false);
+  vr.edit((d) => void (d.tracks.find((t) => t.id === a1).height = 96));
+  await new Promise((r) => setTimeout(r, 100));
+  out.rowHeight = Math.round(document.querySelector(`[data-track-id="${a1}"]`).closest('.tl-row').getBoundingClientRect().height);
+  // Loudness normalisation, noise reduction and stabilisation.
+  const gainOf = (c) => JSON.stringify(c.keyframes.volume?.length ? c.keyframes.volume.map((k) => k.v) : c.volume);
+  const before = gainOf(find(ids.tone));
+  out.loudness = await vr.normalizeLoudness([ids.tone], -16);
+  out.toneVolume = [before, gainOf(find(ids.tone))];
+  out.denoised = await vr.denoiseClip(ids.tone, { strength: 40, voice: false });
+  out.stabilized = await vr.stabilizeClip(ids.a, { smoothing: 40, zoom: true });
+  out.stabName = find(ids.a).name;
+  return out;
+}, ids);
+log('tools', JSON.stringify(toolsRes));
+if (toolsRes.shape !== 'star') problems.push('shape clip not added');
+if (!(toolsRes.layout.imgX < 0 && toolsRes.layout.greenX > 0)) problems.push(`split-screen layout wrong: ${JSON.stringify(toolsRes.layout)}`);
+if (toolsRes.solo !== 1) problems.push('track solo flag not set');
+if (toolsRes.rowHeight !== 96) problems.push(`track height not applied (${toolsRes.rowHeight})`);
+if (toolsRes.loudness !== 1 || toolsRes.toneVolume[0] === toolsRes.toneVolume[1]) problems.push('loudness normalisation did not change the volume');
+if (!toolsRes.denoised) problems.push('noise reduction failed');
+if (!toolsRes.stabilized) problems.push('stabilisation failed');
+await seek(1.5, '05e-adjustment-shape.png');
+await frameStats('t=1.5 adjustment + shape');
+
+log('scopes and level meter');
+await win.click('.transport-right .icon-btn >> nth=1');
+await win.evaluate(() => window.__vr.player.play());
+await win.waitForTimeout(1200);
+const meters = await win.evaluate(() => {
+  const lit = (c) => {
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 60) n++;
+    return n;
+  };
+  const scopes = [...document.querySelectorAll('.scopes canvas')].map(lit);
+  const bars = [...document.querySelectorAll('.vu-bar')].map((b) => parseFloat(b.style.width) || 0);
+  return { scopes, bars };
+});
+await win.screenshot({ path: path.join(outDir, '05f-scopes.png') });
+await win.evaluate(() => window.__vr.player.pause());
+await win.click('.transport-right .icon-btn >> nth=1');
+log('scopes', JSON.stringify(meters));
+if (meters.scopes.length !== 3 || meters.scopes.some((n) => n < 20)) problems.push(`scopes look empty: ${meters.scopes}`);
+if (!meters.bars.some((w) => w > 5)) problems.push('level meter stayed at zero during playback');
+
 log('UI tabs');
-await win.click('.tab:nth-child(2)');
+await win.click('.rail-btn:nth-child(2)');
 await win.waitForTimeout(200);
 await win.screenshot({ path: path.join(outDir, '06-text-tab.png') });
-await win.click('.tab:nth-child(3)');
+await win.click('.rail-btn:nth-child(3)');
 await win.waitForTimeout(200);
 await win.screenshot({ path: path.join(outDir, '07-transitions-tab.png') });
-await win.click('.tab:nth-child(1)');
+await win.click('.rail-btn:nth-child(1)');
 await win.keyboard.press('Control+z');
 await win.keyboard.press('Control+Shift+z');
 
@@ -278,17 +426,43 @@ else {
   log(`exported: ${v?.codec_name} ${v?.width}x${v?.height}, audio ${a?.codec_name}, duration ${probe.format.duration}`);
   if (!v || !a) problems.push('export missing a stream');
   const ffmpeg = require('ffmpeg-static');
-  for (const tt of [2, 6.3, 8, 12]) {
+  for (const tt of [2, 6.3, 8, 12.4]) {
     execFileSync(ffmpeg, ['-v', 'error', '-y', '-ss', String(tt), '-i', exportPath, '-frames:v', '1', path.join(outDir, `export-${tt}.png`)]);
   }
+  // Audio must be present and audible.
+  const vol = spawnSync(ffmpeg, ['-hide_banner', '-i', exportPath, '-vn', '-af', 'volumedetect', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
+  const mean = Number(/mean_volume: (-?[\d.]+) dB/.exec(vol)?.[1]);
+  log(`exported audio mean volume: ${mean} dB`);
+  if (!(mean > -60)) problems.push(`exported audio is silent (${mean} dB)`);
+}
+
+log('in/out range export');
+const rangePath = path.join(outDir, 'export-range.mp4');
+const rangeRes = await win.evaluate(async (out) => {
+  const vr = window.__vr;
+  vr.setMark('in', 2);
+  vr.setMark('out', 4.5);
+  const range = vr.markedRange();
+  const r = await vr.runExport({ outPath: out, format: 'mp4', width: 640, height: 360, fps: 30, quality: 'low', range }, () => {}, { cancelled: false });
+  vr.clearMarks();
+  return { ok: r.ok, range };
+}, rangePath);
+if (!rangeRes.ok) problems.push('range export failed');
+else {
+  const ffprobe = require('ffprobe-static').path;
+  const dur = Number(execFileSync(ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', rangePath]).toString());
+  log(`range ${JSON.stringify(rangeRes.range)} -> ${dur.toFixed(2)} s`);
+  if (Math.abs(dur - 2.5) > 0.15) problems.push(`range export duration ${dur}, expected 2.5`);
 }
 
 log('save + reopen project');
 const projPath = path.join(outDir, 'smoke.vrproj');
 const reopened = await win.evaluate(async (p) => {
   const vr = window.__vr;
-  await window.api.writeText(p, JSON.stringify(vr.useEditor.getState().project));
-  vr.markSaved(p);
+  vr.useEditor.setState({ filePath: p });
+  await vr.saveProject();
+  const saved = JSON.parse(await window.api.readText(p));
+  if (!(saved.fx ?? []).some((d) => d.id === 'kadro.thermal-camera')) throw new Error('mod definition not embedded in project');
   const before = vr.useEditor.getState().project.tracks.reduce((n, t) => n + t.clips.length, 0);
   await vr.openProjectFile(p);
   const after = vr.useEditor.getState().project.tracks.reduce((n, t) => n + t.clips.length, 0);

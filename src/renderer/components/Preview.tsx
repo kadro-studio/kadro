@@ -8,9 +8,12 @@ import { measureText } from '../engine/text';
 import { player } from '../engine/player';
 import { useT } from '../i18n';
 import { commitPreview, previewEdit, select, toast, useEditor } from '../store/editor';
+import { setPrefs, usePrefs } from '../store/prefs';
 import { saveSnapshot } from '../commands';
+import { openProjectFile } from '../store/actions';
 import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/controls';
+import { LevelMeter, ScopesPanel } from './Scopes';
 
 interface StageBox {
   left: number;
@@ -27,6 +30,7 @@ export function Preview() {
   const width = useEditor((s) => s.project.settings.width);
   const height = useEditor((s) => s.project.settings.height);
   const hasClips = useEditor((s) => s.project.tracks.some((tr) => tr.clips.length > 0));
+  const showScopes = usePrefs((p) => p.showScopes);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -82,19 +86,42 @@ export function Preview() {
 
   return (
     <div className="preview">
-      <div className="preview-stage" ref={stageRef} onPointerDown={onStagePointerDown}>
-        <canvas ref={canvasRef} className="preview-canvas" style={{ left: box.left, top: box.top, width: box.width, height: box.height }} />
-        <TransformOverlay box={box} />
-        {!hasClips && (
-          <div className="preview-empty">
-            <div>
-              <h3>{t('preview.emptyTitle')}</h3>
-              <div>{t('preview.emptyHint')}</div>
+      <div className="preview-body">
+        <div className="preview-stage" ref={stageRef} onPointerDown={onStagePointerDown}>
+          <canvas ref={canvasRef} className="preview-canvas" style={{ left: box.left, top: box.top, width: box.width, height: box.height }} />
+          <TransformOverlay box={box} />
+          {!hasClips && (
+            <div className="preview-empty">
+              <div>
+                <img className="empty-logo" src="./logo.png" alt="" draggable={false} />
+                <h3>{t('preview.emptyTitle')}</h3>
+                <div>{t('preview.emptyHint')}</div>
+                <RecentProjects />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+        {showScopes && <ScopesPanel />}
       </div>
       <Transport stageRef={stageRef} />
+    </div>
+  );
+}
+
+function RecentProjects() {
+  const t = useT();
+  const recent = usePrefs((p) => p.recent);
+  const hasMedia = useEditor((s) => s.project.media.length > 0);
+  if (recent.length === 0 || hasMedia) return null;
+  return (
+    <div className="recent-list">
+      <h4>{t('preview.recent')}</h4>
+      {recent.slice(0, 5).map((r) => (
+        <button key={r.path} className="recent-item" onClick={() => void openProjectFile(r.path)} title={r.path}>
+          <span>{r.name}</span>
+          <small>{r.path}</small>
+        </button>
+      ))}
     </div>
   );
 }
@@ -242,12 +269,15 @@ function Transport({ stageRef }: { stageRef: React.RefObject<HTMLDivElement | nu
   const fps = useEditor((s) => s.project.settings.fps);
   const duration = useEditor((s) => projectDuration(s.project));
   const previewScale = useEditor((s) => s.previewScale);
+  const useProxies = usePrefs((p) => p.useProxies);
+  const showScopes = usePrefs((p) => p.showScopes);
 
   return (
     <div className="transport">
       <div className="transport-left">
         <TimecodeInput />
         <span className="timecode dim">/ {formatTimecode(duration, fps)}</span>
+        <LevelMeter />
       </div>
       <div className="transport-center">
         <IconButton icon="toStart" title={t('preview.toStart')} onClick={() => player.seek(0)} />
@@ -269,6 +299,8 @@ function Transport({ stageRef }: { stageRef: React.RefObject<HTMLDivElement | nu
           <option value={0.5}>{t('preview.half')}</option>
           <option value={0.25}>{t('preview.quarter')}</option>
         </select>
+        <IconButton icon="speed" title={t('preview.useProxies')} active={useProxies} onClick={() => setPrefs({ useProxies: !useProxies })} />
+        <IconButton icon="scopes" title={t('preview.scopes')} active={showScopes} onClick={() => setPrefs({ showScopes: !showScopes })} />
         <IconButton icon="camera" title={t('menu.snapshot')} onClick={() => void saveSnapshot()} />
         <IconButton
           icon="fullscreen"

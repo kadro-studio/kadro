@@ -1,11 +1,24 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, shell, utilityProcess, type UtilityProcess } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { handleMediaProtocol, registerMediaScheme } from './protocol';
 import * as media from './media';
 import * as render from './render';
-import { ffmpegPath, ffmpegVersion } from './ffmpeg';
-import type { ClosePrompt, DecoderSpec, ExportSpec, FileFilter, MediaKind } from '../shared/api';
+import { ffmpegPath, ffmpegVersion, hwEncoders } from './ffmpeg';
+import * as autosave from './autosave';
+import * as mods from './mods';
+import { APP_NAME, TITLE_BAR_COLOR, TITLE_BAR_HEIGHT, TITLE_BAR_SYMBOLS } from '../shared/brand';
+import type {
+  AutosaveMeta,
+  ClosePrompt,
+  DecoderSpec,
+  DenoiseOptions,
+  ExportSpec,
+  FileFilter,
+  MatteSpec,
+  MediaKind,
+  StabilizeOptions,
+} from '../shared/api';
 
 registerMediaScheme();
 
@@ -19,15 +32,66 @@ let win: BrowserWindow | null = null;
 let dirty = false;
 let closePrompt: ClosePrompt | null = null;
 let forceClose = false;
+let quitting = false;
+let rendererCrashed = false;
+
+/** A project file passed on the command line (opened from Explorer). */
+function projectArg(argv: string[]): string | null {
+  return argv.slice(1).find((a) => /\.vrproj$/i.test(a) && fs.existsSync(a)) ?? null;
+}
+let pendingOpen = projectArg(process.argv);
+
+// One window per installation: opening another project file hands it to the
+// running instance. Development runs (and tests) may start several copies.
+if (app.isPackaged && !app.requestSingleInstanceLock()) app.quit();
+app.on('second-instance', (_e, argv) => {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.focus();
+  const file = projectArg(argv);
+  if (file) win.webContents.send('app:openFile', file);
+});
+
+// ---------------------------------------------------------------------------
+// Media workers: decoding and encoding run in two utility processes connected
+// to the window by MessagePorts, keeping bulk frame data off this process.
+
+type WorkerRole = 'decode' | 'encode';
+const workers: Partial<Record<WorkerRole, UtilityProcess>> = {};
+
+function connectWorker(role: WorkerRole): void {
+  const child = workers[role];
+  if (!child || !win || win.isDestroyed()) return;
+  const { port1, port2 } = new MessageChannelMain();
+  child.postMessage({ type: 'port' }, [port1]);
+  win.webContents.postMessage('media-port', role, [port2]);
+}
+
+function startWorker(role: WorkerRole): void {
+  const child = utilityProcess.fork(path.join(__dirname, '../worker/index.js'), [], { serviceName: `${APP_NAME} ${role}` });
+  child.on('exit', () => {
+    if (workers[role] === child) delete workers[role];
+    if (quitting) return;
+    startWorker(role);
+    connectWorker(role);
+  });
+  workers[role] = child;
+}
 
 function createWindow(): void {
+  const icon = path.join(__dirname, '../renderer/logo.png');
   win = new BrowserWindow({
     width: 1600,
     height: 960,
     minWidth: 1100,
     minHeight: 680,
-    backgroundColor: '#141518',
-    title: 'Videoredact',
+    backgroundColor: TITLE_BAR_COLOR,
+    title: APP_NAME,
+    icon: fs.existsSync(icon) ? icon : undefined,
+    // The app draws its own title bar; Windows keeps only the caption buttons,
+    // painted in the app's colours.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: TITLE_BAR_COLOR, symbolColor: TITLE_BAR_SYMBOLS, height: TITLE_BAR_HEIGHT },
     show: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -47,6 +111,20 @@ function createWindow(): void {
   const devUrl = process.env.VR_DEV_SERVER_URL;
   if (devUrl) void win.loadURL(devUrl);
   else void win.loadFile(path.join(__dirname, '../renderer/index.html'));
+
+  // If the interface process dies, reload it; the autosave is then offered for recovery.
+  win.webContents.on('render-process-gone', (_e, details) => {
+    if (details.reason === 'clean-exit') return;
+    rendererCrashed = true;
+    dirty = false;
+    setTimeout(() => win?.webContents.reload(), 500);
+  });
+
+  // Every page load (including dev reloads) gets fresh worker channels.
+  win.webContents.on('did-finish-load', () => {
+    connectWorker('decode');
+    connectWorker('encode');
+  });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
@@ -93,8 +171,12 @@ function registerIpc(): void {
   ipcMain.handle('dialog:openProject', async () => {
     const r = await dialog.showOpenDialog(win!, {
       properties: ['openFile'],
-      filters: [{ name: 'Videoredact project', extensions: ['vrproj', 'json'] }],
+      filters: [{ name: `${APP_NAME} project`, extensions: ['vrproj', 'json'] }],
     });
+    return r.canceled ? null : r.filePaths[0];
+  });
+  ipcMain.handle('dialog:openFile', async (_e, filters: FileFilter[]) => {
+    const r = await dialog.showOpenDialog(win!, { properties: ['openFile'], filters });
     return r.canceled ? null : r.filePaths[0];
   });
   ipcMain.handle('dialog:saveFile', async (_e, defaultName: string, filters: FileFilter[]) => {
@@ -103,11 +185,15 @@ function registerIpc(): void {
   });
 
   ipcMain.handle('fs:readText', (_e, p: string) => fs.promises.readFile(p, 'utf8'));
-  ipcMain.handle('fs:writeText', async (_e, p: string, text: string) => {
+  ipcMain.handle('fs:writeText', async (_e, p: string, text: string, backup?: boolean) => {
     const tmp = `${p}.tmp`;
     await fs.promises.writeFile(tmp, text, 'utf8');
+    if (backup && fs.existsSync(p)) await fs.promises.copyFile(p, `${p}.bak`);
     await fs.promises.rename(tmp, p);
   });
+  ipcMain.handle('autosave:write', (_e, json: string, meta: AutosaveMeta) => autosave.autosaveWrite(json, meta));
+  ipcMain.handle('autosave:read', () => autosave.autosaveRead());
+  ipcMain.handle('autosave:clear', () => autosave.autosaveClear());
   ipcMain.handle('fs:writeBinary', (_e, p: string, data: Uint8Array) => fs.promises.writeFile(p, data));
   ipcMain.handle('fs:exists', (_e, p: string) => fs.existsSync(p));
 
@@ -115,12 +201,44 @@ function registerIpc(): void {
   ipcMain.handle('media:thumbnail', (_e, p: string, kind: MediaKind, duration: number) => media.thumbnail(p, kind, duration));
   ipcMain.handle('media:filmstrip', (_e, p: string, w: number, h: number, d: number) => media.filmstrip(p, w, h, d));
   ipcMain.handle('media:waveform', (_e, p: string) => media.waveform(p));
+  ipcMain.handle('media:frame', (_e, p: string, time: number) => media.extractFrame(p, time));
+  ipcMain.handle('media:pcm', (_e, p: string, start: number, duration: number) => media.readPcm(p, start, duration));
+  ipcMain.handle('media:workPath', (_e, name: string) => media.workPath(name));
+  ipcMain.handle('ai:cacheGet', (_e, url: string) => media.modelCacheGet(url));
+  ipcMain.handle('ai:cachePut', (_e, url: string, data: Uint8Array) => media.modelCachePut(url, data));
+  ipcMain.handle('export:matteStart', (_e, spec: MatteSpec) => render.matteStart(spec));
+  ipcMain.handle('media:reverse', (e, p: string, start: number, duration: number, withAudio: boolean) =>
+    media.reverseRange(p, start, duration, withAudio, (progress) => {
+      if (!e.sender.isDestroyed()) e.sender.send('media:proxyProgress', p, progress);
+    }),
+  );
+  const taskProgress = (e: Electron.IpcMainInvokeEvent, taskId: string) => (progress: number) => {
+    if (!e.sender.isDestroyed()) e.sender.send('media:taskProgress', taskId, progress);
+  };
+  ipcMain.handle('media:stabilize', (e, p: string, start: number, duration: number, opts: StabilizeOptions, taskId: string) =>
+    media.stabilize(p, start, duration, opts, taskProgress(e, taskId)),
+  );
+  ipcMain.handle('media:denoise', (e, p: string, opts: DenoiseOptions, taskId: string) => media.denoise(p, opts, taskProgress(e, taskId)));
+  ipcMain.handle('media:loudness', (_e, p: string, start: number, duration: number) => media.measureLoudness(p, start, duration));
   ipcMain.handle('media:proxy', (e, p: string, kind: MediaKind, duration: number) =>
     media.proxy(p, kind, duration, (progress) => {
       if (!e.sender.isDestroyed()) e.sender.send('media:proxyProgress', p, progress);
     }),
   );
 
+  ipcMain.handle('mods:list', () => mods.listMods());
+  ipcMain.handle('mods:catalog', () => mods.listCatalog());
+  ipcMain.handle('mods:install', (_e, paths: string[]) => mods.installMods(paths));
+  ipcMain.handle('mods:remove', (_e, file: string) => mods.removeMod(file));
+  ipcMain.on('mods:folder', () => mods.openModsFolder());
+  ipcMain.handle('dialog:openMods', async () => {
+    const r = await dialog.showOpenDialog(win!, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: `${APP_NAME} mod`, extensions: ['vrmod'] }],
+    });
+    return r.canceled ? [] : r.filePaths;
+  });
+  ipcMain.handle('export:hwEncoders', () => hwEncoders());
   ipcMain.handle('export:start', (_e, spec: ExportSpec) => render.exportStart(spec));
   ipcMain.handle('export:frame', (_e, id: string, data: Uint8Array) => render.exportFrame(id, data));
   ipcMain.handle('export:finish', (_e, id: string) => render.exportFinish(id));
@@ -136,6 +254,11 @@ function registerIpc(): void {
   ipcMain.on('app:setTitle', (_e, title: string) => win?.setTitle(title));
   ipcMain.on('app:showItem', (_e, p: string) => shell.showItemInFolder(p));
   ipcMain.on('app:toggleDevTools', () => win?.webContents.toggleDevTools());
+  ipcMain.handle('app:takeOpenFile', () => {
+    const file = pendingOpen;
+    pendingOpen = null;
+    return file;
+  });
   ipcMain.handle('app:info', async () => ({
     version: app.getVersion(),
     electron: process.versions.electron,
@@ -146,12 +269,40 @@ function registerIpc(): void {
   }));
 }
 
+/** Carries AI models, installed mods and UI preferences over from the pre-rename data folder. */
+function migrateLegacyData(): void {
+  const legacy = path.join(app.getPath('appData'), 'Videoredact');
+  for (const name of ['models', 'mods', 'Local Storage']) {
+    const from = path.join(legacy, name);
+    const to = path.join(app.getPath('userData'), name);
+    try {
+      if (fs.existsSync(from) && !fs.existsSync(to)) {
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        fs.renameSync(from, to);
+      }
+    } catch {
+      // Not critical: models are downloaded again on demand.
+    }
+  }
+}
+
 app.whenReady().then(() => {
+  migrateLegacyData();
   Menu.setApplicationMenu(null);
   handleMediaProtocol();
   registerIpc();
+  startWorker('decode');
+  startWorker('encode');
   createWindow();
+  // Probe GPU encoders in the background so the export dialog has them ready.
+  void hwEncoders();
 });
 
-app.on('will-quit', () => render.killAll());
+app.on('will-quit', () => {
+  // A deliberate quit leaves nothing to recover; after a renderer crash keep it.
+  if (!rendererCrashed) autosave.autosaveClear();
+  quitting = true;
+  for (const w of Object.values(workers)) w?.kill();
+  render.killAll();
+});
 app.on('window-all-closed', () => app.quit());

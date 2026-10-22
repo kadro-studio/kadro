@@ -5,4 +5,7 @@ export const DND = {
   transition: 'application/x-vr-transition',
   filter: 'application/x-vr-filter',
   color: 'application/x-vr-color',
+  effect: 'application/x-vr-effect',
+  /** JSON: { kind: 'adjustment' } | { kind: 'shape', shape: ShapeKind } */
+  element: 'application/x-vr-element',
 };

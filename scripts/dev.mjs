@@ -6,8 +6,10 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import electronPath from 'electron';
 import { nodeBuildOptions } from './build.mjs';
+import { copyOrt } from './copy-ort.mjs';
 
 const root = resolve(import.meta.dirname, '..');
+copyOrt();
 
 const server = await createServer({ configFile: resolve(root, 'vite.config.mts'), mode: 'development' });
 await server.listen();

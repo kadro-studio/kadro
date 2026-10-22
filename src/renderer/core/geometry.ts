@@ -18,8 +18,13 @@ export interface Box {
 
 /** Size (project px, at scale 1) of a clip's uncropped content. */
 export function contentSize(clip: Clip, media: MediaAsset | undefined, frameW: number, frameH: number, textSize?: Size): Size {
-  if (clip.type === 'color') return { w: frameW, h: frameH };
+  if (clip.type === 'color' || clip.type === 'adjustment') return { w: frameW, h: frameH };
   if (clip.type === 'text') return textSize ?? { w: 0, h: 0 };
+  if (clip.type === 'shape' && clip.shape) {
+    // Same padding as the shape rasteriser (stroke plus a 2px margin).
+    const pad = Math.ceil(clip.shape.strokeWidth) + 2;
+    return { w: clip.shape.width + pad * 2, h: clip.shape.height + pad * 2 };
+  }
   if (!media || !media.width || !media.height) return { w: frameW, h: frameH };
   const fit = Math.min(frameW / media.width, frameH / media.height);
   return { w: media.width * fit, h: media.height * fit };

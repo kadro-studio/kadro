@@ -4,10 +4,25 @@ import { create } from 'zustand';
 import { produce, type Draft } from 'immer';
 import { createProject, findClip } from '../core/project';
 import type { Clip, MediaRuntime, Project } from '../core/types';
+import type { AutosaveData } from '../../shared/api';
 
-export type Tool = 'select' | 'razor';
-export type LeftTab = 'media' | 'text' | 'transitions' | 'filters' | 'elements';
-export type DialogKind = null | 'export' | 'settings' | 'about' | 'shortcuts';
+/** Timeline tools (Premiere-style): ripple/roll act on edges, slip/slide on clip bodies. */
+export type Tool = 'select' | 'forward' | 'ripple' | 'roll' | 'slip' | 'slide' | 'razor';
+export type LeftTab = 'media' | 'text' | 'transitions' | 'effects' | 'filters' | 'elements' | 'mods';
+export type DialogKind =
+  | null
+  | 'export'
+  | 'settings'
+  | 'about'
+  | 'shortcuts'
+  | 'prefs'
+  | 'ai-subs'
+  | 'ai-bg'
+  | 'paste-attrs'
+  | 'voiceover'
+  | 'stabilize'
+  | 'denoise'
+  | 'loudness';
 
 export interface Toast {
   id: number;
@@ -45,6 +60,8 @@ export interface EditorState {
   toasts: Toast[];
   /** Snap guide position on the timeline (seconds) while dragging. */
   snapLine: number | null;
+  /** Autosave left by a session that ended unexpectedly. */
+  recovery: AutosaveData | null;
 }
 
 function initialState(): EditorState {
@@ -70,6 +87,7 @@ function initialState(): EditorState {
     clipboard: null,
     toasts: [],
     snapLine: null,
+    recovery: null,
   };
 }
 
@@ -179,6 +197,8 @@ export function setRuntime(mediaId: string, patch: Partial<MediaRuntime>): void 
     thumb: null,
     filmstrip: null,
     proxyPath: null,
+    proxyRequired: false,
+    optimizing: false,
     progress: 0,
     error: null,
     hasWaveform: false,

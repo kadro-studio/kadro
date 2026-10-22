@@ -1,19 +1,27 @@
 // Live preview: keeps a pool of <video>/<audio> elements in sync with the
 // timeline clock, routes their sound through Web Audio (per-clip gain) and
 // draws each frame with the WebGL compositor.
-import { mediaUrl } from '../../shared/api';
+import { AUDIO_FX, mediaUrl } from '../../shared/api';
 import { clipEnd, mediaMap, projectDuration } from '../core/project';
-import { clipGain, clipHasAudio, resolveScene, type LayerPlan } from '../core/scene';
+import { clipGain, clipHasAudio, resolveScene, soloActive, type LayerPlan } from '../core/scene';
 import { snapToFrame } from '../core/time';
-import type { Clip, MediaAsset, Project } from '../core/types';
+import { previewPath, type Clip, type MediaAsset, type Project } from '../core/types';
 import { setPlayhead, useEditor } from '../store/editor';
+import { usePrefs } from '../store/prefs';
 import { Compositor, type TexSource } from './gl';
 import { buildItems, type SourceProvider } from './items';
+import { onLutLoaded } from './lut';
+import { feedScopes } from './scopes';
 
 interface MediaEl {
   el: HTMLMediaElement;
   src: string;
   gain: GainNode | null;
+  /** low shelf, peaking, high shelf (same settings as the export filters). */
+  eq: BiquadFilterNode[];
+  comp: DynamicsCompressorNode | null;
+  /** Last applied audio settings, to avoid touching nodes every frame. */
+  fxKey: string;
   lastUsed: number;
   clipId: string;
 }
@@ -55,6 +63,18 @@ class Player implements SourceProvider {
       }
       prev = s;
     });
+    const unsubPrefs = usePrefs.subscribe((p, old) => {
+      if (p.useProxies === old.useProxies) return;
+      this.refreshSources(useEditor.getState().project);
+      this.requestRender();
+    });
+    const unsubLut = onLutLoaded(() => this.requestRender());
+    const unsubEditor = this.unsub;
+    this.unsub = () => {
+      unsubEditor();
+      unsubPrefs();
+      unsubLut();
+    };
     this.requestRender();
   }
 
@@ -94,6 +114,12 @@ class Player implements SourceProvider {
     useEditor.setState({ playing: true, playhead: t });
     cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame(this.tick);
+  }
+
+  /** Overall preview volume (0 silences the project, e.g. while recording a voice-over). */
+  setMasterVolume(v: number): void {
+    this.ensureAudio();
+    this.master!.gain.value = v;
   }
 
   pause(): void {
@@ -161,9 +187,26 @@ class Player implements SourceProvider {
   // -------------------------------------------------------------------------
   // Rendering
 
+  /** Diagnostics: frames drawn and frames the video decoders dropped. */
+  stats(): { renders: number; dropped: number; decoded: number } {
+    let dropped = 0;
+    let decoded = 0;
+    for (const m of this.elements.values()) {
+      if (m.el instanceof HTMLVideoElement) {
+        const q = m.el.getVideoPlaybackQuality();
+        dropped += q.droppedVideoFrames;
+        decoded += q.totalVideoFrames;
+      }
+    }
+    return { renders: this.renders, dropped, decoded };
+  }
+
+  private renders = 0;
+
   private renderFrame(t: number, playing: boolean): void {
     const comp = this.comp;
     if (!comp) return;
+    this.renders++;
     const s = useEditor.getState();
     const p = s.project;
     const media = mediaMap(p);
@@ -173,6 +216,35 @@ class Player implements SourceProvider {
     comp.resize(p.settings.width * scale, p.settings.height * scale);
     const items = buildItems(p, plans, media, this, scale);
     comp.render(items, p.settings);
+    feedScopes(comp.canvas, playing);
+  }
+
+  // -------------------------------------------------------------------------
+  // Audio level metering (master bus, per channel)
+
+  private meter: { analysers: AnalyserNode[]; buf: Float32Array<ArrayBuffer> } | null = null;
+
+  /** Peak levels 0..1 of the left and right master channels. */
+  levels(): [number, number] {
+    const ctx = this.ensureAudio();
+    if (!this.meter) {
+      const split = ctx.createChannelSplitter(2);
+      this.master!.connect(split);
+      const analysers = [0, 1].map((i) => {
+        const a = ctx.createAnalyser();
+        a.fftSize = 1024;
+        split.connect(a, i);
+        return a;
+      });
+      this.meter = { analysers, buf: new Float32Array(1024) };
+    }
+    const { analysers, buf } = this.meter;
+    return analysers.map((a) => {
+      a.getFloatTimeDomainData(buf);
+      let peak = 0;
+      for (const v of buf) peak = Math.max(peak, Math.abs(v));
+      return peak;
+    }) as [number, number];
   }
 
   source(plan: LayerPlan, m: MediaAsset | undefined): TexSource | null {
@@ -194,7 +266,7 @@ class Player implements SourceProvider {
 
   private image(m: MediaAsset): HTMLImageElement {
     const rt = useEditor.getState().runtime[m.id];
-    const url = mediaUrl(rt?.proxyPath ?? m.path);
+    const url = mediaUrl(previewPath(m, rt, usePrefs.getState().useProxies));
     let img = this.images.get(m.id);
     if (!img || img.src !== url) {
       img = new Image();
@@ -215,14 +287,14 @@ class Player implements SourceProvider {
       const clip = p.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clipId);
       const m = clip?.mediaId ? media.get(clip.mediaId) : undefined;
       if (!m) continue;
-      const url = mediaUrl(runtime[m.id]?.proxyPath ?? m.path);
+      const url = mediaUrl(previewPath(m, runtime[m.id], usePrefs.getState().useProxies));
       if (url !== entry.src) this.disposeElement(clipId);
     }
   }
 
   private element(clip: Clip, m: MediaAsset): MediaEl {
     const runtime = useEditor.getState().runtime[m.id];
-    const src = mediaUrl(runtime?.proxyPath ?? m.path);
+    const src = mediaUrl(previewPath(m, runtime, usePrefs.getState().useProxies));
     let entry = this.elements.get(clip.id);
     if (entry && entry.src !== src) {
       this.disposeElement(clip.id);
@@ -239,16 +311,28 @@ class Player implements SourceProvider {
       el.src = src;
       this.host?.appendChild(el);
       let gain: GainNode | null = null;
+      let eq: BiquadFilterNode[] = [];
+      let comp: DynamicsCompressorNode | null = null;
       const ctx = this.ensureAudio();
       try {
         const node = ctx.createMediaElementSource(el);
+        const band = (type: BiquadFilterType, freq: number) => {
+          const f = ctx.createBiquadFilter();
+          f.type = type;
+          f.frequency.value = freq;
+          f.gain.value = 0;
+          return f;
+        };
+        eq = [band('lowshelf', AUDIO_FX.lowFreq), band('peaking', AUDIO_FX.midFreq), band('highshelf', AUDIO_FX.highFreq)];
+        eq[1].Q.value = AUDIO_FX.midQ;
+        comp = ctx.createDynamicsCompressor();
         gain = ctx.createGain();
         gain.gain.value = 0;
-        node.connect(gain).connect(this.master!);
+        node.connect(eq[0]).connect(eq[1]).connect(eq[2]).connect(comp).connect(gain).connect(this.master!);
       } catch (e) {
         console.warn('Audio routing failed', e);
       }
-      entry = { el, src, gain, lastUsed: performance.now(), clipId: clip.id };
+      entry = { el, src, gain, eq, comp, fxKey: '', lastUsed: performance.now(), clipId: clip.id };
       this.elements.set(clip.id, entry);
     }
     return entry;
@@ -263,6 +347,25 @@ class Player implements SourceProvider {
     entry.el.load();
     entry.el.remove();
     this.elements.delete(clipId);
+  }
+
+  private applyAudioFx(entry: MediaEl, clip: Clip): void {
+    const fx = clip.audioFx;
+    const key = `${fx.low}|${fx.mid}|${fx.high}|${fx.compressor}`;
+    if (key === entry.fxKey || entry.eq.length !== 3) return;
+    entry.fxKey = key;
+    entry.eq[0].gain.value = fx.low;
+    entry.eq[1].gain.value = fx.mid;
+    entry.eq[2].gain.value = fx.high;
+    const c = entry.comp;
+    if (c) {
+      // Threshold 0 dB with ratio 1 leaves the signal untouched.
+      c.threshold.value = fx.compressor ? AUDIO_FX.compThresholdDb : 0;
+      c.ratio.value = fx.compressor ? AUDIO_FX.compRatio : 1;
+      c.knee.value = fx.compressor ? AUDIO_FX.compKneeDb : 0;
+      c.attack.value = AUDIO_FX.compAttack;
+      c.release.value = AUDIO_FX.compRelease;
+    }
   }
 
   private setGain(entry: MediaEl, value: number): void {
@@ -283,6 +386,7 @@ class Player implements SourceProvider {
       gain: number;
     }
     const wanted = new Map<string, Want>();
+    const solo = soloActive(p);
 
     for (const plan of plans) {
       const c = plan.clip;
@@ -299,7 +403,7 @@ class Player implements SourceProvider {
         if (inside && clipHasAudio(c, media)) {
           const local = t - c.start;
           const w = wanted.get(c.id);
-          const gain = clipGain(c, track, local);
+          const gain = clipGain(c, track, local, solo);
           if (w) w.gain = gain;
           else {
             const st = Math.min(Math.max(0, c.in + local * c.speed), Math.max(0, m.duration - 0.5 / fps));
@@ -314,6 +418,7 @@ class Player implements SourceProvider {
     for (const w of wanted.values()) {
       const entry = this.element(w.clip, w.m);
       entry.lastUsed = now;
+      this.applyAudioFx(entry, w.clip);
       const el = entry.el;
       if (w.active) {
         const rate = Math.min(16, Math.max(0.0625, w.clip.speed));
