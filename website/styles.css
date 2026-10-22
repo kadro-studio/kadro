@@ -424,7 +424,78 @@ h2 {
     border-color 0.2s,
     box-shadow 0.2s;
 }
-a.donate-card:hover {
+button.donate-card {
+  width: 100%;
+  font: inherit;
+  font-size: 17px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.donate-card.open {
+  border-color: rgba(255, 59, 79, 0.5);
+}
+.wallets {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.wallets[hidden] {
+  display: none;
+}
+.wallet {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+.wallet-head {
+  display: flex;
+  flex-direction: column;
+}
+.wallet-head span {
+  color: var(--mute);
+  font-size: 13px;
+}
+.wallet code {
+  overflow-wrap: anywhere;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 14px;
+  user-select: all;
+}
+.btn-copy {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-copy:hover {
+  border-color: rgba(255, 59, 79, 0.5);
+}
+.wallet-warn {
+  margin: 4px 0 0;
+  color: var(--mute);
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .wallet {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .wallet code {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+a.donate-card:hover,
+button.donate-card:hover {
   border-color: rgba(255, 59, 79, 0.5);
   box-shadow: 0 0 30px rgba(255, 40, 60, 0.18);
 }

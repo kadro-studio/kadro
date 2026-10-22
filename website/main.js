@@ -163,6 +163,12 @@
     "footer.note": "MIT. FFmpeg використовується як окрема програма під власною ліцензією.",
   };
   const SOON = { ru: 'скоро', uk: 'незабаром', en: EN['support.soon'] };
+  const COPY = { uk: ['Копіювати', 'Скопійовано'], ru: ['Копировать', 'Скопировано'], en: ['Copy', 'Copied'] };
+  const WALLET_WARN = {
+    uk: 'Надсилайте монету лише в мережі, вказаній поруч з адресою: переказ в іншій мережі втрачається.',
+    ru: 'Отправляйте монету только в сети, указанной рядом с адресом: перевод в другой сети теряется.',
+    en: 'Send each coin only on the network shown next to its address: transfers on another network are lost.',
+  };
 
   // Original (Russian) texts are kept from the markup.
   const nodes = [...document.querySelectorAll('[data-i18n]')];
@@ -224,12 +230,21 @@
     const list = document.getElementById('donate-list');
     list.textContent = '';
     for (const d of site.donate) {
-      const card = document.createElement(d.url ? 'a' : 'div');
-      card.className = `donate-card${d.url ? '' : ' disabled'}`;
+      const wallets = (d.wallets ?? []).filter((w) => w.address);
+      const active = !!d.url || wallets.length > 0;
+      const card = document.createElement(d.url ? 'a' : wallets.length ? 'button' : 'div');
+      card.className = `donate-card${active ? '' : ' disabled'}${wallets.length && walletsOpen ? ' open' : ''}`;
       if (d.url) {
         card.href = d.url;
         card.target = '_blank';
         card.rel = 'noopener';
+      } else if (wallets.length) {
+        card.type = 'button';
+        card.setAttribute('aria-expanded', String(walletsOpen));
+        card.addEventListener('click', () => {
+          walletsOpen = !walletsOpen;
+          renderLinks(lang);
+        });
       }
       const text = document.createElement('div');
       const name = document.createElement('strong');
@@ -241,10 +256,56 @@
         text.append(sub);
       }
       const note = document.createElement('span');
-      note.textContent = d.url ? '→' : soon;
+      note.textContent = d.url ? '→' : wallets.length ? (walletsOpen ? '▴' : '▾') : soon;
       card.append(text, note);
       list.append(card);
     }
+    renderWallets(lang);
+  }
+
+  let walletsOpen = false;
+
+  /** Crypto addresses with copy buttons, shown under the donation cards. */
+  function renderWallets(lang) {
+    const box = document.getElementById('wallets');
+    const wallets = site.donate.flatMap((d) => (d.wallets ?? []).filter((w) => w.address));
+    box.hidden = !walletsOpen || wallets.length === 0;
+    box.textContent = '';
+    if (box.hidden) return;
+    const [copyLabel, copiedLabel] = COPY[lang] ?? COPY.en;
+    for (const w of wallets) {
+      const row = document.createElement('div');
+      row.className = 'wallet';
+      const head = document.createElement('div');
+      head.className = 'wallet-head';
+      const coin = document.createElement('strong');
+      coin.textContent = w.coin;
+      const net = document.createElement('span');
+      net.textContent = w.network;
+      head.append(coin, net);
+      const addr = document.createElement('code');
+      addr.textContent = w.address;
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'btn-copy';
+      copy.textContent = copyLabel;
+      copy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(w.address);
+        } catch {
+          // Clipboard blocked: select the text so it can be copied by hand.
+          getSelection()?.selectAllChildren(addr);
+        }
+        copy.textContent = copiedLabel;
+        setTimeout(() => (copy.textContent = copyLabel), 1600);
+      });
+      row.append(head, addr, copy);
+      box.append(row);
+    }
+    const warn = document.createElement('p');
+    warn.className = 'wallet-warn';
+    warn.textContent = WALLET_WARN[lang] ?? WALLET_WARN.en;
+    box.append(warn);
   }
 
   const nav = navigator.language?.toLowerCase() ?? '';

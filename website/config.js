@@ -12,6 +12,8 @@ window.KADRO_SITE = {
     issues: '',
   },
   // Donation options; set `url` to enable a card. `name` and `note` may be per-language.
+  // A card with `wallets` opens the list of crypto addresses instead of a link;
+  // wallets without an address are not shown.
   donate: [
     {
       id: 'kofi',
@@ -20,10 +22,20 @@ window.KADRO_SITE = {
       url: 'https://ko-fi.com/amormorri',
     },
     {
-      id: 'liberapay',
-      name: 'Liberapay',
-      note: { uk: 'регулярна підтримка щомісяця', ru: 'регулярная поддержка каждый месяц', en: 'recurring monthly support' },
-      url: '',
+      id: 'patreon',
+      name: 'Patreon',
+      note: { uk: 'щомісячна підтримка', ru: 'ежемесячная поддержка', en: 'monthly support' },
+      url: 'https://www.patreon.com/cw/kadrostudio',
+    },
+    {
+      id: 'crypto',
+      name: { uk: 'Криптовалюта', ru: 'Криптовалюта', en: 'Crypto' },
+      note: { uk: 'USDT, BTC та інші', ru: 'USDT, BTC и другие', en: 'USDT, BTC and more' },
+      wallets: [
+        { coin: 'USDT', network: 'TRC-20 (Tron)', address: '' },
+        { coin: 'USDT', network: 'ERC-20 (Ethereum)', address: '' },
+        { coin: 'BTC', network: 'Bitcoin', address: '' },
+      ],
     },
   ],
 };
