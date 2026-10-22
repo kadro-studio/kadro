@@ -246,6 +246,15 @@ h1 {
     0 40px 120px rgba(0, 0, 0, 0.7),
     0 0 120px rgba(255, 40, 60, 0.12);
 }
+.shot-wide {
+  margin-top: 40px;
+}
+.shot figcaption {
+  padding: 14px 8px 6px;
+  color: var(--dim);
+  font-size: 15px;
+  text-align: center;
+}
 .shot img {
   display: block;
   width: 100%;
@@ -403,6 +412,7 @@ h2 {
 }
 .donate-card {
   display: flex;
+  gap: 12px;
   justify-content: space-between;
   align-items: center;
   padding: 22px 24px;

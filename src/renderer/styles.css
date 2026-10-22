@@ -598,7 +598,12 @@ button {
   font-size: 11px;
   color: var(--text-mute);
   display: flex;
+  flex-wrap: wrap;
+  column-gap: 6px;
   justify-content: space-between;
+}
+.media-meta > span {
+  white-space: nowrap;
 }
 .media-badge {
   position: absolute;

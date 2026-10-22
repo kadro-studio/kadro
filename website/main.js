@@ -34,6 +34,7 @@
     'f5.d': 'Shader effects and transitions, stabilisation, picture-in-picture layouts and your own GLSL mods.',
     'f6.t': 'Fast export',
     'f6.d': 'NVENC, Quick Sync and AMF hardware encoding. MP4, WebM, ProRes, GIF — up to 4K.',
+    'shot2.caption': '4K footage edits smoothly: lightweight copies are made automatically, and video scopes show the colour of every frame.',
     'free.title': 'Free means free',
     'free.p1':
       'Kadro sells no licences and hides nothing behind a paid edition. No watermark on export, no trial period, no account. Everyone gets the same program.',
@@ -100,7 +101,7 @@
     for (const v of document.querySelectorAll('[data-version]')) v.textContent = site.version;
     document.documentElement.lang = lang;
     document.getElementById('lang').textContent = lang === 'en' ? 'RU' : 'EN';
-    document.querySelector('[data-shot]').src = `assets/screenshot-${lang}.webp`;
+    for (const img of document.querySelectorAll('[data-shot]')) img.src = `assets/${img.dataset.shot}-${lang}.webp`;
     renderLinks(lang);
     try {
       localStorage.setItem('kadro.lang', lang);
