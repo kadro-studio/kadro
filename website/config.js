@@ -30,11 +30,11 @@ window.KADRO_SITE = {
     {
       id: 'crypto',
       name: { uk: 'Криптовалюта', ru: 'Криптовалюта', en: 'Crypto' },
-      note: { uk: 'USDT, BTC та інші', ru: 'USDT, BTC и другие', en: 'USDT, BTC and more' },
+      note: { uk: 'ETH, USDT, BTC', ru: 'ETH, USDT, BTC', en: 'ETH, USDT, BTC' },
       wallets: [
+        { coin: 'ETH / USDT', network: 'Ethereum (ERC-20)', address: '0xf67373e6229B1320c7366020845Ff04bc14C7e6e' },
+        { coin: 'BTC', network: 'Bitcoin', address: 'bc1qn9gljgmgzav6n7s7gpfuhmwpvzjdvkrryflqs3' },
         { coin: 'USDT', network: 'TRC-20 (Tron)', address: '' },
-        { coin: 'USDT', network: 'ERC-20 (Ethereum)', address: '' },
-        { coin: 'BTC', network: 'Bitcoin', address: '' },
       ],
     },
   ],
