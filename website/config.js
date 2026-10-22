@@ -23,7 +23,7 @@ window.KADRO_SITE = {
       id: 'kofi',
       name: 'Ko-fi',
       note: { uk: 'PayPal або картка', ru: 'PayPal или карта', en: 'PayPal or card' },
-      url: '',
+      url: 'https://ko-fi.com/amormorri',
     },
   ],
 };

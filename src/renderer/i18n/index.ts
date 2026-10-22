@@ -22,6 +22,12 @@ function initialLang(): Lang {
 
 export const useLang = create<{ lang: Lang }>(() => ({ lang: initialLang() }));
 
+// The page language follows the interface (screen readers, hyphenation, spell checking).
+document.documentElement.lang = useLang.getState().lang;
+useLang.subscribe((s) => {
+  document.documentElement.lang = s.lang;
+});
+
 export function setLang(lang: Lang): void {
   useLang.setState({ lang });
   try {
