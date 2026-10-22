@@ -14,16 +14,16 @@ window.KADRO_SITE = {
   // Donation options; set `url` to enable a card. `name` and `note` may be per-language.
   donate: [
     {
-      id: 'monobank',
-      name: { uk: 'Банка Monobank', ru: 'Банка Monobank', en: 'Monobank jar' },
-      note: { uk: 'картка, Apple Pay, Google Pay', ru: 'карта, Apple Pay, Google Pay', en: 'card, Apple Pay, Google Pay' },
-      url: '',
-    },
-    {
       id: 'kofi',
       name: 'Ko-fi',
-      note: { uk: 'PayPal або картка', ru: 'PayPal или карта', en: 'PayPal or card' },
+      note: { uk: 'разовий донат: PayPal або картка', ru: 'разовый донат: PayPal или карта', en: 'one-off: PayPal or card' },
       url: 'https://ko-fi.com/amormorri',
+    },
+    {
+      id: 'liberapay',
+      name: 'Liberapay',
+      note: { uk: 'регулярна підтримка щомісяця', ru: 'регулярная поддержка каждый месяц', en: 'recurring monthly support' },
+      url: '',
     },
   ],
 };
