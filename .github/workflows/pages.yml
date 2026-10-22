@@ -24,6 +24,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+      # Browsers cache files for a while; a per-commit query makes them fetch the new ones.
+      - name: Stamp file links with the commit
+        run: sed -i "s/?v=dev\"/?v=${GITHUB_SHA::7}\"/g" website/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
