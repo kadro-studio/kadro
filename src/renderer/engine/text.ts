@@ -1,6 +1,7 @@
 // Text layer rasteriser (Canvas 2D -> texture source).
 import type { TextStyle } from '../core/types';
 import type { Size } from '../core/geometry';
+import { ensureFont, fontString, fontsVersion } from './fonts';
 
 export interface TextRaster {
   canvas: HTMLCanvasElement;
@@ -11,8 +12,9 @@ export interface TextRaster {
 
 const MAX_RASTER = 4096;
 
-function fontString(s: TextStyle, scale: number): string {
-  return `${s.italic ? 'italic ' : ''}${s.bold ? 700 : 400} ${Math.max(1, s.fontSize * scale)}px "${s.fontFamily}", "Segoe UI", Arial, sans-serif`;
+/** Text as drawn (case applied). */
+function shown(s: TextStyle): string {
+  return s.uppercase ? s.content.toUpperCase() : s.content;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -36,7 +38,7 @@ interface Layout {
 function layout(ctx: CanvasRenderingContext2D, s: TextStyle, scale: number): Layout {
   ctx.font = fontString(s, scale);
   ctx.letterSpacing = `${s.letterSpacing * scale}px`;
-  const lines = s.content.split('\n');
+  const lines = shown(s).split('\n');
   const widths = lines.map((l) => ctx.measureText(l).width);
   const textW = Math.max(1, ...widths);
   const lineH = s.fontSize * s.lineHeight * scale;
@@ -60,7 +62,8 @@ const sizeCache = new Map<string, Size>();
 
 /** Size of the rendered text box in project pixels (scale 1). */
 export function measureText(style: TextStyle): Size {
-  const key = JSON.stringify(style);
+  ensureFont(style);
+  const key = `${fontsVersion()}|${JSON.stringify(style)}`;
   const cached = sizeCache.get(key);
   if (cached) return cached;
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')!;
@@ -82,8 +85,8 @@ export function rasterizeText(cacheId: string, style: TextStyle, wantedScale: nu
   const maxScale = MAX_RASTER / Math.max(1, box.w, box.h);
   const scale = Math.max(0.1, Math.min(maxScale, Math.ceil(wantedScale * 4) / 4));
   const total = style.content.replace(/\n/g, '').length;
-  const shown = reveal >= 1 ? total : Math.floor(total * Math.max(0, reveal));
-  const key = `${JSON.stringify(style)}|${scale}|${shown}`;
+  const shownChars = reveal >= 1 ? total : Math.floor(total * Math.max(0, reveal));
+  const key = `${fontsVersion()}|${JSON.stringify(style)}|${scale}|${shownChars}`;
   const cached = rasters.get(cacheId);
   if (cached && cached.key === key) return cached;
 
@@ -109,7 +112,7 @@ export function rasterizeText(cacheId: string, style: TextStyle, wantedScale: nu
     ctx.fill();
   }
 
-  let remaining = shown;
+  let remaining = shownChars;
   const positions = l.lines.map((line, i) => {
     let x = l.margin;
     if (style.align === 'center') x = l.margin + (l.textW - l.widths[i]) / 2;
@@ -137,13 +140,28 @@ export function rasterizeText(cacheId: string, style: TextStyle, wantedScale: nu
   } else {
     applyShadow(hasShadow);
   }
-  ctx.fillStyle = style.color;
+  ctx.fillStyle = style.gradient ? gradientFill(ctx, style, l, textH) : style.color;
   for (const p of positions) if (p.text) ctx.fillText(p.text, p.x, p.y);
   applyShadow(false);
 
   const raster = { canvas, scale, key };
   rasters.set(cacheId, raster);
   return raster;
+}
+
+/** Linear gradient across the text block at the style's angle (0° = bottom to top). */
+function gradientFill(ctx: CanvasRenderingContext2D, style: TextStyle, l: Layout, textH: number): CanvasGradient {
+  const cx = l.margin + l.textW / 2;
+  const cy = l.margin + textH / 2;
+  const a = ((style.gradientAngle ?? 90) * Math.PI) / 180;
+  // Half the extent of the text block along the gradient direction.
+  const r = (Math.abs(Math.sin(a)) * l.textW + Math.abs(Math.cos(a)) * textH) / 2;
+  const dx = Math.sin(a) * r;
+  const dy = -Math.cos(a) * r;
+  const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+  g.addColorStop(0, style.color);
+  g.addColorStop(1, style.gradientColor ?? style.color);
+  return g;
 }
 
 export function dropTextRaster(cacheId: string): void {

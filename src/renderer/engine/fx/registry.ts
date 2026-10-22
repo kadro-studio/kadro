@@ -2,6 +2,7 @@
 // mods and definitions embedded in the open project.
 import { create } from 'zustand';
 import { BUILTIN_EFFECTS, BUILTIN_TRANSITIONS } from './builtins';
+import { BUILTIN_GENERATORS } from './generators';
 import type { FxDef, FxKind } from './types';
 
 interface FxState {
@@ -11,7 +12,7 @@ interface FxState {
 }
 
 function builtins(): Record<string, FxDef> {
-  return Object.fromEntries([...BUILTIN_EFFECTS, ...BUILTIN_TRANSITIONS].map((d) => [d.id, d]));
+  return Object.fromEntries([...BUILTIN_EFFECTS, ...BUILTIN_TRANSITIONS, ...BUILTIN_GENERATORS].map((d) => [d.id, d]));
 }
 
 export const useFx = create<FxState>(() => ({ defs: builtins(), errors: {} }));

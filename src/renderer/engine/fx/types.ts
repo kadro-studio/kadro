@@ -6,13 +6,17 @@
 // In both, uv (0,0) is the bottom-left corner, each parameter is available by
 // its id, and helpers rand(vec2), luma(vec3) and PI are predefined. Effects
 // also get u_size (source pixels) and u_time (seconds since the clip started).
+// Generator GLSL defines vec4 generate(vec2 uv) and draws an animated element
+// from nothing (overlays, backgrounds); it gets `time`, `ratio`, u_size and the
+// element's two colours as `colorA` / `colorB`, and returns straight RGBA.
 
-export type FxKind = 'effect' | 'transition';
+export type FxKind = 'effect' | 'transition' | 'generator';
 
 export interface FxParam {
   id: string;
   name: string;
   nameRu?: string;
+  nameUk?: string;
   min: number;
   max: number;
   default: number;
@@ -31,6 +35,11 @@ export interface FxDef {
   glsl: string;
   /** Where the definition came from (built-ins are not saved into projects). */
   source: 'builtin' | 'mod' | 'project';
+  /** Generators: default blend mode, colours and panel section. */
+  blend?: string;
+  colors?: [string, string];
+  category?: 'overlay' | 'background';
+  nameUk?: string;
 }
 
 export const MAX_FX_PARAMS = 8;
@@ -39,6 +48,7 @@ const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,31}$/;
 const RESERVED = new Set([
   'uv', 'progress', 'ratio', 'src', 'fromColor', 'toColor', 'effect', 'transition', 'rand', 'luma', 'PI',
   'half', 'sample', 'input', 'output', 'filter', 'texture', 'main', 'common', 'partition', 'active',
+  'generate', 'time', 'colorA', 'colorB',
 ]);
 
 /** Validates an untrusted definition (mods, project files). Returns an error or null. */
@@ -46,11 +56,11 @@ export function validateFxDef(raw: unknown): string | null {
   const d = raw as Partial<FxDef> | null;
   if (!d || typeof d !== 'object') return 'not an object';
   if (typeof d.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{1,63}$/i.test(d.id)) return 'invalid id';
-  if (d.kind !== 'effect' && d.kind !== 'transition') return 'kind must be "effect" or "transition"';
+  if (d.kind !== 'effect' && d.kind !== 'transition' && d.kind !== 'generator') return 'kind must be "effect", "transition" or "generator"';
   if (typeof d.name !== 'string' || !d.name.trim()) return 'missing name';
   if (typeof d.glsl !== 'string' || d.glsl.length > 20000) return 'missing or too large glsl';
-  const fn = d.kind === 'effect' ? /vec4\s+effect\s*\(\s*vec2\s+\w+\s*\)/ : /vec4\s+transition\s*\(\s*vec2\s+\w+\s*\)/;
-  if (!fn.test(d.glsl)) return d.kind === 'effect' ? 'glsl must define vec4 effect(vec2 uv)' : 'glsl must define vec4 transition(vec2 uv)';
+  const fnName = d.kind === 'effect' ? 'effect' : d.kind === 'transition' ? 'transition' : 'generate';
+  if (!new RegExp(`vec4\\s+${fnName}\\s*\\(\\s*vec2\\s+\\w+\\s*\\)`).test(d.glsl)) return `glsl must define vec4 ${fnName}(vec2 uv)`;
   if (/#\s*(version|extension)/.test(d.glsl)) return '#version/#extension are not allowed';
   const params = d.params ?? [];
   if (!Array.isArray(params) || params.length > MAX_FX_PARAMS) return `at most ${MAX_FX_PARAMS} params`;
@@ -62,6 +72,7 @@ export function validateFxDef(raw: unknown): string | null {
 }
 
 /** Display name in the current language. */
-export function fxName(def: { name: string; nameRu?: string }, lang: string): string {
+export function fxName(def: { name: string; nameRu?: string; nameUk?: string }, lang: string): string {
+  if (lang === 'uk') return def.nameUk ?? def.nameRu ?? def.name;
   return lang === 'ru' && def.nameRu ? def.nameRu : def.name;
 }

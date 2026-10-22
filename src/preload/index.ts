@@ -23,6 +23,9 @@ const api: VrApi = {
   stabilize: (p, start, duration, opts, taskId) => ipcRenderer.invoke('media:stabilize', p, start, duration, opts, taskId),
   denoise: (p, opts, taskId) => ipcRenderer.invoke('media:denoise', p, opts, taskId),
   measureLoudness: (p, start, duration) => ipcRenderer.invoke('media:loudness', p, start, duration),
+  detectScenes: (p, start, duration, threshold) => ipcRenderer.invoke('media:scenes', p, start, duration, threshold),
+  searchLibrary: (q) => ipcRenderer.invoke('library:search', q),
+  downloadLibraryItem: (item, taskId) => ipcRenderer.invoke('library:download', item, taskId),
   onTaskProgress: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, id: string, progress: number) => cb(id, progress);
     ipcRenderer.on('media:taskProgress', listener);
@@ -59,8 +62,20 @@ const api: VrApi = {
 
   setDirty: (dirty, prompt) => ipcRenderer.send('app:setDirty', dirty, prompt),
   setTitle: (title) => ipcRenderer.send('app:setTitle', title),
+  setAppearance: (a) => ipcRenderer.send('app:appearance', a),
+  onCloseRequest: (cb) => {
+    const listener = () => {
+      ipcRenderer.send('app:closeAck');
+      cb();
+    };
+    ipcRenderer.on('app:closeRequest', listener);
+    return () => ipcRenderer.off('app:closeRequest', listener);
+  },
+  closeNow: () => ipcRenderer.send('app:closeNow'),
   showItemInFolder: (p) => ipcRenderer.send('app:showItem', p),
   appInfo: () => ipcRenderer.invoke('app:info'),
+  storageInfo: () => ipcRenderer.invoke('app:storage'),
+  clearStorage: (kind) => ipcRenderer.invoke('app:clearStorage', kind),
   takeOpenFile: () => ipcRenderer.invoke('app:takeOpenFile'),
   onOpenFile: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, p: string) => cb(p);

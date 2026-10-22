@@ -36,7 +36,7 @@ const uhd = gen('bench-2160.mp4', [
   '-c:v', 'libx264', '-preset', 'ultrafast', '-g', '120', '-pix_fmt', 'yuv420p',
 ]);
 
-const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, VR_DEV_SERVER_URL: '' } });
+const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, VR_DEV_SERVER_URL: '', KADRO_USER_DATA: path.join(work, 'profile') } });
 const win = await app.firstWindow();
 win.on('pageerror', (e) => console.log('[pageerror]', e.message));
 await win.waitForSelector('.timeline');

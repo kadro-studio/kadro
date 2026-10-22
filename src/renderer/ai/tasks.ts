@@ -40,7 +40,7 @@ function wrapCaption(text: string): string {
 }
 
 /** Adds subtitle text clips on a new top video track as one undo step. */
-function placeSubtitles(chunks: AsrChunk[], offset: number, speed: number): number {
+export function placeSubtitles(chunks: AsrChunk[], offset: number, speed: number, wrap = true): number {
   const p = useEditor.getState().project;
   const { width, height } = p.settings;
   const k = Math.min(width, height) / 1080;
@@ -53,7 +53,7 @@ function placeSubtitles(chunks: AsrChunk[], offset: number, speed: number): numb
   for (const c of chunks) {
     const start = Math.max(lastEnd, offset + c.start / speed);
     const end = Math.max(start + 0.6, offset + c.end / speed);
-    const content = wrapCaption(c.text);
+    const content = wrap ? wrapCaption(c.text) : c.text;
     const clip = makeClip('text', { name: content.split('\n')[0], start, duration: end - start, text: { ...style, content } });
     clip.transform.y = Math.round(preset.y * height);
     clips.push(clip);

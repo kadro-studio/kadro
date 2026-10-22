@@ -6,7 +6,7 @@ import { projectDuration } from '../core/project';
 import { formatDuration } from '../core/time';
 import { AUDIO_ONLY, runExport, type CancelToken, type ExportProgress } from '../engine/exporter';
 import { player } from '../engine/player';
-import { setLang, useLang, useT, type I18nKey } from '../i18n';
+import { useT, type I18nKey } from '../i18n';
 import { api } from '../api';
 import { APP_NAME } from '../../shared/brand';
 import { markedRange, openDialog } from '../store/actions';
@@ -14,7 +14,10 @@ import { edit, useEditor } from '../store/editor';
 import { Icon } from '../ui/Icon';
 import { Modal } from './Modal';
 import { BackgroundDialog, SubtitlesDialog } from './AiDialog';
-import { EnhanceDialog, PasteAttributesDialog, VoiceoverDialog } from './ToolDialogs';
+import { CreditsDialog, EnhanceDialog, PasteAttributesDialog, VoiceoverDialog, type EnhanceKind } from './ToolDialogs';
+
+const ENHANCE_KINDS: EnhanceKind[] = ['stabilize', 'denoise', 'loudness', 'scenes', 'beats', 'duck'];
+import { PrefsDialog } from './PrefsDialog';
 
 export function Dialogs() {
   const dialog = useEditor((s) => s.dialog);
@@ -30,7 +33,8 @@ export function Dialogs() {
   if (dialog === 'ai-bg') return <BackgroundDialog onClose={close} />;
   if (dialog === 'paste-attrs') return <PasteAttributesDialog onClose={close} />;
   if (dialog === 'voiceover') return <VoiceoverDialog onClose={close} />;
-  if (dialog === 'stabilize' || dialog === 'denoise' || dialog === 'loudness') return <EnhanceDialog kind={dialog} onClose={close} />;
+  if (dialog === 'credits') return <CreditsDialog onClose={close} />;
+  if (dialog && ENHANCE_KINDS.includes(dialog as EnhanceKind)) return <EnhanceDialog kind={dialog as EnhanceKind} onClose={close} />;
   return null;
 }
 
@@ -59,42 +63,6 @@ function RecoveryDialog({ data }: { data: AutosaveData }) {
     >
       <p style={{ margin: 0 }}>{t('recovery.text', { name: data.meta.name, time: new Date(data.savedAt).toLocaleString() })}</p>
       {data.meta.filePath && <p className="panel-hint" style={{ margin: 0, userSelect: 'text' }}>{data.meta.filePath}</p>}
-    </Modal>
-  );
-}
-
-function PrefsDialog({ onClose }: { onClose: () => void }) {
-  const t = useT();
-  const lang = useLang((s) => s.lang);
-  const prefs = usePrefs();
-  return (
-    <Modal title={t('prefs.title')} onClose={onClose} footer={<button className="btn primary" onClick={onClose}>{t('common.ok')}</button>}>
-      <div className="field">
-        <label className="field-label">{t('menu.language')}</label>
-        <select className="select" value={lang} onChange={(e) => setLang(e.target.value as 'ru' | 'en')}>
-          <option value="ru">Русский</option>
-          <option value="en">English</option>
-        </select>
-      </div>
-      <div className="field">
-        <label className="field-label">{t('prefs.autosave')}</label>
-        <select className="select" value={prefs.autosaveMinutes} onChange={(e) => setPrefs({ autosaveMinutes: Number(e.target.value) })}>
-          <option value={0}>{t('prefs.off')}</option>
-          {[1, 2, 5, 10].map((m) => (
-            <option key={m} value={m}>
-              {t('prefs.everyMinutes', { n: m })}
-            </option>
-          ))}
-        </select>
-      </div>
-      <label className="field toggle-field">
-        <span className="field-label">{t('prefs.autoProxy')}</span>
-        <input type="checkbox" className="switch" checked={prefs.autoProxy} onChange={(e) => setPrefs({ autoProxy: e.target.checked })} />
-      </label>
-      <label className="field toggle-field">
-        <span className="field-label">{t('preview.useProxies')}</span>
-        <input type="checkbox" className="switch" checked={prefs.useProxies} onChange={(e) => setPrefs({ useProxies: e.target.checked })} />
-      </label>
     </Modal>
   );
 }

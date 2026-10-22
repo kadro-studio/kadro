@@ -8,9 +8,34 @@
   "version": "1.0.0",
   "description": "Glowing colour-cycling outlines on a dark background.",
   "params": [
-    { "id": "glow", "name": "Glow", "nameRu": "Свечение", "min": 0.5, "max": 6, "default": 3 },
-    { "id": "keep", "name": "Keep image", "nameRu": "Оставить картинку", "min": 0, "max": 1, "default": 0.15 },
-    { "id": "speed", "name": "Colour speed", "nameRu": "Скорость цвета", "min": 0, "max": 3, "default": 0.6 }
+    {
+      "id": "glow",
+      "name": "Glow",
+      "nameRu": "Свечение",
+      "min": 0.5,
+      "max": 6,
+      "default": 3,
+      "nameUk": "Світіння"
+    },
+    {
+      "id": "keep",
+      "name": "Keep image",
+      "nameRu": "Оставить картинку",
+      "min": 0,
+      "max": 1,
+      "default": 0.15,
+      "nameUk": "Залишити картинку"
+    },
+    {
+      "id": "speed",
+      "name": "Colour speed",
+      "nameRu": "Скорость цвета",
+      "min": 0,
+      "max": 3,
+      "default": 0.6,
+      "nameUk": "Швидкість кольору"
+    }
   ],
-  "glsl": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / u_size;\n  float l = luma(src(uv - vec2(px.x, 0.0)).rgb), r = luma(src(uv + vec2(px.x, 0.0)).rgb);\n  float d = luma(src(uv - vec2(0.0, px.y)).rgb), u = luma(src(uv + vec2(0.0, px.y)).rgb);\n  float e = clamp(length(vec2(r - l, u - d)) * glow, 0.0, 1.0);\n  float h = uv.x * 0.6 + uv.y * 0.4 + u_time * speed;\n  vec3 neon = 0.5 + 0.5 * cos(6.2831 * (h + vec3(0.0, 0.33, 0.67)));\n  vec4 c = src(uv);\n  return vec4(c.rgb * keep + neon * e, c.a);\n}"
+  "glsl": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / u_size;\n  float l = luma(src(uv - vec2(px.x, 0.0)).rgb), r = luma(src(uv + vec2(px.x, 0.0)).rgb);\n  float d = luma(src(uv - vec2(0.0, px.y)).rgb), u = luma(src(uv + vec2(0.0, px.y)).rgb);\n  float e = clamp(length(vec2(r - l, u - d)) * glow, 0.0, 1.0);\n  float h = uv.x * 0.6 + uv.y * 0.4 + u_time * speed;\n  vec3 neon = 0.5 + 0.5 * cos(6.2831 * (h + vec3(0.0, 0.33, 0.67)));\n  vec4 c = src(uv);\n  return vec4(c.rgb * keep + neon * e, c.a);\n}",
+  "nameUk": "Неонові контури"
 }

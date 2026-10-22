@@ -1,5 +1,6 @@
 // Turns resolved layer plans into compositor draw items, given a source provider
 // (live media elements for preview, decoded frames for export).
+import { curvesActive, curvesTable, hslActive, hslVector } from '../core/curves';
 import { effectiveAdjust } from '../core/effects';
 import { contentSize } from '../core/geometry';
 import type { LayerPlan } from '../core/scene';
@@ -48,6 +49,18 @@ export function buildItems(
       // Covers the frame and processes what is already drawn under it.
       source = { key: `adj:${clip.id}`, kind: 'adjust', width: W, height: H, version: 0 };
       plan = { ...plan, x: 0, y: 0, scale: 1, rotation: 0 };
+    } else if (clip.type === 'overlay' && clip.overlay) {
+      const def = getFx(clip.overlay.id);
+      if (!def || def.kind !== 'generator') continue;
+      // Drawn at output resolution, then placed like any full-frame layer.
+      source = {
+        key: `g:${clip.id}`,
+        kind: 'generator',
+        width: Math.max(2, Math.round(W * renderScale)),
+        height: Math.max(2, Math.round(H * renderScale)),
+        version: 0,
+        gen: { def, params: paramValues(def, clip.overlay.params), colorA: hexToRgb(clip.overlay.colorA), colorB: hexToRgb(clip.overlay.colorB) },
+      };
     } else if (clip.type === 'color') {
       source = { key: 'solid', kind: 'color', width: W, height: H, version: 0, color: [...hexToRgb(clip.color), 1] };
     } else {
@@ -75,6 +88,8 @@ export function buildItems(
       blend: clip.blend,
       effects,
       lut: resolveLut(clip.lut),
+      curves: curvesActive(clip.curves) ? curvesTable(clip.curves) : null,
+      hsl: hslActive(clip.hsl) ? hslVector(clip.hsl) : null,
       time: plan.localTime,
     });
   }

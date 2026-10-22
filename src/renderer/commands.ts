@@ -29,6 +29,7 @@ import { redo, select, toast, undo, useEditor } from './store/editor';
 import { importViaDialog } from './store/media';
 import { usePrefs } from './store/prefs';
 import { exportSrt } from './ai/tasks';
+import { importSubtitles } from './store/tools';
 import type { MenuEntry } from './ui/ContextMenu';
 
 export async function saveSnapshot(): Promise<void> {
@@ -268,6 +269,8 @@ export function menus(): MenuDef[] {
           ...recentItems,
           { separator: true },
           { label: t('menu.import'), shortcut: 'Ctrl+I', onClick: () => void importViaDialog() },
+          { label: `${t('subs.import')}…`, onClick: () => void importSubtitles() },
+          { label: `${t('credits.title')}…`, onClick: () => openDialog('credits') },
           { label: t('menu.export'), shortcut: 'Ctrl+E', onClick: () => openDialog('export') },
           { label: t('menu.snapshot'), onClick: () => void saveSnapshot() },
           { separator: true },
@@ -308,6 +311,7 @@ export function menus(): MenuDef[] {
         { label: t('menu.zoomOut'), shortcut: '−', onClick: () => zoomBy(1 / 1.4) },
         { label: t('menu.zoomFit'), shortcut: '\\', onClick: () => zoomToFit(timelineWidth()) },
         { separator: true },
+        { label: 'Українська', checked: useLang.getState().lang === 'uk', onClick: () => setLang('uk') },
         { label: 'Русский', checked: useLang.getState().lang === 'ru', onClick: () => setLang('ru') },
         { label: 'English', checked: useLang.getState().lang === 'en', onClick: () => setLang('en') },
         { separator: true },

@@ -7,18 +7,27 @@ import * as render from './render';
 import { ffmpegPath, ffmpegVersion, hwEncoders } from './ffmpeg';
 import * as autosave from './autosave';
 import * as mods from './mods';
+import * as library from './library';
+import * as storage from './storage';
 import { APP_NAME, TITLE_BAR_COLOR, TITLE_BAR_HEIGHT, TITLE_BAR_SYMBOLS } from '../shared/brand';
 import type {
+  Appearance,
   AutosaveMeta,
   ClosePrompt,
   DecoderSpec,
   DenoiseOptions,
   ExportSpec,
   FileFilter,
+  LibraryItem,
+  LibrarySearch,
   MatteSpec,
   MediaKind,
   StabilizeOptions,
+  StorageKind,
 } from '../shared/api';
+
+// Tests and automation can run against a throwaway profile.
+if (process.env.KADRO_USER_DATA) app.setPath('userData', process.env.KADRO_USER_DATA);
 
 registerMediaScheme();
 
@@ -32,6 +41,24 @@ let win: BrowserWindow | null = null;
 let dirty = false;
 let closePrompt: ClosePrompt | null = null;
 let forceClose = false;
+/** Time of a close request the interface has not acknowledged yet. */
+let closeAsked = 0;
+
+function nativeClosePrompt(): void {
+  if (!win || win.isDestroyed() || !closePrompt) return;
+  const choice = dialog.showMessageBoxSync(win, {
+    type: 'warning',
+    buttons: [closePrompt.cancel, closePrompt.discard],
+    defaultId: 0,
+    cancelId: 0,
+    message: closePrompt.message,
+    detail: closePrompt.detail,
+  });
+  if (choice === 1) {
+    forceClose = true;
+    win.close();
+  }
+}
 let quitting = false;
 let rendererCrashed = false;
 
@@ -140,17 +167,24 @@ function createWindow(): void {
     }
   });
 
+  // Unsaved changes: the interface asks in its own dialog (save / don't save /
+  // cancel). The system dialog is only a fallback when the page does not answer.
   win.on('close', (e) => {
-    if (!dirty || forceClose || !closePrompt || !win) return;
-    const choice = dialog.showMessageBoxSync(win, {
-      type: 'warning',
-      buttons: [closePrompt.cancel, closePrompt.discard],
-      defaultId: 0,
-      cancelId: 0,
-      message: closePrompt.message,
-      detail: closePrompt.detail,
-    });
-    if (choice === 0) e.preventDefault();
+    if (!dirty || forceClose || !win) return;
+    e.preventDefault();
+    if (rendererCrashed || win.webContents.isCrashed()) {
+      nativeClosePrompt();
+      return;
+    }
+    const asked = Date.now();
+    closeAsked = asked;
+    win.webContents.send('app:closeRequest');
+    setTimeout(() => {
+      if (closeAsked === asked) {
+        closeAsked = 0;
+        nativeClosePrompt();
+      }
+    }, 4000);
   });
   win.on('closed', () => {
     win = null;
@@ -220,6 +254,9 @@ function registerIpc(): void {
   );
   ipcMain.handle('media:denoise', (e, p: string, opts: DenoiseOptions, taskId: string) => media.denoise(p, opts, taskProgress(e, taskId)));
   ipcMain.handle('media:loudness', (_e, p: string, start: number, duration: number) => media.measureLoudness(p, start, duration));
+  ipcMain.handle('library:search', (_e, q: LibrarySearch) => library.searchLibrary(q));
+  ipcMain.handle('library:download', (e, item: LibraryItem, taskId: string) => library.downloadLibraryItem(item, taskProgress(e, taskId)));
+  ipcMain.handle('media:scenes', (_e, p: string, start: number, duration: number, threshold: number) => media.detectScenes(p, start, duration, threshold));
   ipcMain.handle('media:proxy', (e, p: string, kind: MediaKind, duration: number) =>
     media.proxy(p, kind, duration, (progress) => {
       if (!e.sender.isDestroyed()) e.sender.send('media:proxyProgress', p, progress);
@@ -252,8 +289,26 @@ function registerIpc(): void {
     closePrompt = prompt;
   });
   ipcMain.on('app:setTitle', (_e, title: string) => win?.setTitle(title));
+  ipcMain.on('app:closeAck', () => {
+    closeAsked = 0;
+  });
+  ipcMain.on('app:closeNow', () => {
+    forceClose = true;
+    win?.close();
+  });
+  ipcMain.on('app:appearance', (_e, a: Appearance) => {
+    if (!win || win.isDestroyed()) return;
+    const zoom = Math.min(1.5, Math.max(0.7, Number(a.zoom) || 1));
+    const color = /^#[0-9a-f]{6}$/i.test(a.titleBarColor) ? a.titleBarColor : TITLE_BAR_COLOR;
+    const symbolColor = /^#[0-9a-f]{6}$/i.test(a.symbolColor) ? a.symbolColor : TITLE_BAR_SYMBOLS;
+    win.webContents.setZoomFactor(zoom);
+    win.setBackgroundColor(color);
+    win.setTitleBarOverlay({ color, symbolColor, height: Math.round(TITLE_BAR_HEIGHT * zoom) });
+  });
   ipcMain.on('app:showItem', (_e, p: string) => shell.showItemInFolder(p));
   ipcMain.on('app:toggleDevTools', () => win?.webContents.toggleDevTools());
+  ipcMain.handle('app:storage', () => storage.storageInfo());
+  ipcMain.handle('app:clearStorage', (_e, kind: StorageKind) => storage.clearStorage(kind));
   ipcMain.handle('app:takeOpenFile', () => {
     const file = pendingOpen;
     pendingOpen = null;

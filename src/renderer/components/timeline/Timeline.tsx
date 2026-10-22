@@ -12,6 +12,8 @@ import {
   addEffect,
   addMarker,
   addShapeClip,
+  addOverlayClip,
+  addSticker,
   addMediaClip,
   addTextClip,
   addTrack,
@@ -495,11 +497,18 @@ export function Timeline() {
     if (hasAudio) items.push({ label: t('ctx.detachAudio'), onClick: () => detachAudio(clip.id) });
     if (clip.type === 'video') items.push({ label: t('tool.freeze'), shortcut: 'Shift+F', onClick: () => void freezeFrame() });
     if (clip.type === 'video' || clip.type === 'audio') items.push({ label: t('tool.reverse'), shortcut: 'Ctrl+R', onClick: () => void reverseClip(clip.id) });
-    if (clip.type === 'video') items.push({ label: `${t('enh.stabilize')}…`, onClick: () => openDialog('stabilize') });
+    if (clip.type === 'video') {
+      items.push(
+        { label: `${t('enh.stabilize')}…`, onClick: () => openDialog('stabilize') },
+        { label: `${t('enh.scenes')}…`, onClick: () => openDialog('scenes') },
+      );
+    }
     if (hasAudio || clip.type === 'audio') {
       items.push(
         { label: `${t('enh.denoise')}…`, onClick: () => openDialog('denoise') },
         { label: `${t('enh.loudness')}…`, onClick: () => openDialog('loudness') },
+        { label: `${t('enh.beats')}…`, onClick: () => openDialog('beats') },
+        { label: `${t('enh.duck')}…`, onClick: () => openDialog('duck') },
       );
     }
     if (clip.type === 'video' || clip.type === 'image') items.push({ label: `✨ ${t('ai.bgTitle')}…`, onClick: () => openDialog('ai-bg') });
@@ -575,9 +584,15 @@ export function Timeline() {
     const effect = dt.getData(DND.effect);
     const element = dt.getData(DND.element);
     if (element) {
-      const el = JSON.parse(element) as { kind: 'adjustment' } | { kind: 'shape'; shape: ShapeKind };
+      const el = JSON.parse(element) as
+        | { kind: 'adjustment' }
+        | { kind: 'shape'; shape: ShapeKind }
+        | { kind: 'overlay'; id: string }
+        | { kind: 'sticker'; emoji: string };
       const where = track?.kind === 'video' ? opts : { time, newTrack: !track };
       if (el.kind === 'adjustment') addAdjustmentClip(where);
+      else if (el.kind === 'overlay') addOverlayClip(el.id, where);
+      else if (el.kind === 'sticker') addSticker(el.emoji, where);
       else addShapeClip(el.shape, where);
       return;
     }

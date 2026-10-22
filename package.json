@@ -12,8 +12,9 @@
     "start": "electron .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "smoke": "node scripts/smoke.mjs",
-    "dist": "npm run build && node scripts/make-icon.mjs && electron-builder --win",
-    "icon": "node scripts/make-icon.mjs"
+    "dist": "node scripts/font-notices.mjs && npm run build && node scripts/make-icon.mjs && electron-builder --win",
+    "icon": "node scripts/make-icon.mjs",
+    "art": "node scripts/make-installer-art.mjs"
   },
   "build": {
     "appId": "org.kadro.editor",
@@ -81,10 +82,22 @@
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
       "artifactName": "Kadro-Setup-${version}.exe",
-      "license": "LICENSE"
+      "license": "LICENSE",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp",
+      "multiLanguageInstaller": true,
+      "installerLanguages": [
+        "uk_UA",
+        "ru_RU",
+        "en_US"
+      ],
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     },
     "portable": {
-      "artifactName": "Kadro-${version}-portable.exe"
+      "artifactName": "Kadro-${version}-portable.exe",
+      "splashImage": "build/splash.bmp"
     }
   },
   "dependencies": {
@@ -92,7 +105,31 @@
     "ffprobe-static": "^3.1.0"
   },
   "devDependencies": {
+    "@fontsource-variable/caveat": "^5.3.0",
+    "@fontsource-variable/comfortaa": "^5.3.0",
+    "@fontsource-variable/exo-2": "^5.3.0",
     "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/lora": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource-variable/montserrat": "^5.3.0",
+    "@fontsource-variable/oswald": "^5.3.0",
+    "@fontsource-variable/playfair-display": "^5.3.0",
+    "@fontsource-variable/raleway": "^5.3.0",
+    "@fontsource-variable/roboto-slab": "^5.3.0",
+    "@fontsource-variable/rubik": "^5.3.0",
+    "@fontsource-variable/unbounded": "^5.3.0",
+    "@fontsource/amatic-sc": "^5.3.0",
+    "@fontsource/bad-script": "^5.3.0",
+    "@fontsource/dela-gothic-one": "^5.3.0",
+    "@fontsource/great-vibes": "^5.3.0",
+    "@fontsource/lobster": "^5.3.0",
+    "@fontsource/marck-script": "^5.3.0",
+    "@fontsource/pacifico": "^5.3.0",
+    "@fontsource/press-start-2p": "^5.3.0",
+    "@fontsource/rubik-mono-one": "^5.3.0",
+    "@fontsource/ruslan-display": "^5.3.0",
+    "@fontsource/russo-one": "^5.3.0",
     "@huggingface/transformers": "^4.3.1",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",

@@ -3,7 +3,6 @@ import type { Draft } from 'immer';
 import {
   clipEnd,
   createProject,
-  DEFAULT_IMAGE_DURATION,
   DEFAULT_TEXT_DURATION,
   defaultShape,
   defaultTextStyle,
@@ -37,8 +36,10 @@ import type { I18nKey } from '../i18n';
 import { clipHasAudio } from '../core/scene';
 import { clearWaveforms } from '../engine/waveforms';
 import { api } from '../api';
+import { ask } from './prompt';
 import { APP_NAME } from '../../shared/brand';
-import { t } from '../i18n';
+import { t, useLang } from '../i18n';
+import { fxName } from '../engine/fx/types';
 import { analyzeMedia, errText, importFiles } from './media';
 import {
   commitPreview,
@@ -52,7 +53,12 @@ import {
   type DialogKind,
   type LeftTab,
 } from './editor';
-import { forgetRecent, rememberRecent } from './prefs';
+import { forgetRecent, rememberRecent, usePrefs } from './prefs';
+
+/** Length of photos, titles and elements when added (Preferences → General). */
+function stillDuration(): number {
+  return Math.max(0.5, usePrefs.getState().stillDuration || 5);
+}
 import { clearAutosave } from './autosave';
 import { getFx } from '../engine/fx/registry';
 import { registerProjectFx, withEmbeddedFx } from './fxProject';
@@ -156,7 +162,7 @@ export function addMediaClip(mediaId: string, opts: PlaceOptions = {}): void {
     kind = 'audio';
   }
   const timeBased = type === 'video' || type === 'audio';
-  const duration = timeBased && media.duration > 0 ? media.duration : DEFAULT_IMAGE_DURATION;
+  const duration = timeBased && media.duration > 0 ? media.duration : stillDuration();
   const clip = makeClip(type, { name: media.name, mediaId, duration });
   placeNewClip(clip, kind, opts);
 }
@@ -185,17 +191,45 @@ export function addTextClip(presetId: string, opts: PlaceOptions = {}): void {
 
 /** Adjustment layer: effects and colour on it apply to all tracks below. */
 export function addAdjustmentClip(opts: PlaceOptions = {}): void {
-  const clip = makeClip('adjustment', { name: t('elements.adjustment'), duration: DEFAULT_IMAGE_DURATION });
+  const clip = makeClip('adjustment', { name: t('elements.adjustment'), duration: stillDuration() });
   placeNewClip(clip, 'video', opts);
 }
 
 export function addShapeClip(kind: ShapeKind, opts: PlaceOptions = {}): void {
-  const clip = makeClip('shape', { name: t(`shape.${kind}` as I18nKey), duration: DEFAULT_IMAGE_DURATION, shape: defaultShape(kind) });
+  const clip = makeClip('shape', { name: t(`shape.${kind}` as I18nKey), duration: stillDuration(), shape: defaultShape(kind) });
+  placeNewClip(clip, 'video', opts);
+}
+
+/** Animated generator element (overlay or background). */
+export function addOverlayClip(defId: string, opts: PlaceOptions = {}): void {
+  const def = getFx(defId);
+  if (!def || def.kind !== 'generator') return;
+  const colors = def.colors ?? ['#ffffff', '#ffffff'];
+  const clip = makeClip('overlay', {
+    name: fxName(def, useLang.getState().lang),
+    duration: stillDuration(),
+    overlay: { id: def.id, params: {}, colorA: colors[0], colorB: colors[1] },
+    blend: (def.blend as Clip['blend']) ?? 'normal',
+  });
+  placeNewClip(clip, 'video', opts);
+}
+
+/** Emoji sticker: a text layer drawn with the colour emoji font. */
+export function addSticker(emoji: string, opts: PlaceOptions = {}): void {
+  const { width, height } = st().project.settings;
+  const k = Math.min(width, height) / 1080;
+  const clip = makeClip('text', {
+    name: emoji,
+    duration: 3,
+    text: { ...defaultTextStyle(), content: emoji, fontFamily: 'Segoe UI Emoji', fontSize: Math.round(260 * k), bold: false, weight: 400 },
+  });
+  clip.animIn = { type: 'pop', duration: 0.4 };
+  clip.animOut = { type: 'fade', duration: 0.3 };
   placeNewClip(clip, 'video', opts);
 }
 
 export function addColorClip(color: string, opts: PlaceOptions = {}): void {
-  const clip = makeClip('color', { name: color, color, duration: DEFAULT_IMAGE_DURATION });
+  const clip = makeClip('color', { name: color, color, duration: stillDuration() });
   placeNewClip(clip, 'video', opts);
 }
 
@@ -350,6 +384,9 @@ export function pasteAttributes(groups: AttrGroup[]): void {
       c.adjust = clone(src.adjust);
       c.filter = clone(src.filter);
       c.lut = clone(src.lut);
+      c.wheels = clone(src.wheels);
+      c.curves = clone(src.curves);
+      c.hsl = clone(src.hsl);
       c.chroma = clone(src.chroma);
       c.blend = src.blend;
     }
@@ -719,18 +756,37 @@ export function syncDirtyFlag(): void {
   api.setDirty(isDirty(), closePrompt());
 }
 
-function confirmDiscard(): boolean {
-  return !isDirty() || window.confirm(t('confirm.discard'));
+/** Save / don't save / cancel for unsaved changes; true when it is fine to continue. */
+export async function confirmDiscard(): Promise<boolean> {
+  if (!isDirty()) return true;
+  const choice = await ask({
+    title: t('prompt.saveTitle', { name: st().project.name }),
+    message: t('prompt.saveText'),
+    icon: 'warning',
+    buttons: [
+      { id: 'cancel', label: t('common.cancel') },
+      { id: 'discard', label: t('prompt.dontSave'), kind: 'danger' },
+      { id: 'save', label: t('prompt.save'), kind: 'primary' },
+    ],
+    cancelId: 'cancel',
+  });
+  if (choice === 'save') return saveProject();
+  return choice === 'discard';
 }
 
-export function newProject(): void {
-  if (!confirmDiscard()) return;
+/** Window close requested by the system while there are unsaved changes. */
+export async function handleCloseRequest(): Promise<void> {
+  if (await confirmDiscard()) api.closeNow();
+}
+
+export async function newProject(): Promise<void> {
+  if (!(await confirmDiscard())) return;
   clearWaveforms();
   loadProject(createProject(t('top.untitled')), null);
 }
 
 export async function openProjectFile(path?: string): Promise<void> {
-  if (!confirmDiscard()) return;
+  if (!(await confirmDiscard())) return;
   const file = path ?? (await api.openProjectDialog());
   if (!file) return;
   if (!(await api.exists(file))) {

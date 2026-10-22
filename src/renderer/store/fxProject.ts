@@ -10,6 +10,7 @@ export function usedFxIds(p: Project): Set<string> {
     for (const c of tr.clips) {
       for (const e of c.effects) ids.add(e.type);
       if (c.transition.type !== 'none') ids.add(c.transition.type);
+      if (c.overlay) ids.add(c.overlay.id);
     }
   }
   return ids;

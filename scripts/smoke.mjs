@@ -24,7 +24,7 @@ for (const f of files) if (!fs.existsSync(f)) throw new Error(`Missing test medi
 const log = (...a) => console.log('[smoke]', ...a);
 const problems = [];
 
-const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, VR_DEV_SERVER_URL: '' } });
+const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, VR_DEV_SERVER_URL: '', KADRO_USER_DATA: path.join(outDir, 'profile') } });
 const win = await app.firstWindow();
 win.on('console', (m) => {
   if (m.type() === 'error') problems.push(`console.error: ${m.text()}`);
@@ -375,6 +375,32 @@ if (!toolsRes.denoised) problems.push('noise reduction failed');
 if (!toolsRes.stabilized) problems.push('stabilisation failed');
 await seek(1.5, '05e-adjustment-shape.png');
 await frameStats('t=1.5 adjustment + shape');
+
+log('overlays, stickers, title fonts, curves, HSL, blend modes');
+const looks = await win.evaluate(async (ids) => {
+  const vr = window.__vr;
+  const all = () => vr.useEditor.getState().project.tracks.flatMap((t) => t.clips);
+  const out = {};
+  vr.addOverlayClip('gen.lightLeak', { time: 0, newTrack: true });
+  const leak = vr.useEditor.getState().selection[0];
+  out.leakBlend = all().find((c) => c.id === leak)?.blend;
+  vr.addSticker('🔥', { time: 0, newTrack: true });
+  out.sticker = all().find((c) => c.id === vr.useEditor.getState().selection[0])?.text?.content;
+  vr.addTextClip('retro', { time: 0.5, newTrack: true });
+  out.retroFont = all().find((c) => c.id === vr.useEditor.getState().selection[0])?.text?.fontFamily;
+  vr.updateClip(ids.green, (c) => {
+    c.curves = { master: [{ x: 0, y: 0 }, { x: 0.3, y: 0.2 }, { x: 0.7, y: 0.85 }, { x: 1, y: 1 }], r: [{ x: 0, y: 0 }, { x: 1, y: 1 }], g: [{ x: 0, y: 0 }, { x: 1, y: 1 }], b: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
+    c.hsl = { red: { h: 30, s: 20, l: 0 }, orange: { h: 0, s: 0, l: 0 }, yellow: { h: 0, s: 0, l: 0 }, green: { h: -20, s: 0, l: 0 }, aqua: { h: 0, s: 0, l: 0 }, blue: { h: 0, s: 0, l: 0 }, purple: { h: 0, s: 0, l: 0 }, magenta: { h: 0, s: 0, l: 0 } };
+  });
+  vr.updateClip(ids.img, (c) => void (c.blend = 'overlay'));
+  return out;
+}, ids);
+log('looks', JSON.stringify(looks));
+if (looks.leakBlend !== 'screen') problems.push('overlay element not added with its blend mode');
+if (looks.sticker !== '🔥') problems.push('sticker not added');
+if (looks.retroFont !== 'Rubik Mono One') problems.push('text style did not use its bundled font');
+await seek(3.2, '05g-overlays.png');
+await frameStats('t=3.2 overlays + blend');
 
 log('scopes and level meter');
 await win.click('.transport-right .icon-btn >> nth=1');

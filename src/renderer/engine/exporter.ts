@@ -7,6 +7,7 @@
 // YUV 4:2:0 in both directions (decoders -> GPU, GPU -> encoder), converted on
 // the GPU, which is ~2.7x less data than RGBA.
 import { mediaWorker } from './mediaWorker';
+import { loadProjectFonts } from './fonts';
 import {
   mediaUrl,
   type EncoderChoice,
@@ -236,6 +237,8 @@ export async function runExport(
   const media = mediaMap(project);
   const projectEnd = projectDuration(project);
   if (projectEnd <= 0) return { ok: false, error: 'empty' };
+  // Text must never be drawn in a fallback font.
+  await loadProjectFonts(project);
   const rangeStart = Math.max(0, settings.range?.start ?? 0);
   const rangeEnd = Math.min(projectEnd, settings.range?.end ?? projectEnd);
   const duration = rangeEnd - rangeStart;

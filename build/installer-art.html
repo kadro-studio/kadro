@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- Source for the installer bitmaps; rendered by scripts/make-installer-art.mjs. -->
+    <style>
+      @font-face {
+        font-family: 'Inter';
+        src: url('../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+        font-weight: 100 900;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #000;
+        font-family: 'Inter', 'Segoe UI', sans-serif;
+      }
+      .art {
+        position: relative;
+        overflow: hidden;
+        color: #f0f0f3;
+      }
+      .dark {
+        background:
+          radial-gradient(160px 140px at 50% 26%, rgba(255, 59, 79, 0.38), transparent 70%),
+          linear-gradient(180deg, #121216 0%, #08080a 100%);
+      }
+      .strip {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 12px;
+        background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0 7px, transparent 7px 14px);
+      }
+      #sidebar {
+        width: 164px;
+        height: 314px;
+      }
+      #sidebar .strip.l {
+        left: 6px;
+      }
+      #sidebar .strip.r {
+        right: 6px;
+      }
+      #sidebar img {
+        position: absolute;
+        left: 34px;
+        top: 34px;
+        width: 96px;
+        height: 96px;
+        border-radius: 24px;
+        box-shadow: 0 0 40px rgba(255, 40, 60, 0.45);
+      }
+      #sidebar .name {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 146px;
+        text-align: center;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+      }
+      #sidebar .line {
+        position: absolute;
+        left: 52px;
+        right: 52px;
+        top: 190px;
+        height: 2px;
+        border-radius: 2px;
+        background: #ff3b4f;
+        box-shadow: 0 0 10px #ff3b4f;
+      }
+      #sidebar .tag {
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        top: 204px;
+        text-align: center;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #a5a5af;
+      }
+      #sidebar .ver {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 14px;
+        text-align: center;
+        font-size: 10px;
+        color: #6b6b75;
+      }
+      #header {
+        width: 150px;
+        height: 57px;
+        background: #fff;
+        color: #111;
+      }
+      #header img {
+        position: absolute;
+        right: 10px;
+        top: 9px;
+        width: 39px;
+        height: 39px;
+        border-radius: 10px;
+      }
+      #header .name {
+        position: absolute;
+        right: 58px;
+        top: 15px;
+        font-size: 20px;
+        font-weight: 800;
+      }
+      #splash {
+        width: 420px;
+        height: 240px;
+      }
+      #splash .strip {
+        top: auto;
+        height: 12px;
+        width: auto;
+        left: 0;
+        right: 0;
+        background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0 9px, transparent 9px 18px);
+      }
+      #splash .strip.t {
+        top: 8px;
+      }
+      #splash .strip.b {
+        bottom: 8px;
+      }
+      #splash img {
+        position: absolute;
+        left: 46px;
+        top: 70px;
+        width: 100px;
+        height: 100px;
+        border-radius: 26px;
+        box-shadow: 0 0 46px rgba(255, 40, 60, 0.5);
+      }
+      #splash .name {
+        position: absolute;
+        left: 170px;
+        top: 82px;
+        font-size: 44px;
+        font-weight: 800;
+      }
+      #splash .tag {
+        position: absolute;
+        left: 172px;
+        top: 140px;
+        font-size: 13px;
+        color: #a5a5af;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sidebar" class="art dark">
+      <div class="strip l"></div>
+      <div class="strip r"></div>
+      <img src="icon.png" alt="" />
+      <div class="name">Kadro</div>
+      <div class="line"></div>
+      <div class="tag">Free &amp; open-source<br />video editor</div>
+      <div class="ver">open source · MIT</div>
+    </div>
+    <div style="height: 10px"></div>
+    <div id="header" class="art">
+      <div class="name">Kadro</div>
+      <img src="icon.png" alt="" />
+    </div>
+    <div style="height: 10px"></div>
+    <div id="splash" class="art dark">
+      <div class="strip t"></div>
+      <div class="strip b"></div>
+      <img src="icon.png" alt="" />
+      <div class="name">Kadro</div>
+      <div class="tag">free open-source video editor</div>
+    </div>
+  </body>
+</html>

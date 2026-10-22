@@ -9,6 +9,7 @@ import { t } from '../i18n';
 import { edit, setRuntime, toast, useEditor } from './editor';
 import { usePrefs } from './prefs';
 import { installMods } from './mods';
+import { confirmAction } from './prompt';
 
 const PLAYABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1', 'theora']);
 const PLAYABLE_AUDIO = new Set(['aac', 'mp3', 'opus', 'vorbis', 'flac', 'pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le', 'pcm_u8']);
@@ -196,10 +197,13 @@ export async function relinkMedia(mediaId: string): Promise<void> {
   }
 }
 
-export function removeMedia(mediaId: string): void {
+export async function removeMedia(mediaId: string): Promise<void> {
   const p = useEditor.getState().project;
   const used = p.tracks.reduce((n, tr) => n + tr.clips.filter((c) => c.mediaId === mediaId).length, 0);
-  if (used > 0 && !window.confirm(t('media.removeUsed', { n: used }))) return;
+  if (used > 0) {
+    const ok = await confirmAction({ title: t('prompt.removeTitle'), message: t('media.removeUsed', { n: used }), confirm: t('prompt.remove'), cancel: t('common.cancel'), danger: true });
+    if (!ok) return;
+  }
   edit((d) => {
     d.media = d.media.filter((m) => m.id !== mediaId);
     for (const tr of d.tracks) tr.clips = tr.clips.filter((c) => c.mediaId !== mediaId);

@@ -54,11 +54,11 @@ export function defaultWheels(): ColorWheels {
 }
 
 export function defaultShape(kind: ShapeKind = 'rect'): ShapeStyle {
-  const square = kind === 'ellipse' || kind === 'star' || kind === 'triangle';
+  const square = ['ellipse', 'star', 'triangle', 'heart', 'burst', 'hexagon', 'ring', 'check', 'cross'].includes(kind);
   return {
     kind,
     width: kind === 'line' || kind === 'arrow' ? 600 : square ? 400 : 640,
-    height: kind === 'line' ? 12 : kind === 'arrow' ? 160 : square ? 400 : 360,
+    height: kind === 'line' ? 12 : kind === 'arrow' ? 160 : kind === 'pill' ? 160 : square ? 400 : 360,
     fill: '#4d8dff',
     fillOpacity: 100,
     stroke: '#ffffff',
@@ -82,9 +82,10 @@ export function defaultChroma(): ChromaKey {
 export function defaultTextStyle(): TextStyle {
   return {
     content: 'Text',
-    fontFamily: 'Segoe UI',
+    fontFamily: 'Montserrat Variable',
     fontSize: 96,
     bold: true,
+    weight: 700,
     italic: false,
     color: '#ffffff',
     align: 'center',
@@ -121,6 +122,8 @@ export function makeClip(type: ClipType, partial: Partial<Clip> = {}): Clip {
     effects: [],
     mask: defaultMask(),
     lut: null,
+    curves: null,
+    hsl: null,
     chroma: defaultChroma(),
     blend: 'normal',
     animIn: { type: 'none', duration: 0.5 },
@@ -134,6 +137,7 @@ export function makeClip(type: ClipType, partial: Partial<Clip> = {}): Clip {
     audioFx: defaultAudioFx(),
     text: null,
     shape: null,
+    overlay: null,
     color: '#1e88e5',
     ...partial,
   };
@@ -277,6 +281,7 @@ export function normalizeProject(raw: unknown): Project {
               gain: { ...def.wheels.gain, ...(c.wheels?.gain ?? {}) },
             },
             shape: c.type === 'shape' ? { ...defaultShape(c.shape?.kind), ...(c.shape ?? {}) } : null,
+            overlay: c.type === 'overlay' && c.overlay ? { id: String(c.overlay.id), params: { ...(c.overlay.params ?? {}) }, colorA: c.overlay.colorA ?? '#ffffff', colorB: c.overlay.colorB ?? '#ffffff' } : null,
             animIn: { ...def.animIn, ...(c.animIn ?? {}) },
             animOut: { ...def.animOut, ...(c.animOut ?? {}) },
             transition: { ...def.transition, ...(c.transition ?? {}) },
@@ -284,7 +289,8 @@ export function normalizeProject(raw: unknown): Project {
             effects: Array.isArray(c.effects)
               ? c.effects.filter((e) => e && typeof e.type === 'string').map((e) => ({ id: e.id ?? uid(), type: e.type, enabled: e.enabled !== false, params: { ...(e.params ?? {}) } }))
               : [],
-            text: c.type === 'text' ? { ...defaultTextStyle(), ...(c.text ?? {}) } : null,
+            // Projects from before variable weights only stored bold.
+            text: c.type === 'text' ? { ...defaultTextStyle(), ...(c.text ?? {}), weight: c.text?.weight ?? (c.text?.bold === false ? 400 : 700) } : null,
           };
         });
         sortClips(track);

@@ -1,69 +1,31 @@
-// Live thumbnails for effect/transition cards: the real shader applied to a
-// small test scene, so mods get previews for free.
+// Thumbnails for effect, transition and filter cards: the real shader or
+// colour preset applied to sample photos, so mods get previews for free.
+import { effectiveAdjust } from '../../core/effects';
 import { makeClip, makeTrack } from '../../core/project';
 import type { LayerPlan } from '../../core/scene';
-import { Compositor, type DrawItem } from '../gl';
+import { Compositor, hexToRgb, type DrawItem } from '../gl';
+import { loadSample, sampleIfLoaded, type SampleId } from '../samples';
 import { paramValues } from './registry';
 import type { FxDef } from './types';
 
-const W = 192;
-const H = 108;
+const W = 256;
+const H = 144;
 const cache = new Map<string, string>();
 let comp: Compositor | null = null;
-const scenes: HTMLCanvasElement[] = [];
 
-function scene(variant: number): HTMLCanvasElement {
-  if (scenes[variant]) return scenes[variant];
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const g = c.getContext('2d')!;
-  if (variant === 0) {
-    const sky = g.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#3d7bd9');
-    sky.addColorStop(0.55, '#8ec5ff');
-    sky.addColorStop(0.551, '#3f8f4a');
-    sky.addColorStop(1, '#2f6e3a');
-    g.fillStyle = sky;
-    g.fillRect(0, 0, W, H);
-    g.fillStyle = '#ffd27a';
-    g.beginPath();
-    g.arc(W * 0.72, H * 0.3, 13, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#e8e8e8';
-    g.fillRect(W * 0.18, H * 0.38, 34, 24);
-    g.fillStyle = '#c0392b';
-    g.beginPath();
-    g.moveTo(W * 0.18 - 4, H * 0.38);
-    g.lineTo(W * 0.18 + 17, H * 0.22);
-    g.lineTo(W * 0.18 + 38, H * 0.38);
-    g.fill();
-  } else {
-    const night = g.createLinearGradient(0, 0, 0, H);
-    night.addColorStop(0, '#120a2e');
-    night.addColorStop(1, '#3b1d5e');
-    g.fillStyle = night;
-    g.fillRect(0, 0, W, H);
-    for (let i = 0; i < 9; i++) {
-      const bw = 14 + ((i * 7) % 10);
-      const bh = 30 + ((i * 23) % 50);
-      const x = i * 22;
-      g.fillStyle = '#1d1838';
-      g.fillRect(x, H - bh, bw, bh);
-      g.fillStyle = '#ffcf5a';
-      for (let y = H - bh + 5; y < H - 4; y += 8) for (let wx = x + 3; wx < x + bw - 3; wx += 6) if ((wx + y + i) % 3) g.fillRect(wx, y, 2, 3);
-    }
+function compositor(): Compositor {
+  if (!comp) {
+    comp = new Compositor(document.createElement('canvas'), { preserve: true });
+    comp.resize(W, H);
   }
-  scenes[variant] = c;
-  return c;
+  return comp;
 }
 
-function plan(id: string): LayerPlan {
-  const clip = makeClip('image', { id });
+function plan(id: string, localTime: number): LayerPlan {
   return {
-    clip,
+    clip: makeClip('image', { id }),
     track: makeTrack('video', 'T'),
-    localTime: 0.6,
+    localTime,
     sourceTime: 0,
     x: 0,
     y: 0,
@@ -79,45 +41,81 @@ function plan(id: string): LayerPlan {
   };
 }
 
-function item(variant: number, p: LayerPlan, effects: DrawItem['effects']): DrawItem {
-  const clip = p.clip;
+function item(sample: SampleId, img: HTMLImageElement, p: LayerPlan, extra: Partial<DrawItem> = {}): DrawItem {
   return {
     plan: p,
     content: { w: W, h: H },
-    source: { key: `thumb${variant}`, kind: 'element', el: scene(variant), width: W, height: H, version: 1 },
-    adjust: clip.adjust,
+    source: { key: `sample:${sample}`, kind: 'element', el: img, width: img.naturalWidth, height: img.naturalHeight, version: 1 },
+    adjust: p.clip.adjust,
     wheels: null,
     colorize: null,
-    chroma: clip.chroma,
+    chroma: p.clip.chroma,
     blend: 'normal',
-    effects,
+    effects: [],
     lut: null,
+    curves: null,
+    hsl: null,
     time: p.localTime,
+    ...extra,
   };
 }
 
-/** JPEG data URL of the definition applied to the test scene (null if it cannot render). */
-export function fxThumbnail(def: FxDef): string | null {
+/** Draws one frame of an effect (t = seconds) or transition (t = progress 0..1). Needs the samples loaded. */
+function drawFx(def: FxDef, t: number): HTMLCanvasElement | null {
+  const a = sampleIfLoaded('mountain');
+  const b = sampleIfLoaded('street');
+  if (!a || !b) return null;
+  const c = compositor();
+  let items: DrawItem[];
+  if (def.kind === 'generator') {
+    const colors = def.colors ?? ['#ffffff', '#ffffff'];
+    const p = plan('thumb-gen', t);
+    const genItem: DrawItem = {
+      ...item('mountain', a, p),
+      source: {
+        key: `gen:${def.id}`,
+        kind: 'generator',
+        width: W,
+        height: H,
+        version: 0,
+        gen: { def, params: paramValues(def, undefined), colorA: hexToRgb(colors[0]), colorB: hexToRgb(colors[1]) },
+      },
+      blend: (def.blend as DrawItem['blend']) ?? 'normal',
+    };
+    // Overlays are shown over a photo, backgrounds on their own.
+    items = def.category === 'background' ? [genItem] : [item('mountain', a, plan('photo', 0)), genItem];
+  } else if (def.kind === 'effect') {
+    items = [item('mountain', a, plan('fx', t), { effects: [{ def, params: paramValues(def, undefined) }] })];
+  } else {
+    const group = { key: 'g', type: def.id, progress: t, params: undefined };
+    items = [
+      item('mountain', a, { ...plan('a', 0.5), group: { ...group, role: 'from' as const } }),
+      item('street', b, { ...plan('b', 0.5), group: { ...group, role: 'to' as const } }),
+    ];
+  }
+  c.render(items, { width: W, height: H, background: '#000000' });
+  return c.canvas;
+}
+
+async function samplesReady(): Promise<boolean> {
+  try {
+    await Promise.all([loadSample('mountain'), loadSample('street')]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** JPEG data URL of the definition applied to the sample photos (null if it cannot render). */
+export async function fxThumbnail(def: FxDef): Promise<string | null> {
   const key = `${def.id}:${def.glsl}`;
   const hit = cache.get(key);
   if (hit) return hit;
+  if (!(await samplesReady())) return null;
   try {
-    if (!comp) {
-      const canvas = document.createElement('canvas');
-      comp = new Compositor(canvas, { preserve: true });
-      comp.resize(W, H);
-    }
-    let items: DrawItem[];
-    if (def.kind === 'effect') {
-      items = [item(0, plan('fx'), [{ def, params: paramValues(def, undefined) }])];
-    } else {
-      const group = { key: 'g', type: def.id, progress: 0.5, params: undefined };
-      const a = { ...plan('a'), group: { ...group, role: 'from' as const } };
-      const b = { ...plan('b'), group: { ...group, role: 'to' as const } };
-      items = [item(0, a, []), item(1, b, [])];
-    }
-    comp.render(items, { width: W, height: H, background: '#000000' });
-    const url = comp.canvas.toDataURL('image/jpeg', 0.85);
+    const canvas = drawFx(def, def.kind === 'transition' ? 0.5 : def.kind === 'generator' ? 2.2 : 0.6);
+    if (!canvas) return null;
+    const url = canvas.toDataURL('image/jpeg', 0.86);
     cache.set(key, url);
     return url;
   } catch (e) {
@@ -125,3 +123,38 @@ export function fxThumbnail(def: FxDef): string | null {
     return null;
   }
 }
+
+/** Live frame for hover animation; draws into `target`. */
+export function drawFxFrame(def: FxDef, t: number, target: CanvasRenderingContext2D): boolean {
+  try {
+    const canvas = drawFx(def, t);
+    if (!canvas) return false;
+    target.drawImage(canvas, 0, 0, target.canvas.width, target.canvas.height);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A colour preset applied to the street photo. */
+export async function filterThumbnail(filterId: string): Promise<string | null> {
+  const key = `filter:${filterId}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  try {
+    const img = await loadSample('street');
+    const p = plan('filter', 0);
+    p.clip.filter = { id: filterId, amount: 100 };
+    const { adjust, colorize } = effectiveAdjust(p.clip);
+    const c = compositor();
+    c.render([item('street', img, p, { adjust, colorize })], { width: W, height: H, background: '#000000' });
+    const url = c.canvas.toDataURL('image/jpeg', 0.86);
+    cache.set(key, url);
+    return url;
+  } catch (e) {
+    console.warn('Filter thumbnail failed', filterId, e);
+    return null;
+  }
+}
+
+export const THUMB_SIZE = { w: W, h: H };

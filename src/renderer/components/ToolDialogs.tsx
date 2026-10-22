@@ -8,13 +8,14 @@ import { player } from '../engine/player';
 import { useT, type I18nKey } from '../i18n';
 import { addMediaClip, ATTR_GROUPS, pasteAttributes, type AttrGroup } from '../store/actions';
 import { denoiseClip, normalizeLoudness, stabilizeClip } from '../store/enhance';
+import { duckUnderVoice, markBeats, splitAtScenes } from '../store/tools';
 import { toast, useEditor } from '../store/editor';
 import { importFiles } from '../store/media';
 import { Icon } from '../ui/Icon';
 import { SelectField, SliderField, ToggleField } from '../ui/controls';
 import { Modal } from './Modal';
 
-type EnhanceKind = 'stabilize' | 'denoise' | 'loudness';
+export type EnhanceKind = 'stabilize' | 'denoise' | 'loudness' | 'scenes' | 'beats' | 'duck';
 
 const LOUDNESS_TARGETS = [
   { value: '-14', label: 'enh.target14' },
@@ -22,7 +23,12 @@ const LOUDNESS_TARGETS = [
   { value: '-23', label: 'enh.target23' },
 ] as const;
 
-/** Stabilisation, noise reduction and loudness normalisation of the selected clip(s). */
+/** Tools that work on the picture; the rest need a clip with sound. */
+const VIDEO_KINDS: EnhanceKind[] = ['stabilize', 'scenes'];
+/** Tools without measurable progress show a running bar instead. */
+const NO_PROGRESS: EnhanceKind[] = ['scenes', 'beats', 'duck'];
+
+/** Clip tools with options: stabilise, denoise, loudness, scene cuts, beat markers, ducking. */
 export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: () => void }) {
   const t = useT();
   const targets = useEditor(
@@ -31,7 +37,7 @@ export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: (
       return s.selection.filter((id) => {
         const f = findClip(s.project, id);
         if (!f) return false;
-        return kind === 'stabilize' ? f.clip.type === 'video' : clipHasAudio(f.clip, media);
+        return VIDEO_KINDS.includes(kind) ? f.clip.type === 'video' : clipHasAudio(f.clip, media);
       });
     }),
   );
@@ -40,6 +46,9 @@ export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: (
   const [strength, setStrength] = useState(50);
   const [voice, setVoice] = useState(true);
   const [target, setTarget] = useState<string>('-14');
+  const [sensitivity, setSensitivity] = useState(50);
+  const [beatMode, setBeatMode] = useState<'beats' | 'onsets'>('beats');
+  const [duckDb, setDuckDb] = useState(-14);
   const [progress, setProgress] = useState<number | null>(null);
 
   const single = kind !== 'loudness';
@@ -50,16 +59,29 @@ export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: (
     let ok = false;
     if (kind === 'stabilize') ok = await stabilizeClip(targets[0], { smoothing, zoom }, setProgress);
     else if (kind === 'denoise') ok = await denoiseClip(targets[0], { strength, voice }, setProgress);
-    else {
+    else if (kind === 'loudness') {
       const n = await normalizeLoudness(targets, Number(target), setProgress);
       ok = n > 0;
       toast(n > 0 ? t('enh.loudnessDone', { n }) : t('enh.loudnessNone'), n > 0 ? 'success' : 'error');
+    } else if (kind === 'scenes') {
+      const n = await splitAtScenes(targets[0], sensitivity);
+      toast(n > 0 ? t('tools.scenesDone', { n }) : t('tools.scenesNone'), n > 0 ? 'success' : 'info');
+      ok = true;
+    } else if (kind === 'beats') {
+      const r = await markBeats(targets[0], beatMode);
+      toast(r.count > 0 ? t('tools.beatsDone', { n: r.count, bpm: r.bpm || '—' }) : t('tools.beatsNone'), r.count > 0 ? 'success' : 'info');
+      ok = true;
+    } else {
+      const n = duckUnderVoice(targets[0], duckDb, sensitivity);
+      toast(n > 0 ? t('tools.duckDone', { n }) : t('tools.duckNone'), n > 0 ? 'success' : 'info');
+      ok = true;
     }
     setProgress(null);
     if (ok) onClose();
   };
 
   const busy = progress !== null;
+  const indeterminate = NO_PROGRESS.includes(kind);
   return (
     <Modal
       title={t(`enh.${kind}` as I18nKey)}
@@ -76,7 +98,7 @@ export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: (
       }
     >
       <p className="panel-hint" style={{ margin: 0 }}>
-        {ready ? t(`enh.${kind}Hint` as I18nKey) : t(single ? 'enh.selectOne' : 'enh.selectAudio')}
+        {ready ? t(`enh.${kind}Hint` as I18nKey) : t(VIDEO_KINDS.includes(kind) ? 'enh.selectOne' : single ? 'enh.selectOneAudio' : 'enh.selectAudio')}
       </p>
       {kind === 'stabilize' && (
         <>
@@ -93,14 +115,31 @@ export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: (
       {kind === 'loudness' && (
         <SelectField label={t('enh.target')} value={target} options={LOUDNESS_TARGETS.map((o) => ({ value: o.value, label: t(o.label) }))} onChange={setTarget} />
       )}
+      {(kind === 'scenes' || kind === 'duck') && (
+        <SliderField label={t('tools.sensitivity')} value={sensitivity} min={0} max={100} unit="%" defaultValue={50} onChange={(v) => setSensitivity(v)} />
+      )}
+      {kind === 'beats' && (
+        <SelectField
+          label={t('tools.beatMode')}
+          value={beatMode}
+          options={[
+            { value: 'beats', label: t('tools.beatGrid') },
+            { value: 'onsets', label: t('tools.onsets') },
+          ]}
+          onChange={setBeatMode}
+        />
+      )}
+      {kind === 'duck' && (
+        <SliderField label={t('tools.duckAmount')} value={duckDb} min={-40} max={-3} unit="dB" defaultValue={-14} onChange={(v) => setDuckDb(v)} />
+      )}
       {busy && (
         <div className="export-status">
-          <div className="progress">
+          <div className={`progress ${indeterminate ? 'indeterminate' : ''}`}>
             <div style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
           <div className="line">
             <span>{t('enh.working')}</span>
-            <span>{Math.round(progress * 100)}%</span>
+            <span>{indeterminate ? '' : `${Math.round(progress * 100)}%`}</span>
           </div>
         </div>
       )}
@@ -310,6 +349,51 @@ export function VoiceoverDialog({ onClose }: { onClose: () => void }) {
         <input type="checkbox" className="switch" checked={hearProject} disabled={recording} onChange={(e) => setHearProject(e.target.checked)} />
       </label>
       {error && <div className="error-box">{error}</div>}
+    </Modal>
+  );
+}
+
+/** Authors and licences of library media used in the project. */
+export function CreditsDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const media = useEditor((s) => s.project.media);
+  const credited = media.filter((m) => m.credit);
+  const text = credited.map((m) => m.credit!.attribution).join('\n');
+  return (
+    <Modal
+      title={t('credits.title')}
+      onClose={onClose}
+      width={620}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            {t('common.ok')}
+          </button>
+          <button
+            className="btn primary"
+            disabled={!text}
+            onClick={() => void navigator.clipboard.writeText(text).then(() => toast(t('credits.copied'), 'success'))}
+          >
+            {t('credits.copy')}
+          </button>
+        </>
+      }
+    >
+      <p className="panel-hint" style={{ margin: 0 }}>
+        {credited.length ? t('credits.hint') : t('credits.none')}
+      </p>
+      {credited.map((m) => (
+        <div key={m.id} className="credit-row">
+          <div className="credit-title">{m.credit!.title}</div>
+          <div className="credit-meta">
+            {m.credit!.author || t('credits.unknown')} · {m.credit!.license} ·{' '}
+            <a href={m.credit!.sourceUrl} target="_blank" rel="noreferrer">
+              {t('credits.source')}
+            </a>
+          </div>
+        </div>
+      ))}
+      {text && <textarea className="text-input credit-text" readOnly value={text} rows={Math.min(8, credited.length + 1)} />}
     </Modal>
   );
 }

@@ -1,6 +1,7 @@
 // User preferences, persisted in localStorage (not part of projects).
 import { create } from 'zustand';
 import type { EncoderChoice } from '../../shared/api';
+import { applyTheme, DEFAULT_THEME, type ThemePrefs } from './theme';
 
 export interface RecentProject {
   path: string;
@@ -18,6 +19,13 @@ export interface Prefs {
   autosaveMinutes: number;
   /** Show the scopes panel next to the preview. */
   showScopes: boolean;
+  theme: ThemePrefs;
+  /** Free API keys for optional library sources. */
+  libraryKeys: { pexels?: string; pixabay?: string };
+  /** Seconds for photos, titles and elements added to the timeline. */
+  stillDuration: number;
+  /** Scroll the timeline to keep the playhead in view during playback. */
+  followPlayhead: boolean;
   recent: RecentProject[];
 }
 
@@ -29,13 +37,17 @@ const DEFAULTS: Prefs = {
   encoder: 'auto',
   autosaveMinutes: 2,
   showScopes: false,
+  theme: DEFAULT_THEME,
+  libraryKeys: {},
+  stillDuration: 5,
+  followPlayhead: true,
   recent: [],
 };
 
 function load(): Prefs {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Prefs> | null;
-    return { ...DEFAULTS, ...(raw ?? {}) };
+    return { ...DEFAULTS, ...(raw ?? {}), theme: { ...DEFAULTS.theme, ...(raw?.theme ?? {}) } };
   } catch {
     return { ...DEFAULTS };
   }
@@ -43,7 +55,8 @@ function load(): Prefs {
 
 export const usePrefs = create<Prefs>(() => load());
 
-usePrefs.subscribe((p) => {
+usePrefs.subscribe((p, prev) => {
+  if (p.theme !== prev.theme) applyTheme(p.theme);
   try {
     localStorage.setItem(KEY, JSON.stringify(p));
   } catch {
@@ -64,4 +77,8 @@ export function rememberRecent(path: string, name: string): void {
 
 export function forgetRecent(path: string): void {
   setPrefs({ recent: usePrefs.getState().recent.filter((r) => r.path !== path) });
+}
+
+export function setTheme(patch: Partial<ThemePrefs>): void {
+  usePrefs.setState((p) => ({ theme: { ...p.theme, ...patch } }));
 }

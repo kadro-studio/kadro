@@ -9,7 +9,9 @@ import { Timeline } from './components/timeline/Timeline';
 import { api } from './api';
 import { APP_NAME } from '../shared/brand';
 import { useT, useLang } from './i18n';
-import { openProjectFile, syncDirtyFlag } from './store/actions';
+import { handleCloseRequest, openProjectFile, syncDirtyFlag } from './store/actions';
+import { PromptHost } from './components/PromptHost';
+import { TooltipHost } from './ui/Tooltip';
 import { isDirty, toast, useEditor } from './store/editor';
 import { importFiles, startProxyProgressListener } from './store/media';
 import { pendingRecovery, startAutosave } from './store/autosave';
@@ -29,7 +31,7 @@ function loadLayout(): Layout {
   } catch {
     // default layout
   }
-  return { left: 330, right: 330, timeline: Math.round(window.innerHeight * 0.38) };
+  return { left: 390, right: 330, timeline: Math.round(window.innerHeight * 0.38) };
 }
 
 function Splitter({ dir, onDrag }: { dir: 'left' | 'right' | 'h'; onDrag: (dx: number, dy: number) => void }) {
@@ -99,6 +101,7 @@ export function App() {
       if (file) void openProjectFile(file);
     });
     const stopOpen = api.onOpenFile((file) => void openProjectFile(file));
+    const stopClose = api.onCloseRequest(() => void handleCloseRequest());
     const onRejection = (e: PromiseRejectionEvent) => {
       console.error(e.reason);
       toast(t('toast.unexpected', { err: e.reason instanceof Error ? e.reason.message : String(e.reason) }), 'error');
@@ -110,6 +113,7 @@ export function App() {
       stop();
       stopAutosave();
       stopOpen();
+      stopClose();
     };
   }, [t]);
 
@@ -191,6 +195,8 @@ export function App() {
       </div>
       <Dialogs />
       <ContextMenuHost />
+      <PromptHost />
+      <TooltipHost />
       <Toasts />
       {fileDrag && <div className="drop-overlay">{t('media.dropHint')}</div>}
     </div>

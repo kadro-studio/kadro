@@ -9,6 +9,8 @@ import { renameTrack, setTrackFlag } from '../../store/actions';
 import { commitPreview, previewEdit, useEditor } from '../../store/editor';
 import { Icon, type IconName } from '../../ui/Icon';
 import { IconButton } from '../../ui/controls';
+import { themeColor, useThemeVersion } from '../../store/theme';
+import { usePrefs } from '../../store/prefs';
 
 export const HEADER_W = 168;
 export const RULER_H = 28;
@@ -50,6 +52,7 @@ const RULER_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
 
 export function RulerCanvas({ width, scrollLeft, pps, fps }: { width: number; scrollLeft: number; pps: number; fps: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const themeVersion = useThemeVersion();
   useLayoutEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
@@ -69,6 +72,7 @@ export function RulerCanvas({ width, scrollLeft, pps, fps }: { width: number; sc
     const minor = major * pps / 5 >= 7 ? major / 5 : major / 2;
     const t0 = scrollLeft / pps;
     const t1 = (scrollLeft + w) / pps;
+    const colors = { major: themeColor('--ruler-major', '#7b8090'), minor: themeColor('--ruler-minor', '#4a4e59'), text: themeColor('--ruler-text', '#a3a7b1') };
     ctx.font = '10px Segoe UI, sans-serif';
     ctx.textBaseline = 'top';
     const first = Math.floor(t0 / minor) * minor;
@@ -79,17 +83,17 @@ export function RulerCanvas({ width, scrollLeft, pps, fps }: { width: number; sc
       const x = Math.round(tt * pps - scrollLeft) + 0.5;
       const ratio = tt / major;
       const isMajor = Math.abs(ratio - Math.round(ratio)) < 1e-6;
-      ctx.strokeStyle = isMajor ? '#7b8090' : '#4a4e59';
+      ctx.strokeStyle = isMajor ? colors.major : colors.minor;
       ctx.beginPath();
       ctx.moveTo(x, RULER_H);
       ctx.lineTo(x, RULER_H - (isMajor ? 11 : 5));
       ctx.stroke();
       if (isMajor) {
-        ctx.fillStyle = '#a3a7b1';
+        ctx.fillStyle = colors.text;
         ctx.fillText(formatRuler(tt, fps, major < 1), x + 4, 4);
       }
     }
-  }, [width, scrollLeft, pps, fps]);
+  }, [width, scrollLeft, pps, fps, themeVersion]);
   return <canvas ref={ref} style={{ left: HEADER_W }} />;
 }
 
@@ -104,7 +108,7 @@ export function PlayheadLine({ pps, scrollRef }: { pps: number; scrollRef: React
   const x = HEADER_W + playhead * pps;
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || !playing) return;
+    if (!el || !playing || !usePrefs.getState().followPlayhead) return;
     const viewLeft = el.scrollLeft + HEADER_W;
     const viewRight = el.scrollLeft + el.clientWidth;
     if (x > viewRight - 30 || x < viewLeft) el.scrollLeft = Math.max(0, x - HEADER_W - 60);
@@ -204,6 +208,7 @@ const TYPE_ICON: Record<Clip['type'], IconName> = {
   color: 'shapes',
   adjustment: 'layers',
   shape: 'shapes',
+  overlay: 'wand',
 };
 
 function Waveform({ clip, pps, color, waveVersion }: { clip: Clip; pps: number; color: string; waveVersion: number }) {

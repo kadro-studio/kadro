@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { fxOfKind, useFx } from '../engine/fx/registry';
-import { fxThumbnail } from '../engine/fx/thumbs';
+import { drawFxFrame, filterThumbnail, fxThumbnail, THUMB_SIZE } from '../engine/fx/thumbs';
+import { sampleUrl } from '../engine/samples';
 import { fxName, type FxDef } from '../engine/fx/types';
 import { ModsPanel } from './ModsPanel';
+import { LibraryPanel } from './LibraryPanel';
 import { mediaUrl } from '../../shared/api';
 import { FILTERS, TRANSITIONS } from '../core/effects';
 import { TEXT_PRESETS } from '../core/textPresets';
@@ -16,6 +18,8 @@ import {
   addEffect,
   addMediaClip,
   addShapeClip,
+  addOverlayClip,
+  addSticker,
   addTextClip,
   applyFilter,
   applyTransition,
@@ -30,6 +34,7 @@ import { DND } from './dnd';
 
 const TABS: { id: LeftTab; icon: IconName; label: I18nKey }[] = [
   { id: 'media', icon: 'folder', label: 'tab.media' },
+  { id: 'library', icon: 'globe', label: 'tab.library' },
   { id: 'text', icon: 'text', label: 'tab.text' },
   { id: 'transitions', icon: 'transition', label: 'tab.transitions' },
   { id: 'effects', icon: 'wand', label: 'tab.effects' },
@@ -56,6 +61,7 @@ export function LeftPanel() {
         <div className="panel-title">{t(current.label)}</div>
         <div className="panel-body">
           {tab === 'media' && <MediaPanel />}
+          {tab === 'library' && <LibraryPanel />}
           {tab === 'text' && <TextPanel />}
           {tab === 'transitions' && <TransitionsPanel />}
           {tab === 'effects' && <EffectsPanel />}
@@ -224,11 +230,19 @@ function MediaCard({ m, used }: { m: MediaAsset; used: boolean }) {
 function textPreviewStyle(style: (typeof TEXT_PRESETS)[number]['style']): CSSProperties {
   const scale = 0.16;
   return {
-    fontFamily: `"${style.fontFamily ?? 'Segoe UI'}", sans-serif`,
+    fontFamily: `"${style.fontFamily ?? 'Montserrat Variable'}", sans-serif`,
     fontSize: Math.max(10, (style.fontSize ?? 96) * scale),
-    fontWeight: style.bold === false ? 400 : 700,
+    fontWeight: style.weight ?? (style.bold === false ? 400 : 700),
     fontStyle: style.italic ? 'italic' : 'normal',
+    textTransform: style.uppercase ? 'uppercase' : undefined,
     color: style.color ?? '#fff',
+    ...(style.gradient
+      ? {
+          backgroundImage: `linear-gradient(${style.gradientAngle ?? 90}deg, ${style.color}, ${style.gradientColor})`,
+          WebkitBackgroundClip: 'text',
+          color: 'transparent',
+        }
+      : {}),
     letterSpacing: (style.letterSpacing ?? 0) * scale,
     WebkitTextStroke: style.strokeWidth ? `${Math.max(0.6, style.strokeWidth * scale)}px ${style.strokeColor}` : undefined,
     textShadow: style.shadowBlur ? `0 0 ${style.shadowBlur * scale * 1.5}px ${style.shadowColor}` : undefined,
@@ -255,7 +269,7 @@ function TextPanel() {
             onDragStart={(e) => e.dataTransfer.setData(DND.text, p.id)}
             onClick={() => addTextClip(p.id)}
           >
-            <div className="preset-visual" style={{ background: '#1b1d23' }}>
+            <div className="preset-visual photo-dim" style={{ backgroundImage: `url(${sampleUrl('spa')})` }}>
               <span style={textPreviewStyle(p.style)}>{t(p.sampleKey)}</span>
             </div>
             <div className="preset-label">{t(p.nameKey)}</div>
@@ -324,25 +338,50 @@ function transitionAStyle(type: string): CSSProperties {
   return {};
 }
 
-/** Card for a shader effect or transition, previewed with the real shader. */
+/** Card for a shader effect or transition, previewed with the real shader; plays on hover. */
 export function FxCard({ def, active, onClick }: { def: FxDef; active?: boolean; onClick: () => void }) {
   const lang = useLang((s) => s.lang);
   const error = useFx((s) => s.errors[def.id]);
   const [thumb, setThumb] = useState<string | null>(null);
+  const [hover, setHover] = useState(false);
+  const live = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const timer = setTimeout(() => setThumb(fxThumbnail(def)), 0);
-    return () => clearTimeout(timer);
+    let alive = true;
+    void fxThumbnail(def).then((url) => alive && setThumb(url));
+    return () => {
+      alive = false;
+    };
   }, [def]);
+  useEffect(() => {
+    const ctx = live.current?.getContext('2d');
+    if (!hover || !ctx || !thumb) return;
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = () => {
+      const s = (performance.now() - t0) / 1000;
+      // Transitions loop through their progress, effects run in real time.
+      if (drawFxFrame(def, def.kind === 'transition' ? Math.min(1, (s % 1.8) / 1.4) : s + 1, ctx)) raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [hover, def, thumb]);
   return (
     <button
       className={`preset-card ${active ? 'active' : ''}`}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       draggable
-      onDragStart={(e) => e.dataTransfer.setData(def.kind === 'effect' ? DND.effect : DND.transition, def.id)}
+      onDragStart={(e) =>
+        def.kind === 'generator'
+          ? e.dataTransfer.setData(DND.element, JSON.stringify({ kind: 'overlay', id: def.id }))
+          : e.dataTransfer.setData(def.kind === 'effect' ? DND.effect : DND.transition, def.id)
+      }
       onClick={onClick}
       title={[def.description, def.author && `© ${def.author}`, error].filter(Boolean).join('\n')}
     >
       <div className="preset-visual">
         {thumb ? <img src={thumb} alt="" className="fx-thumb" /> : <Icon name="wand" size={24} />}
+        {hover && thumb && <canvas ref={live} className="fx-thumb fx-live" width={THUMB_SIZE.w} height={THUMB_SIZE.h} />}
         {def.source !== 'builtin' && <span className="fx-badge">MOD</span>}
         {error && <span className="fx-badge error">!</span>}
       </div>
@@ -399,8 +438,8 @@ function TransitionsPanel() {
           >
             <div className="preset-visual">
               <div className="transition-visual" style={{ overflow: 'hidden', borderRadius: 3 }}>
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg,#2f6fe6,#1b3f8f)', ...transitionAStyle(type) }} />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg,#ff9f43,#e8590c)', ...transitionBStyle(type) }} />
+                <div className="photo" style={{ backgroundImage: `url(${sampleUrl('mountain')})`, ...transitionAStyle(type) }} />
+                <div className="photo" style={{ backgroundImage: `url(${sampleUrl('street')})`, ...transitionBStyle(type) }} />
               </div>
             </div>
             <div className="preset-label">{t(`transition.${type}` as I18nKey)}</div>
@@ -412,6 +451,18 @@ function TransitionsPanel() {
 }
 
 // ---------------------------------------------------------------------------
+
+function FilterThumb({ id }: { id: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void filterThumbnail(id).then((u) => alive && setUrl(u));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  return url ? <img src={url} alt="" className="fx-thumb" /> : <div className="photo" style={{ backgroundImage: `url(${sampleUrl('street')})` }} />;
+}
 
 function FiltersPanel() {
   const t = useT();
@@ -434,7 +485,7 @@ function FiltersPanel() {
             onClick={() => applyFilter(selection, f.id)}
           >
             <div className="preset-visual">
-              <div className="sample-scene" style={{ filter: f.swatch }} />
+              <FilterThumb id={f.id} />
             </div>
             <div className="preset-label">{t(`filter.${f.id}` as I18nKey)}</div>
           </button>
@@ -448,7 +499,7 @@ function FiltersPanel() {
 
 const COLORS = ['#000000', '#ffffff', '#1e88e5', '#e53935', '#43a047', '#fdd835', '#8e24aa', '#fb8c00', '#00acc1', '#ec407a', '#6d4c41', '#37474f'];
 
-const SHAPES: ShapeKind[] = ['rect', 'ellipse', 'triangle', 'star', 'arrow', 'line', 'bubble'];
+const SHAPES: ShapeKind[] = ['rect', 'pill', 'ellipse', 'ring', 'triangle', 'hexagon', 'star', 'burst', 'heart', 'arrow', 'line', 'bubble', 'check', 'cross'];
 
 function ShapeIcon({ kind }: { kind: ShapeKind }) {
   const p: Record<ShapeKind, string> = {
@@ -459,21 +510,66 @@ function ShapeIcon({ kind }: { kind: ShapeKind }) {
     arrow: 'M6 26h34V14l18 18-18 18V38H6z',
     line: 'M6 29h52v6H6z',
     bubble: 'M10 10h44a6 6 0 016 6v22a6 6 0 01-6 6H24l-10 10V44h-4a6 6 0 01-6-6V16a6 6 0 016-6z',
+    pill: 'M18 20h28a12 12 0 010 24H18a12 12 0 010-24z',
+    heart: 'M32 54C14 41 6 31 8 21c2-9 14-13 24-3 10-10 22-6 24 3 2 10-6 20-24 33z',
+    burst: 'M32 4l5 12 11-7-2 13 13 1-9 9 9 9-13 1 2 13-11-7-5 12-5-12-11 7 2-13-13-1 9-9-9-9 13-1-2-13 11 7z',
+    hexagon: 'M32 6l23 13v26L32 58 9 45V19z',
+    ring: 'M32 8a24 24 0 100 48 24 24 0 000-48zm0 9a15 15 0 110 30 15 15 0 010-30z',
+    check: 'M6 34l9-9 12 12 23-26 9 9-32 35z',
+    cross: 'M14 6l18 18L50 6l8 8-18 18 18 18-8 8-18-18-18 18-8-8 18-18L6 14z',
   };
   return (
     <svg viewBox="0 0 64 64" width="56" height="56">
-      <path d={p[kind]} fill="#4d8dff" />
+      <path d={p[kind]} fill="currentColor" />
     </svg>
   );
 }
 
+const STICKERS = [
+  '😀', '😂', '😍', '🥳', '😎', '🤩', '😮', '😢', '😡', '🤔', '👍', '👎', '👏', '🙌', '🔥', '✨',
+  '⭐', '💥', '💯', '❤️', '💔', '💖', '💬', '💡', '🎉', '🎊', '🎁', '🎂', '🎵', '🎬', '📷', '🎮',
+  '⚡', '☀️', '🌙', '🌈', '❄️', '🌊', '🍕', '☕', '🚀', '✈️', '🏆', '⚽', '🐶', '🐱', '🌸', '🍀',
+  '👀', '✅', '❌', '⚠️', '➡️', '⬇️', '📍', '🔔',
+];
+
 function ElementsPanel() {
   const t = useT();
+  const defs = useFx((s) => s.defs);
+  const generators = fxOfKind(defs, 'generator');
+  const overlays = generators.filter((d) => d.category !== 'background');
+  const backgrounds = generators.filter((d) => d.category === 'background');
   return (
     <>
       <div className="mods-section-title" style={{ marginTop: 0 }}>
-        {t('elements.adjustment')}
+        {t('elements.overlays')}
       </div>
+      <p className="panel-hint">{t('elements.overlaysHint')}</p>
+      <div className="preset-grid">
+        {overlays.map((def) => (
+          <FxCard key={def.id} def={def} onClick={() => addOverlayClip(def.id)} />
+        ))}
+      </div>
+      <div className="mods-section-title">{t('elements.backgrounds')}</div>
+      <div className="preset-grid">
+        {backgrounds.map((def) => (
+          <FxCard key={def.id} def={def} onClick={() => addOverlayClip(def.id)} />
+        ))}
+      </div>
+      <div className="mods-section-title">{t('elements.stickers')}</div>
+      <div className="sticker-grid">
+        {STICKERS.map((emoji) => (
+          <button
+            key={emoji}
+            className="sticker"
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData(DND.element, JSON.stringify({ kind: 'sticker', emoji }))}
+            onClick={() => addSticker(emoji)}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+      <div className="mods-section-title">{t('elements.adjustment')}</div>
       <button
         className="preset-card adjustment-card"
         draggable
@@ -494,7 +590,7 @@ function ElementsPanel() {
             onDragStart={(e) => e.dataTransfer.setData(DND.element, JSON.stringify({ kind: 'shape', shape: kind }))}
             onClick={() => addShapeClip(kind)}
           >
-            <div className="preset-visual">
+            <div className="preset-visual photo-dim shape-visual" style={{ backgroundImage: `url(${sampleUrl('mountain')})` }}>
               <ShapeIcon kind={kind} />
             </div>
             <div className="preset-label">{t(`shape.${kind}` as I18nKey)}</div>

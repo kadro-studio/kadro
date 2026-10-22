@@ -68,6 +68,9 @@ const PATHS = {
   reverse: 'M20 6v12M16 12H4M8 8l-4 4 4 4',
   mic: 'M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21M8.5 21h7',
   scopes: 'M3 4h18v16H3zM3 15l4-5 3 3 4-6 3 4 4-3',
+  globe: 'M12 21a9 9 0 100-18 9 9 0 000 18zM3.5 9h17M3.5 15h17M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
+  playSmall: 'M8 5.5v13l10-6.5z',
+  pauseSmall: 'M8 5h3v14H8zM13 5h3v14h-3z',
 } satisfies Record<string, string>;
 
 const FILLED = new Set<string>(['play', 'pause', 'stepBack', 'stepFwd', 'toStart', 'toEnd']);

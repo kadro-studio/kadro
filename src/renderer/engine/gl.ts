@@ -12,8 +12,11 @@ export type YuvMatrix = 'bt601' | 'bt709' | 'bt2020';
 export interface TexSource {
   /** Texture cache key. */
   key: string;
-  /** 'pixels' is RGBA; 'yuv' is planar 8-bit 4:2:0, limited range; 'adjust' is the frame drawn so far. */
-  kind: 'element' | 'pixels' | 'yuv' | 'color' | 'adjust';
+  /**
+   * 'pixels' is RGBA; 'yuv' is planar 8-bit 4:2:0, limited range; 'adjust' is
+   * the frame drawn so far; 'generator' is drawn by a generator shader.
+   */
+  kind: 'element' | 'pixels' | 'yuv' | 'color' | 'adjust' | 'generator';
   el?: TexImageSource;
   data?: Uint8Array;
   width: number;
@@ -24,6 +27,7 @@ export interface TexSource {
   matrix?: YuvMatrix;
   /** 'yuv' data also carries a full-resolution alpha plane. */
   alpha?: boolean;
+  gen?: { def: FxDef; params: number[]; colorA: [number, number, number]; colorB: [number, number, number] };
 }
 
 /** Layout of exported frame data. */
@@ -63,6 +67,10 @@ export interface DrawItem {
   effects: { def: FxDef; params: number[] }[];
   /** 3D LUT (RGB floats, red fastest) and its strength 0..1. */
   lut: { key: string; size: number; data: Float32Array; amount: number } | null;
+  /** Tone curves as a 256×1 RGBA table. */
+  curves: { key: string; data: Uint8Array } | null;
+  /** HSL band shifts (8 × hue, saturation, lightness in -1..1). */
+  hsl: Float32Array | null;
   /** Seconds since the clip started (animated effects). */
   time: number;
 }
@@ -124,8 +132,91 @@ uniform int u_maskType;
 uniform vec4 u_mask;
 uniform vec2 u_resolution;
 uniform float u_aspect;
+uniform sampler2D u_curves;  // 256x1 RGBA tone curve table (unit 4)
+uniform int u_curvesOn;
+uniform int u_hslOn;
+uniform vec3 u_hsl[8];       // per band: hue, saturation, lightness shift (-1..1)
+uniform int u_blendMode;     // 0 = fixed-function blending, else a shader blend mode
+uniform sampler2D u_backdrop; // copy of what is drawn under the layer (unit 5)
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+
+vec3 applyCurves(vec3 c) {
+  vec3 u = clamp(c, 0.0, 1.0) * (255.0 / 256.0) + 0.5 / 256.0;
+  return vec3(texture(u_curves, vec2(u.r, 0.5)).r, texture(u_curves, vec2(u.g, 0.5)).g, texture(u_curves, vec2(u.b, 0.5)).b);
+}
+
+vec3 rgb2hsv(vec3 c) {
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x);
+}
+
+vec3 hsv2rgb(vec3 c) {
+  vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+
+// Eight overlapping hue bands (red, orange, yellow, green, aqua, blue, purple,
+// magenta); each pixel takes a linear blend of its two nearest bands.
+const float BAND_HUES[9] = float[9](0.0, 30.0, 60.0, 120.0, 180.0, 240.0, 270.0, 300.0, 360.0);
+vec3 applyHsl(vec3 c) {
+  vec3 hsv = rgb2hsv(clamp(c, 0.0, 1.0));
+  float h = hsv.x * 360.0;
+  vec3 adj = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (h >= BAND_HUES[i] && h < BAND_HUES[i + 1]) {
+      float t = (h - BAND_HUES[i]) / (BAND_HUES[i + 1] - BAND_HUES[i]);
+      adj = mix(u_hsl[i], u_hsl[(i + 1) % 8], t);
+    }
+  }
+  // Greys have no hue: leave them alone.
+  adj *= smoothstep(0.03, 0.18, hsv.y);
+  hsv.x = fract(hsv.x + adj.x * (30.0 / 360.0) + 1.0);
+  hsv.y = clamp(hsv.y * (1.0 + adj.y), 0.0, 1.0);
+  hsv.z = max(0.0, hsv.z * (1.0 + adj.z * 0.6));
+  return hsv2rgb(hsv);
+}
+
+// Shader blend modes (W3C compositing definitions), on straight colours.
+float blendLum(vec3 c) { return dot(c, vec3(0.3, 0.59, 0.11)); }
+vec3 clipColor(vec3 c) {
+  float l = blendLum(c);
+  float n = min(c.r, min(c.g, c.b));
+  float x = max(c.r, max(c.g, c.b));
+  if (n < 0.0) c = l + (c - l) * l / max(1e-5, l - n);
+  if (x > 1.0) c = l + (c - l) * (1.0 - l) / max(1e-5, x - l);
+  return c;
+}
+vec3 setLum(vec3 c, float l) { return clipColor(c + (l - blendLum(c))); }
+float blendSat(vec3 c) { return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); }
+vec3 setSat(vec3 c, float s) {
+  float mn = min(c.r, min(c.g, c.b));
+  float mx = max(c.r, max(c.g, c.b));
+  return mx > mn ? (c - mn) * s / (mx - mn) : vec3(0.0);
+}
+vec3 overlayMode(vec3 b, vec3 s) { return mix(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, b)); }
+vec3 blendModes(vec3 b, vec3 s) {
+  if (u_blendMode == 1) return overlayMode(b, s);
+  if (u_blendMode == 2) {
+    vec3 d = mix(((16.0 * b - 12.0) * b + 4.0) * b, sqrt(b), step(0.25, b));
+    return mix(b - (1.0 - 2.0 * s) * b * (1.0 - b), b + (2.0 * s - 1.0) * (d - b), step(0.5, s));
+  }
+  if (u_blendMode == 3) return overlayMode(s, b);
+  if (u_blendMode == 4) return min(b, s);
+  if (u_blendMode == 5) return max(b, s);
+  if (u_blendMode == 6) return abs(b - s);
+  if (u_blendMode == 7) return b + s - 2.0 * b * s;
+  if (u_blendMode == 8) return mix(min(vec3(1.0), b / max(vec3(1e-5), 1.0 - s)), vec3(1.0), step(1.0, s)) * step(1e-5, b);
+  if (u_blendMode == 9) return mix(1.0 - min(vec3(1.0), (1.0 - b) / max(vec3(1e-5), s)), vec3(1.0), step(1.0, b));
+  if (u_blendMode == 10) return max(b + s - 1.0, 0.0);
+  if (u_blendMode == 11) return setLum(setSat(s, blendSat(b)), blendLum(b));
+  if (u_blendMode == 12) return setLum(setSat(b, blendSat(s)), blendLum(b));
+  if (u_blendMode == 13) return setLum(s, blendLum(b));
+  return setLum(b, blendLum(s));
+}
 
 vec4 sampleSource(vec2 uv) {
   if (u_blur < 0.5) {
@@ -236,6 +327,8 @@ void main() {
     c = mix(c, vec3(dot(c, LUMA)), spill);
   }
   c = grade(c);
+  if (u_curvesOn == 1) c = applyCurves(c);
+  if (u_hslOn == 1) c = applyHsl(c);
   if (u_lutParams.y > 0.0) {
     float n = u_lutParams.x;
     vec3 lc = texture(u_lut, clamp(c, 0.0, 1.0) * ((n - 1.0) / n) + 0.5 / n).rgb;
@@ -248,6 +341,12 @@ void main() {
   if (u_fade.a > 0.0) c = mix(c, u_fade.rgb, u_fade.a);
   c = clamp(c, 0.0, 1.0);
   alpha *= u_opacity * maskValue() * shapeMask();
+  if (u_blendMode > 0) {
+    // The backdrop copy is premultiplied (opaque for the main canvas).
+    vec4 bd = texture(u_backdrop, gl_FragCoord.xy / u_resolution);
+    vec3 cb = bd.a > 1e-4 ? bd.rgb / bd.a : vec3(0.0);
+    c = mix(c, clamp(blendModes(cb, c), 0.0, 1.0), bd.a);
+  }
   outColor = vec4(c * alpha, alpha);
 }`;
 
@@ -349,6 +448,23 @@ in vec2 v_uv;
 out vec4 outColor;
 uniform float u_p[${MAX_FX_PARAMS}];
 ${FX_HELPERS}`;
+  if (def.kind === 'generator') {
+    // Same y-up uv as effects; the output keeps the top in texture row 0 like
+    // every other layer source.
+    return `${head}
+uniform vec2 u_size;
+uniform float u_time;
+uniform vec3 u_colorA;
+uniform vec3 u_colorB;
+#define time u_time
+#define ratio (u_size.x / u_size.y)
+#define colorA u_colorA
+#define colorB u_colorB
+${defines}
+#line 1
+${def.glsl}
+void main() { outColor = generate(vec2(v_uv.x, 1.0 - v_uv.y)); }`;
+  }
   if (def.kind === 'effect') {
     // Effects see uv with y pointing up, like transitions.
     return `${head}
@@ -390,6 +506,8 @@ function hashString(s: string): number {
 
 interface FxProgram {
   prog: WebGLProgram;
+  colorA: WebGLUniformLocation | null;
+  colorB: WebGLUniformLocation | null;
   src: WebGLUniformLocation | null;
   flip: WebGLUniformLocation | null;
   size: WebGLUniformLocation | null;
@@ -407,7 +525,26 @@ const UNIFORMS = [
   'u_maskType', 'u_mask', 'u_resolution', 'u_aspect',
   'u_localRect', 'u_lut', 'u_lutParams', 'u_shape', 'u_shapeA', 'u_shapeB',
   'u_lift', 'u_gamma', 'u_gain',
+  'u_curves', 'u_curvesOn', 'u_hslOn', 'u_hsl', 'u_blendMode', 'u_backdrop',
 ] as const;
+
+/** Blend modes done in the shader against a copy of the backdrop (others use blendFunc). */
+const SHADER_BLEND: Partial<Record<BlendMode, number>> = {
+  overlay: 1,
+  softLight: 2,
+  hardLight: 3,
+  darken: 4,
+  lighten: 5,
+  difference: 6,
+  exclusion: 7,
+  colorDodge: 8,
+  colorBurn: 9,
+  linearBurn: 10,
+  hue: 11,
+  saturation: 12,
+  color: 13,
+  luminosity: 14,
+};
 type UniformName = (typeof UNIFORMS)[number];
 
 interface TexEntry {
@@ -489,7 +626,14 @@ export class Compositor {
   private readonly loc = {} as Record<UniformName, WebGLUniformLocation | null>;
   private readonly textures = new Map<string, TexEntry>();
   private readonly dummyLut: WebGLTexture;
+  private readonly dummy2d: WebGLTexture;
   private readonly lutTextures = new Map<string, WebGLTexture>();
+  private readonly curveTextures = new Map<string, WebGLTexture>();
+  /** Backdrop copies for shader blend modes: RGB for the canvas, RGBA for offscreen targets. */
+  private backdrops: Record<'rgb' | 'rgba', { tex: WebGLTexture | null; w: number; h: number }> = {
+    rgb: { tex: null, w: 0, h: 0 },
+    rgba: { tex: null, w: 0, h: 0 },
+  };
   private readonly yuvProgram: WebGLProgram;
   private readonly yuvK: WebGLUniformLocation | null;
   private readonly yuvHasA: WebGLUniformLocation | null;
@@ -533,6 +677,15 @@ export class Compositor {
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_3D, this.dummyLut);
     gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA8, 1, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    // Curves table on unit 4 and blend backdrop on unit 5, with placeholders.
+    gl.uniform1i(this.loc.u_curves, 4);
+    gl.uniform1i(this.loc.u_backdrop, 5);
+    this.dummy2d = newTexture(gl);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    for (const unit of [gl.TEXTURE4, gl.TEXTURE5]) {
+      gl.activeTexture(unit);
+      gl.bindTexture(gl.TEXTURE_2D, this.dummy2d);
+    }
     gl.activeTexture(gl.TEXTURE0);
     this.yuvProgram = link(gl, FULL_VS, YUV_FS);
     gl.useProgram(this.yuvProgram);
@@ -666,6 +819,11 @@ export class Compositor {
     this.processed.clear();
     for (const item of items) {
       if (item.source.kind === 'color' || item.source.kind === 'adjust') continue;
+      if (item.source.kind === 'generator') {
+        const gen = this.runGenerator(item);
+        if (gen) this.processed.set(item, item.effects.length ? this.runEffects(item, gen, item.source.width, item.source.height, false) : gen);
+        continue;
+      }
       const entry = this.texture(item.source);
       if (entry && item.effects.length > 0) {
         const tex = this.applyEffects(item, entry);
@@ -777,6 +935,8 @@ export class Compositor {
         to: u('u_to'),
         progress: u('u_progress'),
         ratio: u('u_ratio'),
+        colorA: u('u_colorA'),
+        colorB: u('u_colorB'),
       };
     } catch (e) {
       reportFxError(def.id, e instanceof Error ? e.message : String(e));
@@ -808,6 +968,30 @@ export class Compositor {
     this.fxParams.fill(0);
     values.forEach((v, i) => (this.fxParams[i] = v));
     if (loc) this.gl.uniform1fv(loc, this.fxParams);
+  }
+
+  /** Draws a generator element into its own target; returns the texture. */
+  private runGenerator(item: DrawItem): WebGLTexture | null {
+    const gen = item.source.gen;
+    const prog = gen && gen.def.kind === 'generator' ? this.fxProgram(gen.def) : null;
+    if (!gen || !prog) return null;
+    const gl = this.gl;
+    const w = Math.max(2, Math.round(item.source.width));
+    const h = Math.max(2, Math.round(item.source.height));
+    const target = this.fxTarget(`gen:${item.plan.clip.id}`, w, h);
+    gl.disable(gl.BLEND);
+    gl.bindVertexArray(this.vao);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(prog.prog);
+    gl.uniform2f(prog.size, w, h);
+    gl.uniform1f(prog.time, item.time);
+    gl.uniform3fv(prog.colorA, gen.colorA);
+    gl.uniform3fv(prog.colorB, gen.colorB);
+    this.setFxParams(prog.params, gen.params);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return target.tex;
   }
 
   /** Runs an item's effect stack on its source texture; returns the result. */
@@ -907,6 +1091,12 @@ export class Compositor {
     if (source.kind === 'color') {
       gl.uniform1i(L.u_solid, 1);
       gl.uniform4fv(L.u_color, source.color ?? [0, 0, 0, 1]);
+    } else if (source.kind === 'generator') {
+      const tex = this.processed.get(item);
+      if (!tex) return;
+      entry = { tex, width: source.width, height: source.height, version: null, lastUsed: 0, mips: false };
+      gl.uniform1i(L.u_solid, 0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
     } else if (source.kind === 'adjust') {
       // Only valid through drawAdjustment, which prepares the frame copy.
       const tex = this.processed.get(item);
@@ -1010,6 +1200,29 @@ export class Compositor {
       gl.uniform1i(L.u_maskType, 0);
     }
 
+    gl.activeTexture(gl.TEXTURE4);
+    if (item.curves) {
+      gl.bindTexture(gl.TEXTURE_2D, this.curveTexture(item.curves));
+      gl.uniform1i(L.u_curvesOn, 1);
+    } else {
+      gl.bindTexture(gl.TEXTURE_2D, this.dummy2d);
+      gl.uniform1i(L.u_curvesOn, 0);
+    }
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(L.u_hslOn, item.hsl ? 1 : 0);
+    if (item.hsl) gl.uniform3fv(L.u_hsl, item.hsl);
+
+    const shaderBlend = SHADER_BLEND[item.blend] ?? 0;
+    gl.uniform1i(L.u_blendMode, shaderBlend);
+    if (shaderBlend) {
+      this.copyBackdrop();
+      // copyBackdrop changed unit 0's binding; restore the layer texture.
+      gl.activeTexture(gl.TEXTURE0);
+      if (source.kind !== 'color' && entry) gl.bindTexture(gl.TEXTURE_2D, this.processed.get(item) ?? entry.tex);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      return;
+    }
     switch (item.blend) {
       case 'add':
         gl.blendFunc(gl.ONE, gl.ONE);
@@ -1024,6 +1237,42 @@ export class Compositor {
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  private curveTexture(c: NonNullable<DrawItem['curves']>): WebGLTexture {
+    const gl = this.gl;
+    let tex = this.curveTextures.get(c.key);
+    if (!tex) {
+      if (this.curveTextures.size > 32) {
+        for (const t of this.curveTextures.values()) gl.deleteTexture(t);
+        this.curveTextures.clear();
+      }
+      tex = newTexture(gl);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, c.data);
+      this.curveTextures.set(c.key, tex);
+    }
+    return tex;
+  }
+
+  /** Copies the current render target into the backdrop texture on unit 5. */
+  private copyBackdrop(): void {
+    const gl = this.gl;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    // The canvas has no alpha channel; offscreen targets do and need it kept.
+    const kind = gl.getParameter(gl.FRAMEBUFFER_BINDING) ? 'rgba' : 'rgb';
+    const b = this.backdrops[kind];
+    gl.activeTexture(gl.TEXTURE5);
+    if (!b.tex || b.w !== w || b.h !== h) {
+      b.tex ??= newTexture(gl);
+      gl.bindTexture(gl.TEXTURE_2D, b.tex);
+      if (kind === 'rgb') gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, w, h, 0, gl.RGB, gl.UNSIGNED_BYTE, null);
+      else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      b.w = w;
+      b.h = h;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, b.tex);
+    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
   }
 
   private lutTexture(lut: NonNullable<DrawItem['lut']>): WebGLTexture {

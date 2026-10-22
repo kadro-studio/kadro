@@ -1,20 +1,23 @@
 import { create } from 'zustand';
 import { en, type I18nKey } from './en';
 import { ru } from './ru';
+import { uk } from './uk';
 
-export type Lang = 'ru' | 'en';
+export type Lang = 'uk' | 'ru' | 'en';
 export type { I18nKey };
 
-const dictionaries: Record<Lang, Record<I18nKey, string>> = { en, ru };
+const dictionaries: Record<Lang, Record<I18nKey, string>> = { en, ru, uk };
 
 function initialLang(): Lang {
   try {
     const saved = localStorage.getItem('vr.lang');
-    if (saved === 'ru' || saved === 'en') return saved;
+    if (saved === 'ru' || saved === 'en' || saved === 'uk') return saved;
   } catch {
     // storage unavailable
   }
-  return navigator.language.toLowerCase().startsWith('ru') ? 'ru' : 'en';
+  const nav = navigator.language.toLowerCase();
+  if (nav.startsWith('uk')) return 'uk';
+  return nav.startsWith('ru') ? 'ru' : 'en';
 }
 
 export const useLang = create<{ lang: Lang }>(() => ({ lang: initialLang() }));

@@ -5,7 +5,6 @@ import { isAnimated, keyframeAt, propValue, setPropAt, toggleKeyframe, clearKeyf
 import { defaultAdjust, defaultCrop, defaultTransform, defaultWheels, findClip, maxClipDuration, mediaMap, projectDuration } from '../core/project';
 import { setClipSpeed } from '../core/edit';
 import { clipHasAudio } from '../core/scene';
-import { FONT_FAMILIES } from '../core/textPresets';
 import { formatTimecode } from '../core/time';
 import type { Adjust, AnimProp, BlendMode, Clip, MediaAsset, Project, ShapeKind, ShapeStyle, TextAlign } from '../core/types';
 import { player } from '../engine/player';
@@ -17,6 +16,9 @@ import { commitPreview, edit, previewEdit, toast, useEditor } from '../store/edi
 import { api } from '../api';
 import { loadLut } from '../engine/lut';
 import { LayoutPicker } from './LayoutPicker';
+import { CurvesSection, HslSection } from './ColorTools';
+import { FontPicker } from '../ui/FontPicker';
+import { isVariableFont, textWeight } from '../engine/fonts';
 import { MAX_VOLUME } from '../store/enhance';
 import {
   ColorField,
@@ -38,6 +40,7 @@ const TYPE_COLOR: Record<Clip['type'], string> = {
   color: 'var(--clip-color)',
   adjustment: '#5b4bb0',
   shape: '#2b6f7a',
+  overlay: '#b4237a',
 };
 
 type ClipRecipe = (c: Draft<Clip>) => void;
@@ -115,6 +118,7 @@ export function Inspector() {
           </Section>
         )}
         {clip.type === 'shape' && clip.shape && <ShapeSection clip={clip} set={set} />}
+        {clip.type === 'overlay' && clip.overlay && <OverlaySection clip={clip} set={set} />}
         {visual && clip.type !== 'adjustment' && <TransformSection clip={clip} m={m} local={local} project={project} set={set} />}
         {clip.type === 'adjustment' && (
           <Section id="adjustment" title={t('elements.adjustment')}>
@@ -132,6 +136,8 @@ export function Inspector() {
         {clipHasAudio(clip, media) && <AudioSection clip={clip} set={set} local={local} fps={project.settings.fps} />}
         {visual && clip.type !== 'color' && <EffectsSection clip={clip} set={set} />}
         {visual && clip.type !== 'shape' && <WheelsSection clip={clip} set={set} />}
+        {visual && clip.type !== 'shape' && <CurvesSection clip={clip} set={set} />}
+        {visual && clip.type !== 'shape' && <HslSection clip={clip} set={set} />}
         {visual && <ColorSection clip={clip} set={set} />}
         {visual && <FilterSection clip={clip} set={set} />}
         {(clip.type === 'video' || clip.type === 'image') && <ChromaSection clip={clip} set={set} />}
@@ -176,6 +182,35 @@ function ProjectInfo({ project }: { project: Project }) {
         </div>
       </div>
     </>
+  );
+}
+
+/** Parameters and colours of an animated generator element. */
+function OverlaySection({ clip, set }: { clip: Clip; set: Setter }) {
+  const t = useT();
+  const lang = useLang((s) => s.lang);
+  const o = clip.overlay!;
+  const def = useFx((s) => s.defs[o.id]);
+  if (!def) return null;
+  return (
+    <Section id="overlay" title={`${t('sec.overlay')}: ${fxName(def, lang)}`}>
+      {def.params.map((p) => (
+        <SliderField
+          key={p.id}
+          label={fxName(p, lang)}
+          value={o.params[p.id] ?? p.default}
+          min={p.min}
+          max={p.max}
+          step={p.step ?? (p.max - p.min) / 100}
+          defaultValue={p.default}
+          onChange={(v, f) => set((c) => void (c.overlay!.params[p.id] = v), f)}
+        />
+      ))}
+      <div className="grid-2">
+        <ColorField label={t('p.colorA')} value={o.colorA} onChange={(v, f) => set((c) => void (c.overlay!.colorA = v), f)} />
+        <ColorField label={t('p.colorB')} value={o.colorB} onChange={(v, f) => set((c) => void (c.overlay!.colorB = v), f)} />
+      </div>
+    </Section>
   );
 }
 
@@ -532,7 +567,10 @@ function CropSection({ clip, set }: { clip: Clip; set: Setter }) {
 
 function BlendSection({ clip, set }: { clip: Clip; set: Setter }) {
   const t = useT();
-  const modes: BlendMode[] = ['normal', 'add', 'multiply', 'screen'];
+  const modes: BlendMode[] = [
+    'normal', 'darken', 'multiply', 'colorBurn', 'linearBurn', 'lighten', 'screen', 'colorDodge', 'add',
+    'overlay', 'softLight', 'hardLight', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity',
+  ];
   return (
     <Section id="blend" title={t('sec.blend')}>
       <SelectField
@@ -753,20 +791,30 @@ function TextSection({ clip, set }: { clip: Clip; set: Setter }) {
     { v: 'center', label: 'p.alignCenter' },
     { v: 'right', label: 'p.alignRight' },
   ];
-  const fonts = FONT_FAMILIES.includes(s.fontFamily) ? FONT_FAMILIES : [s.fontFamily, ...FONT_FAMILIES];
+  const weight = textWeight(s);
+  const setWeight = (w: number, final: boolean) =>
+    setText((x) => {
+      x.weight = w;
+      x.bold = w >= 600;
+    }, final);
   return (
     <Section id="text" title={t('sec.text')}>
       <TextField label={t('p.content')} multiline value={s.content} onChange={(v, f) => setText((x) => void (x.content = v), f)} />
-      <SelectField label={t('p.font')} value={s.fontFamily} options={fonts.map((f) => ({ value: f, label: f }))}
-        onChange={(v) => setText((x) => void (x.fontFamily = v), true)} />
+      <FontPicker label={t('p.font')} value={s.fontFamily} onChange={(v) => setText((x) => void (x.fontFamily = v), true)} />
       <SliderField label={t('p.size')} value={s.fontSize} min={6} max={1000} softMax={400} unit="px"
         onChange={(v, f) => setText((x) => void (x.fontSize = v), f)} />
+      {isVariableFont(s.fontFamily) && (
+        <SliderField label={t('p.weight')} value={weight} min={100} max={900} step={50} defaultValue={700} onChange={setWeight} />
+      )}
       <div className="seg">
-        <button className={s.bold ? 'active' : ''} style={{ fontWeight: 700 }} onClick={() => setText((x) => void (x.bold = !x.bold), true)}>
+        <button className={weight >= 600 ? 'active' : ''} style={{ fontWeight: 700 }} onClick={() => setWeight(weight >= 600 ? 400 : 700, true)}>
           {t('p.bold')}
         </button>
         <button className={s.italic ? 'active' : ''} style={{ fontStyle: 'italic' }} onClick={() => setText((x) => void (x.italic = !x.italic), true)}>
           {t('p.italic')}
+        </button>
+        <button className={s.uppercase ? 'active' : ''} onClick={() => setText((x) => void (x.uppercase = !x.uppercase), true)}>
+          {t('p.uppercase')}
         </button>
       </div>
       <div className="seg">
@@ -777,6 +825,18 @@ function TextSection({ clip, set }: { clip: Clip; set: Setter }) {
         ))}
       </div>
       <ColorField label={t('p.color')} value={s.color} onChange={(v, f) => setText((x) => void (x.color = v), f)} />
+      <ToggleField label={t('p.gradient')} value={!!s.gradient} onChange={(v) => setText((x) => {
+        x.gradient = v;
+        x.gradientColor ??= '#ff3b4f';
+        x.gradientAngle ??= 90;
+      }, true)} />
+      {s.gradient && (
+        <>
+          <ColorField label={t('p.gradientColor')} value={s.gradientColor ?? '#ff3b4f'} onChange={(v, f) => setText((x) => void (x.gradientColor = v), f)} />
+          <SliderField label={t('p.gradientAngle')} value={s.gradientAngle ?? 90} min={0} max={360} unit="°" defaultValue={90}
+            onChange={(v, f) => setText((x) => void (x.gradientAngle = v), f)} />
+        </>
+      )}
       <SliderField label={t('p.lineHeight')} value={s.lineHeight} min={0.6} max={3} step={0.05} defaultValue={1.2}
         onChange={(v, f) => setText((x) => void (x.lineHeight = v), f)} />
       <SliderField label={t('p.letterSpacing')} value={s.letterSpacing} min={-20} max={100} defaultValue={0} unit="px"

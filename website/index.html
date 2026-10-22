@@ -29,7 +29,11 @@
           <a href="#faq" data-i18n="nav.faq">Вопросы</a>
         </nav>
         <div class="nav-actions">
-          <button class="lang" id="lang" type="button" aria-label="Language">EN</button>
+          <select class="lang" id="lang" aria-label="Language">
+            <option value="uk">UA</option>
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
           <a class="btn btn-primary btn-sm" href="#download" data-i18n="nav.download">Скачать</a>
         </div>
       </div>
@@ -79,14 +83,14 @@
                 <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18M8 3v6M15 9v6M10 15v6" /></svg>
               </div>
               <h3 data-i18n="f1.t">Настоящий таймлайн</h3>
-              <p data-i18n="f1.d">Неограниченные дорожки, ripple-, roll-, slip- и slide-правка, маркеры, точки входа и выхода, соло и блокировка дорожек.</p>
+              <p data-i18n="f1.d">Неограниченные дорожки, ripple-, roll-, slip- и slide-правка, нарезка по сменам сцен, метки в ритм музыки, соло и блокировка дорожек.</p>
             </article>
             <article class="card">
               <div class="card-icon">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 000 18" /></svg>
               </div>
               <h3 data-i18n="f2.t">Цвет как в студии</h3>
-              <p data-i18n="f2.d">Цветовые круги, LUT (.cube), корректирующие слои, видеоскопы, хромакей и маски.</p>
+              <p data-i18n="f2.d">Цветовые круги, RGB-кривые, выборочный цвет HSL, LUT (.cube), 18 режимов наложения, видеоскопы, хромакей и маски.</p>
             </article>
             <article class="card">
               <div class="card-icon">
@@ -100,14 +104,14 @@
                 <svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" /></svg>
               </div>
               <h3 data-i18n="f4.t">Чистый звук</h3>
-              <p data-i18n="f4.d">Шумоподавление, нормализация громкости по EBU R128, эквалайзер, компрессор и запись голоса.</p>
+              <p data-i18n="f4.d">Шумоподавление, нормализация громкости по EBU R128, автоприглушение музыки под голос, эквалайзер, компрессор и запись голоса.</p>
             </article>
             <article class="card">
               <div class="card-icon">
                 <svg viewBox="0 0 24 24"><path d="M4 20L16 8M14 6l4 4M18 3v3M16.5 4.5h3" /></svg>
               </div>
               <h3 data-i18n="f5.t">Эффекты и моды</h3>
-              <p data-i18n="f5.d">Шейдерные эффекты и переходы, стабилизация, компоновки «картинка в картинке» и свои моды на GLSL.</p>
+              <p data-i18n="f5.d">Шейдерные эффекты и переходы, анимированные оверлеи и фоны, стикеры, стабилизация, «картинка в картинке» и свои моды на GLSL.</p>
             </article>
             <article class="card">
               <div class="card-icon">
@@ -115,6 +119,27 @@
               </div>
               <h3 data-i18n="f6.t">Быстрый экспорт</h3>
               <p data-i18n="f6.d">Аппаратное кодирование NVENC, Quick Sync и AMF. MP4, WebM, ProRes, GIF — до 4K.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3.5 9h17M3.5 15h17M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" /></svg>
+              </div>
+              <h3 data-i18n="f7.t">Онлайн-библиотека</h3>
+              <p data-i18n="f7.d">Бесплатные видео, фото, музыка и звуки прямо в программе — с авторами и лицензиями, которые сохраняются в проекте.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M4 7V5h16v2M9 19h6M12 5v14" /></svg>
+              </div>
+              <h3 data-i18n="f8.t">Титры и шрифты</h3>
+              <p data-i18n="f8.d">24 встроенных шрифта с кириллицей, 22 стиля титров, градиенты, обводки, тени и анимации появления.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 000 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 004-4c0-4.5-4-8-9-8z" /></svg>
+              </div>
+              <h3 data-i18n="f9.t">Под себя</h3>
+              <p data-i18n="f9.d">Пять тем, включая светлую, любой цвет акцента, масштаб интерфейса. Украинский, русский и английский языки.</p>
             </article>
           </div>
           <figure class="shot shot-wide">
@@ -134,7 +159,7 @@
             </p>
             <p data-i18n="free.p2">
               Исходный код открыт под лицензией MIT: его можно проверить, изменить и собрать самому. Программа не собирает данные и работает без
-              интернета — сеть нужна только один раз, чтобы скачать ИИ-модели.
+              интернета — сеть нужна только один раз, чтобы скачать ИИ-модели, и для онлайн-библиотеки.
             </p>
           </div>
           <table class="compare">
@@ -203,7 +228,7 @@
           </details>
           <details>
             <summary data-i18n="q3">Нужен ли интернет?</summary>
-            <p data-i18n="a3">Нет. Только при первом использовании ИИ-функций программа один раз скачивает модели (от 40 до 250 МБ).</p>
+            <p data-i18n="a3">Нет. Только при первом использовании ИИ-функций программа один раз скачивает модели (от 40 до 250 МБ), а онлайн-библиотека, конечно, работает через сеть.</p>
           </details>
           <details>
             <summary data-i18n="q4">Какие системы поддерживаются?</summary>
@@ -215,7 +240,7 @@
           </details>
           <details>
             <summary data-i18n="q6">Как сделать свой эффект?</summary>
-            <p data-i18n="a6">Эффекты и переходы пишутся на GLSL в файлах .vrmod. Инструкция — в MODS.md в репозитории.</p>
+            <p data-i18n="a6">Эффекты, переходы и анимированные элементы пишутся на GLSL в файлах .vrmod. Инструкция — в MODS.md в репозитории.</p>
           </details>
         </div>
       </section>

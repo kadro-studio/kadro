@@ -12,6 +12,7 @@ import { Compositor, type TexSource } from './gl';
 import { buildItems, type SourceProvider } from './items';
 import { onLutLoaded } from './lut';
 import { feedScopes } from './scopes';
+import { onFontsLoaded } from './fonts';
 
 interface MediaEl {
   el: HTMLMediaElement;
@@ -69,11 +70,13 @@ class Player implements SourceProvider {
       this.requestRender();
     });
     const unsubLut = onLutLoaded(() => this.requestRender());
+    const unsubFonts = onFontsLoaded(() => this.requestRender());
     const unsubEditor = this.unsub;
     this.unsub = () => {
       unsubEditor();
       unsubPrefs();
       unsubLut();
+      unsubFonts();
     };
     this.requestRender();
   }

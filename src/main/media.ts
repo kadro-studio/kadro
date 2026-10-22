@@ -414,6 +414,25 @@ export async function denoise(file: string, opts: DenoiseOptions, onProgress: (p
   return out;
 }
 
+/**
+ * Shot changes in a source range, as seconds from `start`. Frames are scored
+ * on a small copy, which is plenty for cut detection and several times faster.
+ */
+export async function detectScenes(file: string, start: number, duration: number, threshold: number): Promise<number[]> {
+  const t = Math.min(0.9, Math.max(0.05, threshold));
+  const r = await run(ffmpegPath(), [
+    '-hide_banner', '-nostats',
+    '-ss', Math.max(0, start).toFixed(6), '-t', Math.max(0.1, duration).toFixed(6), '-i', file,
+    '-an', '-sn', '-vf', `scale=320:-2,select='gt(scene,${t})',showinfo`, '-f', 'null', '-',
+  ]);
+  if (r.code !== 0 && !r.stderr.includes('pts_time')) throw new Error(tailLog(r.stderr) || 'Scene detection failed');
+  const times: number[] = [];
+  const re = /pts_time:([\d.]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(r.stderr))) times.push(Number(m[1]));
+  return times.filter((x) => x > 0.2 && x < duration - 0.2);
+}
+
 /** EBU R128 integrated loudness (LUFS) and true peak (dBTP) of a source range. */
 export async function measureLoudness(file: string, start: number, duration: number): Promise<Loudness> {
   const r = await run(ffmpegPath(), [

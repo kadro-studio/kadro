@@ -4,9 +4,32 @@ export type { MediaKind };
 
 export type TrackKind = 'video' | 'audio';
 /** 'adjustment' applies its effects and colour to everything below it; 'shape' is a vector graphic. */
-export type ClipType = 'video' | 'audio' | 'image' | 'text' | 'color' | 'adjustment' | 'shape';
+export type ClipType = 'video' | 'audio' | 'image' | 'text' | 'color' | 'adjustment' | 'shape' | 'overlay';
 
-export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'star' | 'arrow' | 'line' | 'bubble';
+export type ShapeKind =
+  | 'rect'
+  | 'ellipse'
+  | 'triangle'
+  | 'star'
+  | 'arrow'
+  | 'line'
+  | 'bubble'
+  | 'pill'
+  | 'heart'
+  | 'burst'
+  | 'hexagon'
+  | 'ring'
+  | 'check'
+  | 'cross';
+
+/** Procedural animated element (overlay or background) drawn by a generator shader. */
+export interface OverlayStyle {
+  /** Generator definition id. */
+  id: string;
+  params: Record<string, number>;
+  colorA: string;
+  colorB: string;
+}
 
 export interface ShapeStyle {
   kind: ShapeKind;
@@ -35,7 +58,44 @@ export interface ColorWheels {
   gamma: Wheel;
   gain: Wheel;
 }
-export type BlendMode = 'normal' | 'add' | 'multiply' | 'screen';
+export type BlendMode =
+  | 'normal'
+  | 'add'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'softLight'
+  | 'hardLight'
+  | 'darken'
+  | 'lighten'
+  | 'difference'
+  | 'exclusion'
+  | 'colorDodge'
+  | 'colorBurn'
+  | 'linearBurn'
+  | 'hue'
+  | 'saturation'
+  | 'color'
+  | 'luminosity';
+
+/** Curve control point, both axes 0..1. */
+export interface CurvePoint {
+  x: number;
+  y: number;
+}
+
+/** Tone curves: master first, then per channel. */
+export interface Curves {
+  master: CurvePoint[];
+  r: CurvePoint[];
+  g: CurvePoint[];
+  b: CurvePoint[];
+}
+
+export type HslBand = 'red' | 'orange' | 'yellow' | 'green' | 'aqua' | 'blue' | 'purple' | 'magenta';
+
+/** Per-colour-range hue / saturation / lightness shifts, -100..100. */
+export type HslAdjust = Record<HslBand, { h: number; s: number; l: number }>;
 export type Ease = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'hold';
 export type AnimProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity' | 'volume';
 
@@ -152,10 +212,10 @@ export interface ClipEffect {
   params: Record<string, number>;
 }
 
-/** Effect/transition definition embedded in a project (keeps mod-based projects portable). */
+/** Effect/transition/generator definition embedded in a project (keeps mod-based projects portable). */
 export interface EmbeddedFx {
   id: string;
-  kind: 'effect' | 'transition';
+  kind: 'effect' | 'transition' | 'generator';
   name: string;
   nameRu?: string;
   author?: string;
@@ -163,6 +223,9 @@ export interface EmbeddedFx {
   description?: string;
   params: { id: string; name: string; nameRu?: string; min: number; max: number; default: number; step?: number }[];
   glsl: string;
+  blend?: string;
+  colors?: [string, string];
+  category?: 'overlay' | 'background';
 }
 
 export type TextAlign = 'left' | 'center' | 'right';
@@ -187,6 +250,13 @@ export interface TextStyle {
   backgroundOpacity: number;
   backgroundPadding: number;
   backgroundRadius: number;
+  /** 100..900; when missing, derived from `bold`. */
+  weight?: number;
+  uppercase?: boolean;
+  /** Fill blends from `color` to `gradientColor` at `gradientAngle` degrees. */
+  gradient?: boolean;
+  gradientColor?: string;
+  gradientAngle?: number;
 }
 
 export interface Clip {
@@ -212,6 +282,8 @@ export interface Clip {
   lut: ClipLut | null;
   chroma: ChromaKey;
   blend: BlendMode;
+  curves: Curves | null;
+  hsl: HslAdjust | null;
   animIn: ClipAnim;
   animOut: ClipAnim;
   /** Transition from the previous clip on the same track into this one. */
@@ -226,6 +298,7 @@ export interface Clip {
 
   text: TextStyle | null;
   shape: ShapeStyle | null;
+  overlay: OverlayStyle | null;
   color: string;
 }
 
@@ -274,6 +347,18 @@ export interface MediaAsset {
   colorSpace?: string | null;
   /** Transparent video (e.g. AI background removal results). */
   hasAlpha?: boolean;
+  /** Author and licence of media taken from the online library. */
+  credit?: MediaCredit;
+}
+
+export interface MediaCredit {
+  title: string;
+  author: string;
+  license: string;
+  licenseUrl?: string;
+  sourceUrl: string;
+  attribution: string;
+  provider: string;
 }
 
 export interface Project {

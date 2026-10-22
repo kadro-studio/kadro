@@ -60,6 +60,68 @@ export function frameBytes(width: number, height: number, format: DecoderSpec['f
   return (width * height * 3) / 2;
 }
 
+export type LibraryKind = 'video' | 'image' | 'audio';
+export type LibraryProvider = 'openverse' | 'commons' | 'pexels' | 'pixabay';
+
+export interface LibrarySearch {
+  provider: LibraryProvider;
+  kind: LibraryKind;
+  query: string;
+  page: number;
+  /** Openverse audio: 'music' or 'sound_effect'. */
+  audioCategory?: string;
+  keys?: { pexels?: string; pixabay?: string };
+}
+
+/** A search result with everything needed to credit the author. */
+export interface LibraryItem {
+  id: string;
+  provider: LibraryProvider;
+  kind: LibraryKind;
+  title: string;
+  thumb: string;
+  /** Small playable file for hover previews (video) or listening (audio). */
+  preview?: string;
+  downloadUrl: string;
+  ext: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  size?: number;
+  author: string;
+  authorUrl?: string;
+  license: string;
+  licenseUrl?: string;
+  sourceUrl: string;
+  attribution: string;
+  /** Original site behind an aggregator (e.g. flickr, jamendo). */
+  origin?: string;
+}
+
+export interface LibraryResult {
+  items: LibraryItem[];
+  hasMore: boolean;
+}
+
+export type StorageKind = 'cache' | 'library' | 'models';
+
+export interface StorageInfo {
+  /** The app's data folder. */
+  root: string;
+  /** Bytes used by thumbnails, waveforms, proxies and processed copies. */
+  cache: number;
+  /** Bytes of files downloaded from the online library. */
+  library: number;
+  /** Bytes of downloaded AI models. */
+  models: number;
+}
+
+export interface Appearance {
+  titleBarColor: string;
+  symbolColor: string;
+  zoom: number;
+}
+
 export interface StabilizeOptions {
   /** 0..100: how strongly camera motion is smoothed. */
   smoothing: number;
@@ -229,7 +291,12 @@ export interface VrApi {
   /** Copy of a file with denoised audio (cached); progress is reported under `taskId`. */
   denoise(path: string, opts: DenoiseOptions, taskId: string): Promise<string>;
   measureLoudness(path: string, start: number, duration: number): Promise<Loudness>;
+  /** Shot changes in a source range (seconds from start); threshold 0..1. */
+  detectScenes(path: string, start: number, duration: number, threshold: number): Promise<number[]>;
   onTaskProgress(cb: (taskId: string, progress: number) => void): () => void;
+  searchLibrary(q: LibrarySearch): Promise<LibraryResult>;
+  /** Downloads a library item into the cache (once); progress under `taskId`. */
+  downloadLibraryItem(item: LibraryItem, taskId: string): Promise<string>;
   /** Mono 16 kHz float samples of a source range (speech recognition). */
   readPcm(path: string, start: number, duration: number): Promise<Float32Array>;
   /** Fresh file path in the app's work folder, e.g. for AI results. */
@@ -262,8 +329,16 @@ export interface VrApi {
 
   setDirty(dirty: boolean, prompt: ClosePrompt): void;
   setTitle(title: string): void;
+  /** Title-bar colours (native caption buttons) and interface zoom. */
+  setAppearance(a: Appearance): void;
+  /** The window is closing with unsaved changes; the page asks the user. */
+  onCloseRequest(cb: () => void): () => void;
+  /** Close the window now, without asking again. */
+  closeNow(): void;
   showItemInFolder(path: string): void;
   appInfo(): Promise<AppInfo>;
+  storageInfo(): Promise<StorageInfo>;
+  clearStorage(kind: StorageKind): Promise<void>;
   /** Project file the app was started with (once), e.g. from Explorer. */
   takeOpenFile(): Promise<string | null>;
   /** Project files opened while the app is already running. */

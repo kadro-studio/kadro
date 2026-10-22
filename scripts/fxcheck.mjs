@@ -10,7 +10,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const outDir = path.resolve(process.argv[2] ?? 'fxcheck-out');
 fs.mkdirSync(outDir, { recursive: true });
 
-const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, VR_DEV_SERVER_URL: '' } });
+const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, VR_DEV_SERVER_URL: '', KADRO_USER_DATA: path.join(outDir, 'profile') } });
 const win = await app.firstWindow();
 win.on('pageerror', (e) => console.log('[pageerror]', e.message));
 await win.waitForSelector('.timeline');
@@ -26,7 +26,7 @@ const result = await win.evaluate(async () => {
   const defs = Object.values(useFx.getState().defs);
   const rows = [];
   for (const def of defs) {
-    const url = fxThumbnail(def);
+    const url = await fxThumbnail(def);
     rows.push({ id: def.id, kind: def.kind, source: def.source, ok: !!url, url });
   }
   return { rows, errors: useFx.getState().errors, catalogErrors: mods.filter((m) => m.error).map((m) => `${m.fileName}: ${m.error}`) };
