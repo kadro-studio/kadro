@@ -194,6 +194,7 @@ export function menus(): MenuDef[] {
           { label: t('menu.open'), shortcut: sc('openProject'), onClick: () => void openProjectFile() },
           { label: t('menu.save'), shortcut: sc('save'), onClick: () => void saveProject() },
           { label: t('menu.saveAs'), shortcut: sc('saveAs'), onClick: () => void saveProject(true) },
+          { label: `${t('tpl.title')}…`, onClick: () => openDialog('templates') },
           ...recentItems,
           { separator: true },
           { label: t('menu.import'), shortcut: sc('import'), onClick: () => void importViaDialog() },

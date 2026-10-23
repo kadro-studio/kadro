@@ -1,11 +1,11 @@
 // Thumbnails for effect, transition and filter cards: the real shader or
 // colour preset applied to sample photos, so mods get previews for free.
 import { effectiveAdjust } from '../../core/effects';
-import { createProject, makeClip, makeTrack } from '../../core/project';
-import type { Clip } from '../../core/types';
+import { createProject, makeClip, makeTrack, mediaMap } from '../../core/project';
+import type { Clip, Project } from '../../core/types';
 import { buildItems } from '../items';
 import { loadLut } from '../lut';
-import type { LayerPlan } from '../../core/scene';
+import { resolveScene, type LayerPlan } from '../../core/scene';
 import { Compositor, hexToRgb, type DrawItem } from '../gl';
 import { loadSample, sampleIfLoaded, type SampleId } from '../samples';
 import { paramValues } from './registry';
@@ -184,6 +184,42 @@ export async function lookThumbnail(look: Pick<Clip, 'adjust' | 'wheels' | 'curv
   } catch (e) {
     console.warn('Look thumbnail failed', e);
     return null;
+  }
+}
+
+const TPL_W = 480;
+const TPL_H = 270;
+
+/**
+ * One frame of a project (a template with its slots drawn as placeholders),
+ * fitted into a 16:9 picture. Media that is not a slot is left out.
+ */
+export function projectThumbnail(project: Project, at: number): string | null {
+  const key = `tpl:${at}:${JSON.stringify(project)}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const { width: PW, height: PH } = project.settings;
+  const k = Math.min(TPL_W / PW, TPL_H / PH);
+  const comp = new Compositor(document.createElement('canvas'), { preserve: true });
+  try {
+    const media = mediaMap(project);
+    comp.resize(Math.max(2, Math.round(PW * k)), Math.max(2, Math.round(PH * k)));
+    comp.render(buildItems(project, resolveScene(project, at, media), media, { source: () => null }, k, 'tpl:'), project.settings);
+    const out = document.createElement('canvas');
+    out.width = TPL_W;
+    out.height = TPL_H;
+    const g = out.getContext('2d')!;
+    g.fillStyle = '#121318';
+    g.fillRect(0, 0, TPL_W, TPL_H);
+    g.drawImage(comp.canvas, (TPL_W - comp.canvas.width) / 2, (TPL_H - comp.canvas.height) / 2);
+    const url = out.toDataURL('image/jpeg', 0.86);
+    cache.set(key, url);
+    return url;
+  } catch (e) {
+    console.warn('Template thumbnail failed', e);
+    return null;
+  } finally {
+    comp.dispose();
   }
 }
 

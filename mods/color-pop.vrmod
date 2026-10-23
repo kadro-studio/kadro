@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "id": "kadro.color-pop",
+  "kind": "effect",
+  "name": "Color pop",
+  "nameRu": "Цветовой акцент",
+  "nameUk": "Колірний акцент",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "Keeps one colour; everything else turns black and white.",
+  "descriptionRu": "Оставляет один цвет, остальное — чёрно-белое.",
+  "descriptionUk": "Залишає один колір, решта — чорно-біла.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "hue",
+      "name": "Kept hue",
+      "nameRu": "Оставляемый оттенок",
+      "nameUk": "Збережений відтінок",
+      "min": 0,
+      "max": 360,
+      "default": 0,
+      "step": 1
+    },
+    {
+      "id": "range",
+      "name": "Range",
+      "nameRu": "Диапазон",
+      "nameUk": "Діапазон",
+      "min": 5,
+      "max": 90,
+      "default": 28,
+      "step": 1
+    },
+    {
+      "id": "softness",
+      "name": "Softness",
+      "nameRu": "Мягкость",
+      "nameUk": "М’якість",
+      "min": 1,
+      "max": 40,
+      "default": 12,
+      "step": 1
+    }
+  ],
+  "glsl": "vec3 popHsv(vec3 c) {\n  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);\n  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));\n  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));\n  float d = q.x - min(q.w, q.y);\n  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x);\n}\nvec4 effect(vec2 uv) {\n  vec4 c = src(uv);\n  vec3 hsv = popHsv(c.rgb);\n  float dh = abs(hsv.x * 360.0 - hue);\n  dh = min(dh, 360.0 - dh);\n  float keep = (1.0 - smoothstep(range, range + softness, dh)) * smoothstep(0.08, 0.25, hsv.y);\n  c.rgb = mix(vec3(luma(c.rgb)), c.rgb, keep);\n  return c;\n}"
+}

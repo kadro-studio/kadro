@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Майстерня Kadro — ефекти, переходи, LUT і теми від спільноти</title>
+    <meta
+      name="description"
+      content="Безкоштовні ефекти, переходи, фільтри, LUT, стилі титрів і теми для відеоредактора Kadro від інших користувачів. Встановлюються в програму одним кліком."
+    />
+    <meta property="og:title" content="Майстерня Kadro" />
+    <meta property="og:description" content="Ефекти, переходи, фільтри, LUT і теми від спільноти Kadro." />
+    <meta property="og:image" content="https://kadro.studio/assets/screenshot-uk.webp" />
+    <meta property="og:url" content="https://kadro.studio/workshop/" />
+    <meta property="og:type" content="website" />
+    <link rel="canonical" href="https://kadro.studio/workshop/" />
+    <meta name="theme-color" content="#08080a" />
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="../styles.css?v=dev" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="../">
+          <img src="../assets/logo.png" alt="" width="30" height="30" />
+          <span>Kadro</span>
+        </a>
+        <nav class="nav-links">
+          <a href="../#features" data-i18n="nav.features">Можливості</a>
+          <a href="./" class="active" data-i18n="nav.workshop">Майстерня</a>
+          <a href="../#support" data-i18n="nav.support">Підтримати</a>
+          <a href="../#faq" data-i18n="nav.faq">Питання</a>
+        </nav>
+        <div class="nav-actions">
+          <select class="lang" id="lang" aria-label="Language">
+            <option value="uk">UA</option>
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+          <a class="btn btn-primary btn-sm" href="../#download" data-i18n="nav.download">Завантажити</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="ws-hero">
+        <div class="glow"></div>
+        <div class="wrap">
+          <h1 data-i18n="title">Майстерня спільноти</h1>
+          <p class="lead" data-i18n="lead">
+            Ефекти, переходи, фільтри, LUT, стилі титрів, теми й шаблони проєктів від користувачів Kadro. Знайдіть потрібне тут і встановіть у програму одним кліком.
+          </p>
+        </div>
+      </section>
+
+      <section class="ws-browse">
+        <div class="wrap">
+          <div class="ws-bar">
+            <div class="ws-kinds" id="kinds" role="tablist"></div>
+            <div class="ws-tools">
+              <input class="ws-search" id="search" type="search" data-i18n-placeholder="search" placeholder="Пошук" />
+              <select class="lang ws-sort" id="sort" aria-label="Sort">
+                <option value="popular" data-i18n="sort.popular">Популярні</option>
+                <option value="new" data-i18n="sort.new">Нові</option>
+                <option value="liked" data-i18n="sort.liked">Найбільше вподобань</option>
+              </select>
+            </div>
+          </div>
+          <div class="ws-items" id="items" aria-live="polite"></div>
+          <p class="ws-state" id="state"></p>
+          <div class="ws-more">
+            <button class="btn btn-ghost btn-sm" id="more" type="button" hidden data-i18n="more">Показати ще</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="share">
+        <div class="wrap">
+          <h2 data-i18n="share.title">Поділіться своїм</h2>
+          <p class="section-lead" data-i18n="share.lead">Публікувати можна прямо з програми — без файлів і ручного завантаження.</p>
+          <ol class="ws-steps">
+            <li data-i18n="share.1">Відкрийте вкладку «Майстерня» в Kadro й увійдіть через сайт майстерні.</li>
+            <li data-i18n="share.2">Натисніть «Опублікувати», виберіть ефект, фільтр, LUT, стиль титрів чи тему та додайте опис.</li>
+            <li data-i18n="share.3">Після перевірки модератором елемент з’явиться тут і в програмі в усіх користувачів.</li>
+          </ol>
+          <p class="hint" data-i18n="share.rules">
+            Публікуйте лише власні роботи або те, що дозволяє ліцензія автора. Ефекти з CapCut і TikTok переносити не можна — але схожий ефект завжди можна зробити самому.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="ws-dialog" id="details">
+      <form method="dialog" class="ws-close-form">
+        <button class="ws-close" type="submit" data-i18n-aria="close" aria-label="Закрити">×</button>
+      </form>
+      <div class="ws-detail" id="detail"></div>
+    </dialog>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div class="brand small">
+          <img src="../assets/logo.png" alt="" width="22" height="22" />
+          <span>Kadro</span>
+        </div>
+        <nav>
+          <a data-link="workshopSite" href="#" data-i18n="footer.site">Сайт майстерні</a>
+          <a data-link="source" href="#" data-i18n="footer.source">Вихідний код</a>
+          <a data-link="issues" href="#" data-i18n="footer.issues">Повідомити про помилку</a>
+        </nav>
+        <p data-i18n="footer.note">Кожен елемент належить своєму автору й поширюється під указаною ліцензією.</p>
+      </div>
+    </footer>
+
+    <script src="../config.js?v=dev"></script>
+    <script src="workshop.js?v=dev"></script>
+  </body>
+</html>

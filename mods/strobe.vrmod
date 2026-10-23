@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "id": "kadro.strobe",
+  "kind": "effect",
+  "name": "Strobe",
+  "nameRu": "Стробоскоп",
+  "nameUk": "Стробоскоп",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "White flashes in time with the music.",
+  "descriptionRu": "Белые вспышки в такт музыке.",
+  "descriptionUk": "Білі спалахи в такт музиці.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "bpm",
+      "name": "Tempo (BPM)",
+      "nameRu": "Темп (BPM)",
+      "nameUk": "Темп (BPM)",
+      "min": 40,
+      "max": 220,
+      "default": 120,
+      "step": 1
+    },
+    {
+      "id": "intensity",
+      "name": "Brightness",
+      "nameRu": "Яркость",
+      "nameUk": "Яскравість",
+      "min": 0,
+      "max": 1,
+      "default": 0.8,
+      "step": 0.01
+    },
+    {
+      "id": "decay",
+      "name": "Flash length",
+      "nameRu": "Длина вспышки",
+      "nameUk": "Тривалість спалаху",
+      "min": 0.02,
+      "max": 0.9,
+      "default": 0.25,
+      "step": 0.01
+    }
+  ],
+  "glsl": "vec4 effect(vec2 uv) {\n  float beat = fract(u_time * bpm / 60.0);\n  float f = intensity * (1.0 - smoothstep(0.0, decay, beat));\n  vec4 c = src(uv);\n  c.rgb = mix(c.rgb, vec3(1.0), f);\n  return c;\n}"
+}

@@ -16,7 +16,8 @@
     "smoke": "node scripts/smoke.mjs",
     "dist": "node scripts/font-notices.mjs && npm run build && node scripts/make-icon.mjs && electron-builder --win",
     "icon": "node scripts/make-icon.mjs",
-    "art": "node scripts/make-installer-art.mjs"
+    "art": "node scripts/make-installer-art.mjs",
+    "workshop:zip": "node scripts/pack-workshop.mjs"
   },
   "build": {
     "appId": "org.kadro.editor",
@@ -52,6 +53,18 @@
         "ext": "vrproj",
         "name": "Kadro project",
         "description": "Kadro video project",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "kadroitem",
+        "name": "Kadro workshop item",
+        "description": "Kadro filter, title style, theme or template",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "vrmod",
+        "name": "Kadro mod",
+        "description": "Kadro effect, transition or element",
         "icon": "build/icon.ico"
       }
     ],
@@ -100,7 +113,15 @@
     "portable": {
       "artifactName": "Kadro-${version}-portable.exe",
       "splashImage": "build/splash.bmp"
-    }
+    },
+    "protocols": [
+      {
+        "name": "Kadro",
+        "schemes": [
+          "kadro"
+        ]
+      }
+    ]
   },
   "dependencies": {
     "ffmpeg-static": "^5.3.0",

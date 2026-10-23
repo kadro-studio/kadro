@@ -4,9 +4,11 @@ import { drawFxFrame, filterThumbnail, fxThumbnail, lookThumbnail, THUMB_SIZE } 
 import { sampleUrl } from '../engine/samples';
 import { fxDescription, fxName, type FxDef } from '../engine/fx/types';
 import { ModsPanel } from './ModsPanel';
+import { WorkshopPanel } from './WorkshopPanel';
 import { LibraryPanel } from './LibraryPanel';
 import { mediaUrl } from '../../shared/api';
 import { FILTERS, TRANSITIONS } from '../core/effects';
+import { emptySlot } from '../core/project';
 import { TEXT_PRESETS } from '../core/textPresets';
 import { formatBytes, formatDuration } from '../core/time';
 import type { MediaAsset } from '../core/types';
@@ -24,7 +26,9 @@ import {
   addTextFromPreset,
   applyFilter,
   applyLookPreset,
+  applyLutToClips,
   applyTransition,
+  openDialog,
   setLeftTab,
 } from '../store/actions';
 import type { ShapeKind } from '../core/types';
@@ -34,6 +38,9 @@ import { openContextMenu, type MenuEntry } from '../ui/ContextMenu';
 import { Icon, type IconName } from '../ui/Icon';
 import { DND } from './dnd';
 import { deletePreset, renamePreset, usePresets, type Look, type PresetKind } from '../store/presets';
+import { addLutsViaDialog, removeLutFromLibrary, useLuts } from '../store/luts';
+import { fillSlotViaDialog } from '../store/templates';
+import type { LutFile } from '../../shared/api';
 
 const TABS: { id: LeftTab; icon: IconName; label: I18nKey }[] = [
   { id: 'media', icon: 'folder', label: 'tab.media' },
@@ -44,6 +51,7 @@ const TABS: { id: LeftTab; icon: IconName; label: I18nKey }[] = [
   { id: 'filters', icon: 'palette', label: 'tab.filters' },
   { id: 'elements', icon: 'shapes', label: 'tab.elements' },
   { id: 'mods', icon: 'layers', label: 'tab.mods' },
+  { id: 'workshop', icon: 'workshop', label: 'tab.workshop' },
 ];
 
 export function LeftPanel() {
@@ -71,6 +79,7 @@ export function LeftPanel() {
           {tab === 'filters' && <FiltersPanel />}
           {tab === 'elements' && <ElementsPanel />}
           {tab === 'mods' && <ModsPanel />}
+          {tab === 'workshop' && <WorkshopPanel />}
         </div>
       </div>
     </div>
@@ -84,6 +93,7 @@ function MediaPanel() {
   const media = useEditor((s) => s.project.media);
   const tracks = useEditor((s) => s.project.tracks);
   const used = useMemo(() => new Set(tracks.flatMap((tr) => tr.clips.map((c) => c.mediaId))), [tracks]);
+  const emptySlots = media.filter(emptySlot).length;
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -107,7 +117,20 @@ function MediaPanel() {
           <Icon name="import" size={16} />
           {t('media.import')}
         </button>
+        <button className="btn" onClick={() => openDialog('link')} title={t('link.title')}>
+          <Icon name="globe" size={16} />
+          {t('media.fromLink')}
+        </button>
       </div>
+      {emptySlots > 0 && (
+        <div className="tpl-banner">
+          <Icon name="layers" size={16} />
+          <span>{t('tpl.banner', { n: emptySlots })}</span>
+          <button className="btn small primary" onClick={() => openDialog('fillTemplate')}>
+            {t('tpl.fill')}
+          </button>
+        </div>
+      )}
       {media.length === 0 ? (
         <div className="dropzone">
           <Icon name="film" size={32} />
@@ -126,6 +149,35 @@ function MediaPanel() {
 }
 
 function MediaCard({ m, used }: { m: MediaAsset; used: boolean }) {
+  if (emptySlot(m)) return <SlotCard m={m} />;
+  return <FileCard m={m} used={used} />;
+}
+
+/** A template slot waiting for a file: shown with its number, filled on click. */
+function SlotCard({ m }: { m: MediaAsset }) {
+  const t = useT();
+  return (
+    <div className="media-card slot" onDoubleClick={() => void fillSlotViaDialog(m.id)} title={t('tpl.slotHint')}>
+      <div className="media-thumb slot">
+        <span>{m.slot!.index}</span>
+      </div>
+      <div className="media-badge">
+        <Icon name={m.kind === 'audio' ? 'music' : 'film'} size={11} />
+        {formatDuration(m.duration)}
+      </div>
+      <div className="media-info">
+        <div className="media-name">{m.name}</div>
+        <div className="media-meta">
+          <button className="link-btn" onClick={() => void fillSlotViaDialog(m.id)}>
+            {t('tpl.pick')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FileCard({ m, used }: { m: MediaAsset; used: boolean }) {
   const t = useT();
   const rt = useEditor((s) => s.runtime[m.id]);
   const icon: IconName = m.kind === 'audio' ? 'music' : m.kind === 'image' ? 'image' : 'film';
@@ -524,6 +576,62 @@ function LookThumb({ look }: { look: Look }) {
   return url ? <img src={url} alt="" className="fx-thumb" /> : <Icon name="palette" size={24} />;
 }
 
+/** A neutral look carrying only a LUT, for LUT previews. */
+function lutLook(lut: LutFile): Look {
+  return {
+    adjust: { exposure: 0, brightness: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, hue: 0, highlights: 0, shadows: 0, vignette: 0, blur: 0, sharpen: 0 },
+    wheels: { lift: { x: 0, y: 0, l: 0 }, gamma: { x: 0, y: 0, l: 0 }, gain: { x: 0, y: 0, l: 0 } },
+    curves: null,
+    hsl: null,
+    filter: { id: 'none', amount: 100 },
+    lut: { path: lut.path, name: lut.name, amount: 100 },
+    effects: [],
+  };
+}
+
+function MyLuts({ selection }: { selection: string[] }) {
+  const t = useT();
+  const luts = useLuts((s) => s.luts);
+  return (
+    <>
+      <div className="mods-section-title ws-row" style={{ marginBottom: 6 }}>
+        <span>{t('luts.title')}</span>
+        <span style={{ display: 'flex', gap: 4 }}>
+          <button className="btn small" onClick={() => void addLutsViaDialog()}>
+            <Icon name="plus" size={13} />
+            {t('luts.add')}
+          </button>
+          <button className="btn small" title={t('luts.folder')} onClick={() => api.openLutsFolder()}>
+            <Icon name="folder" size={13} />
+          </button>
+        </span>
+      </div>
+      {luts.length > 0 && (
+        <div className="preset-grid">
+          {luts.map((l) => (
+            <button
+              key={l.path}
+              className="preset-card"
+              onClick={() => void applyLutToClips(selection, l)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openContextMenu(e.clientX, e.clientY, [{ label: t('common.delete'), onClick: () => void removeLutFromLibrary(l) }]);
+              }}
+              title={l.name}
+            >
+              <div className="preset-visual">
+                <LookThumb look={lutLook(l)} />
+                <span className="fx-badge">LUT</span>
+              </div>
+              <div className="preset-label">{l.name}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function MyLooks({ selection }: { selection: string[] }) {
   const t = useT();
   const looks = usePresets((s) => s.looks);
@@ -567,6 +675,7 @@ function FiltersPanel() {
     <>
       <p className="panel-hint">{t('filters.hint')}</p>
       <MyLooks selection={selection} />
+      <MyLuts selection={selection} />
       <div className="preset-grid">
         {FILTERS.map((f) => (
           <button

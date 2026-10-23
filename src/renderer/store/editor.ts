@@ -8,7 +8,7 @@ import type { AutosaveData } from '../../shared/api';
 
 /** Timeline tools (Premiere-style): ripple/roll act on edges, slip/slide on clip bodies. */
 export type Tool = 'select' | 'forward' | 'ripple' | 'roll' | 'slip' | 'slide' | 'razor';
-export type LeftTab = 'media' | 'library' | 'text' | 'transitions' | 'effects' | 'filters' | 'elements' | 'mods';
+export type LeftTab = 'media' | 'library' | 'text' | 'transitions' | 'effects' | 'filters' | 'elements' | 'mods' | 'workshop';
 export type DialogKind =
   | null
   | 'export'
@@ -26,7 +26,12 @@ export type DialogKind =
   | 'scenes'
   | 'beats'
   | 'duck'
-  | 'credits';
+  | 'credits'
+  | 'shadertoy'
+  | 'publish'
+  | 'link'
+  | 'templates'
+  | 'fillTemplate';
 
 export interface Toast {
   id: number;

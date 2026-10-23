@@ -181,6 +181,11 @@ export function projectDuration(p: Project): number {
   return end;
 }
 
+/** A template slot that still waits for the user's file. */
+export function emptySlot(m: MediaAsset | undefined): boolean {
+  return !!m?.slot && !m.path;
+}
+
 export function mediaMap(p: Project): Map<string, MediaAsset> {
   return new Map(p.media.map((m) => [m.id, m]));
 }
@@ -254,7 +259,7 @@ export function normalizeProject(raw: unknown): Project {
   const src = (raw ?? {}) as Partial<Project>;
   const base = createProject(src.name ?? 'Untitled');
   const settings = { ...base.settings, ...(src.settings ?? {}) };
-  const media = Array.isArray(src.media) ? src.media.filter((m) => m && m.id && m.path) : [];
+  const media = Array.isArray(src.media) ? src.media.filter((m) => m && m.id && (m.path || m.slot)) : [];
   const tracks: Track[] = Array.isArray(src.tracks)
     ? src.tracks.map((t) => {
         const kind: TrackKind = t.kind === 'audio' ? 'audio' : 'video';

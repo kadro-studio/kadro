@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "id": "kadro.spin-blur",
+  "kind": "transition",
+  "name": "Spin blur",
+  "nameRu": "Вращение",
+  "nameUk": "Обертання",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "The frame spins with a blur into the next clip.",
+  "descriptionRu": "Кадр вращается с размытием в следующий клип.",
+  "descriptionUk": "Кадр обертається з розмиттям у наступний кліп.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "turns",
+      "name": "Turns",
+      "nameRu": "Обороты",
+      "nameUk": "Оберти",
+      "min": 0.25,
+      "max": 2,
+      "default": 1,
+      "step": 0.05
+    },
+    {
+      "id": "blur",
+      "name": "Motion blur",
+      "nameRu": "Размытие",
+      "nameUk": "Розмиття",
+      "min": 0,
+      "max": 1,
+      "default": 0.7,
+      "step": 0.01
+    }
+  ],
+  "glsl": "float easeInOut(float t) { return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0; }\nvec2 spinRot(vec2 v, float a) {\n  float s = sin(a);\n  float c = cos(a);\n  return vec2(c * v.x - s * v.y, s * v.x + c * v.y);\n}\nvec4 transition(vec2 uv) {\n  float e = easeInOut(progress);\n  float smear = blur * 0.6 * sin(progress * PI);\n  float zoom = 1.0 + 0.6 * sin(progress * PI);\n  vec2 asp = vec2(ratio, 1.0);\n  vec4 acc = vec4(0.0);\n  for (int i = 0; i < 16; i++) {\n    float a = e * turns * 2.0 * PI + (float(i) / 15.0 - 0.5) * smear;\n    vec2 q = spinRot((uv - 0.5) * asp, a) / asp * zoom + 0.5;\n    q = 1.0 - abs(1.0 - mod(q, 2.0));\n    acc += progress < 0.5 ? fromColor(q) : toColor(q);\n  }\n  return acc / 16.0;\n}"
+}

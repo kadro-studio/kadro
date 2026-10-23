@@ -76,6 +76,44 @@ export async function addFromLibrary(item: LibraryItem, onProgress: (p: number) 
   }
 }
 
+/**
+ * Downloads the user's own TikTok video once and adds it to the media bin.
+ * The source stays in the project's credits. Throws on failure.
+ */
+export async function addFromLink(url: string, onToolProgress: (p: number) => void, onProgress: (p: number) => void): Promise<MediaAsset | null> {
+  const taskId = `link-${++taskSeq}`;
+  const off = api.onTaskProgress((id, p) => {
+    if (id === taskId) onProgress(p);
+    else if (id === `${taskId}:tool`) onToolProgress(p);
+  });
+  try {
+    const video = await api.importLinkVideo(url, taskId);
+    const [asset] = await importFiles([video.path]);
+    if (!asset) return null;
+    const title = video.title.split(/\r?\n/)[0].trim().slice(0, 80) || `TikTok ${video.id}`;
+    const author = video.authorId ? `@${video.authorId}` : video.author;
+    const credit: MediaCredit = {
+      title,
+      author,
+      license: t('link.license'),
+      sourceUrl: video.url,
+      attribution: `${title} — ${author} (TikTok) ${video.url}`,
+      provider: 'tiktok',
+    };
+    edit((d) => {
+      const m = d.media.find((x) => x.id === asset.id);
+      if (m) {
+        m.credit = credit;
+        m.name = `${title}.mp4`;
+      }
+    });
+    toast(t('library.added', { name: title }), 'success');
+    return asset;
+  } finally {
+    off();
+  }
+}
+
 /** Credits of the library media used in the project, one line each. */
 export function creditsText(): string {
   const media = useEditor.getState().project.media.filter((m) => m.credit);

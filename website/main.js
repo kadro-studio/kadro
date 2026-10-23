@@ -4,6 +4,10 @@
 
   const EN = {
     'nav.features': 'Features',
+    'nav.workshop': 'Workshop',
+    'ws.title': 'Community workshop',
+    'ws.lead': 'Effects, transitions, filters, LUTs, title styles and themes from other users. They install into Kadro in one click, and you can publish your own straight from the app.',
+    'ws.open': 'Open the workshop',
     'nav.free': 'Free forever',
     'nav.support': 'Support',
     'nav.faq': 'FAQ',
@@ -86,6 +90,10 @@
   };
   const UK = {
     "nav.features": "Можливості",
+    "nav.workshop": "Майстерня",
+    "ws.title": "Майстерня спільноти",
+    "ws.lead": "Ефекти, переходи, фільтри, LUT, стилі титрів і теми від інших користувачів. Встановлюються в Kadro одним кліком, а свої можна опублікувати просто з програми.",
+    "ws.open": "Відкрити майстерню",
     "nav.free": "Безкоштовно назавжди",
     "nav.support": "Підтримати",
     "nav.faq": "Питання",

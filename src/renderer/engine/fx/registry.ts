@@ -45,6 +45,15 @@ export function reportFxError(id: string, message: string): void {
   useFx.setState((s) => ({ errors: { ...s.errors, [id]: message } }));
 }
 
+export function clearFxError(id: string): void {
+  if (!(id in useFx.getState().errors)) return;
+  useFx.setState((s) => {
+    const errors = { ...s.errors };
+    delete errors[id];
+    return { errors };
+  });
+}
+
 /** Parameter values of a definition in declaration order, filled with defaults. */
 export function paramValues(def: FxDef, values: Record<string, number> | undefined): number[] {
   return def.params.map((p) => {

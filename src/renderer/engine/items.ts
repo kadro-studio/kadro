@@ -3,6 +3,7 @@
 import { curvesActive, curvesTable, hslActive, hslVector } from '../core/curves';
 import { effectiveAdjust } from '../core/effects';
 import { contentSize } from '../core/geometry';
+import { emptySlot } from '../core/project';
 import type { LayerPlan } from '../core/scene';
 import type { ChromaKey, ClipEffect, ClipLut, ColorWheels, MediaAsset, Project, Wheel } from '../core/types';
 import type { FxDef } from './fx/types';
@@ -11,6 +12,7 @@ import { hexToRgb, type DrawItem, type TexSource } from './gl';
 import { getFx, paramValues } from './fx/registry';
 import { rasterizeText } from './text';
 import { rasterizeShape } from './shape';
+import { slotSource } from './slot';
 
 export interface SourceProvider {
   source(plan: LayerPlan, media: MediaAsset | undefined): TexSource | null;
@@ -65,7 +67,7 @@ export function buildItems(
       source = { key: 'solid', kind: 'color', width: W, height: H, version: 0, color: [...hexToRgb(clip.color), 1] };
     } else {
       const m = clip.mediaId ? media.get(clip.mediaId) : undefined;
-      source = provider.source(plan, m);
+      source = m && emptySlot(m) ? slotSource(m) : provider.source(plan, m);
       content = contentSize(clip, m, W, H);
     }
     if (!source) continue;

@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "id": "kadro.star-glint",
+  "kind": "effect",
+  "name": "Star glint",
+  "nameRu": "Звёздные блики",
+  "nameUk": "Зоряні відблиски",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "Bright spots sparkle with star rays.",
+  "descriptionRu": "Яркие точки сверкают лучами звёзд.",
+  "descriptionUk": "Яскраві точки виблискують зоряними променями.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "threshold",
+      "name": "Threshold",
+      "nameRu": "Порог",
+      "nameUk": "Поріг",
+      "min": 0.5,
+      "max": 1,
+      "default": 0.82,
+      "step": 0.01
+    },
+    {
+      "id": "size",
+      "name": "Ray length",
+      "nameRu": "Длина лучей",
+      "nameUk": "Довжина променів",
+      "min": 0.01,
+      "max": 0.2,
+      "default": 0.06,
+      "step": 0.005
+    },
+    {
+      "id": "intensity",
+      "name": "Brightness",
+      "nameRu": "Яркость",
+      "nameUk": "Яскравість",
+      "min": 0,
+      "max": 2,
+      "default": 0.9,
+      "step": 0.01
+    },
+    {
+      "id": "rotate",
+      "name": "Rotation",
+      "nameRu": "Поворот",
+      "nameUk": "Поворот",
+      "min": 0,
+      "max": 90,
+      "default": 0,
+      "step": 1
+    }
+  ],
+  "glsl": "vec3 glintBright(vec2 q) {\n  vec3 c = src(q).rgb;\n  return c * smoothstep(threshold, 1.0, luma(c));\n}\nvec4 effect(vec2 uv) {\n  vec4 c = src(uv);\n  vec3 acc = vec3(0.0);\n  float asp = u_size.y / u_size.x;\n  for (int d = 0; d < 4; d++) {\n    float a = float(d) * PI * 0.25 + radians(rotate);\n    vec2 dir = vec2(cos(a) * asp, sin(a));\n    for (int i = 1; i <= 8; i++) {\n      float f = float(i) / 8.0;\n      float w = (1.0 - f) * (1.0 - f);\n      acc += (glintBright(uv + dir * f * size) + glintBright(uv - dir * f * size)) * w;\n    }\n  }\n  c.rgb += acc / 12.0 * intensity;\n  return c;\n}"
+}

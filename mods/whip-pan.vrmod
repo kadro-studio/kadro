@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "id": "kadro.whip-pan",
+  "kind": "transition",
+  "name": "Whip pan",
+  "nameRu": "Резкая панорама",
+  "nameUk": "Різка панорама",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "A fast camera swipe with motion blur.",
+  "descriptionRu": "Быстрый взмах камеры с размытием движения.",
+  "descriptionUk": "Швидкий змах камери з розмиттям руху.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "direction",
+      "name": "Direction (0 left, 1 right, 2 up, 3 down)",
+      "nameRu": "Направление (0 влево, 1 вправо, 2 вверх, 3 вниз)",
+      "nameUk": "Напрямок (0 ліворуч, 1 праворуч, 2 вгору, 3 вниз)",
+      "min": 0,
+      "max": 3,
+      "default": 0,
+      "step": 1
+    },
+    {
+      "id": "blur",
+      "name": "Motion blur",
+      "nameRu": "Размытие",
+      "nameUk": "Розмиття",
+      "min": 0,
+      "max": 1,
+      "default": 0.8,
+      "step": 0.01
+    }
+  ],
+  "glsl": "float easeInOut(float t) { return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0; }\nvec2 whipDir() {\n  int d = int(direction + 0.5);\n  return d == 0 ? vec2(1.0, 0.0) : d == 1 ? vec2(-1.0, 0.0) : d == 2 ? vec2(0.0, -1.0) : vec2(0.0, 1.0);\n}\nvec4 whipStrip(vec2 w, vec2 dir) {\n  if (w.x >= 0.0 && w.x <= 1.0 && w.y >= 0.0 && w.y <= 1.0) return fromColor(w);\n  return toColor(clamp(w - dir, 0.0, 1.0));\n}\nvec4 transition(vec2 uv) {\n  vec2 dir = whipDir();\n  float e = easeInOut(progress);\n  float smear = blur * 0.35 * sin(progress * PI);\n  vec4 acc = vec4(0.0);\n  for (int i = 0; i < 16; i++) {\n    acc += whipStrip(uv + dir * (e + (float(i) / 15.0 - 0.5) * smear), dir);\n  }\n  return acc / 16.0;\n}"
+}

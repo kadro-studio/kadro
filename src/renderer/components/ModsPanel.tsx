@@ -3,6 +3,7 @@ import { useFx } from '../engine/fx/registry';
 import { fxDescription, fxName } from '../engine/fx/types';
 import { useLang, useT } from '../i18n';
 import { installMods, installModsViaDialog, uninstallMod, useMods, type ModEntry } from '../store/mods';
+import { openDialog } from '../store/actions';
 import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/controls';
 
@@ -35,6 +36,19 @@ function ModRow({ entry, action }: { entry: ModEntry; action: React.ReactNode })
           {def ? `${kind}${def.author ? ` · ${def.author}` : ''}${def.version ? ` · v${def.version}` : ''}` : entry.fileName}
         </div>
         {description && <div className="mod-meta">{description}</div>}
+        {def?.license && (
+          <div className="mod-meta">
+            {t('st.license')}: {def.license}
+            {def.sourceUrl && (
+              <>
+                {' · '}
+                <button className="link-btn" onClick={() => window.open(def.sourceUrl)}>
+                  {t('mods.source')}
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {(entry.error || compileError) && <div className="mod-error">{entry.error ?? compileError}</div>}
       </div>
       {action}
@@ -55,6 +69,10 @@ export function ModsPanel() {
         <button className="btn primary" onClick={() => void installModsViaDialog()}>
           <Icon name="import" size={16} />
           {t('mods.install')}
+        </button>
+        <button className="btn" onClick={() => openDialog('shadertoy')} title={t('st.title')}>
+          <Icon name="sparkles" size={16} />
+          Shadertoy…
         </button>
         <button className="btn" onClick={() => api.openModsFolder()}>
           <Icon name="folder" size={16} />

@@ -207,10 +207,13 @@ function OverlaySection({ clip, set }: { clip: Clip; set: Setter }) {
           onChange={(v, f) => set((c) => void (c.overlay!.params[p.id] = v), f)}
         />
       ))}
-      <div className="grid-2">
-        <ColorField label={t('p.colorA')} value={o.colorA} onChange={(v, f) => set((c) => void (c.overlay!.colorA = v), f)} />
-        <ColorField label={t('p.colorB')} value={o.colorB} onChange={(v, f) => set((c) => void (c.overlay!.colorB = v), f)} />
-      </div>
+      {/* Imported elements (e.g. from Shadertoy) do not use the two colours. */}
+      {def.colors && (
+        <div className="grid-2">
+          <ColorField label={t('p.colorA')} value={o.colorA} onChange={(v, f) => set((c) => void (c.overlay!.colorA = v), f)} />
+          <ColorField label={t('p.colorB')} value={o.colorB} onChange={(v, f) => set((c) => void (c.overlay!.colorB = v), f)} />
+        </div>
+      )}
     </Section>
   );
 }

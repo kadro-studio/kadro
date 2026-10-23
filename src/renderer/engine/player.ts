@@ -2,7 +2,7 @@
 // timeline clock, routes their sound through Web Audio (per-clip gain) and
 // draws each frame with the WebGL compositor.
 import { AUDIO_FX, mediaUrl } from '../../shared/api';
-import { clipEnd, mediaMap, projectDuration } from '../core/project';
+import { clipEnd, emptySlot, mediaMap, projectDuration } from '../core/project';
 import { clipGain, clipHasAudio, resolveScene, soloActive, type LayerPlan } from '../core/scene';
 import { snapToFrame } from '../core/time';
 import { previewPath, type Clip, type MediaAsset, type Project } from '../core/types';
@@ -413,13 +413,14 @@ class Player implements SourceProvider {
       const c = plan.clip;
       if (c.type !== 'video' || !c.mediaId) continue;
       const m = media.get(c.mediaId);
-      if (m) wanted.set(c.id, { clip: c, m, sourceTime: plan.sourceTime, active: true, gain: 0 });
+      // Template slots are drawn as placeholders, with nothing to play.
+      if (m && !emptySlot(m)) wanted.set(c.id, { clip: c, m, sourceTime: plan.sourceTime, active: true, gain: 0 });
     }
     for (const track of p.tracks) {
       for (const c of track.clips) {
         if (!c.mediaId || (c.type !== 'video' && c.type !== 'audio')) continue;
         const m = media.get(c.mediaId);
-        if (!m) continue;
+        if (!m || emptySlot(m)) continue;
         const inside = t >= c.start && t < clipEnd(c);
         if (inside && clipHasAudio(c, media)) {
           const local = t - c.start;

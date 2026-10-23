@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "id": "kadro.cinema-bars",
+  "kind": "effect",
+  "name": "Cinema bars",
+  "nameRu": "Кинополосы",
+  "nameUk": "Кіносмуги",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "Widescreen letterbox bars that slide in.",
+  "descriptionRu": "Широкоэкранные полосы, которые выезжают.",
+  "descriptionUk": "Широкоекранні смуги, що виїжджають.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "aspect",
+      "name": "Aspect ratio",
+      "nameRu": "Соотношение сторон",
+      "nameUk": "Співвідношення сторін",
+      "min": 1.5,
+      "max": 3,
+      "default": 2.39,
+      "step": 0.01
+    },
+    {
+      "id": "slideIn",
+      "name": "Slide-in time",
+      "nameRu": "Время появления",
+      "nameUk": "Час появи",
+      "min": 0,
+      "max": 3,
+      "default": 0.6,
+      "step": 0.05
+    }
+  ],
+  "glsl": "vec4 effect(vec2 uv) {\n  float frame = u_size.x / u_size.y;\n  float bar = max(0.0, (1.0 - frame / aspect) * 0.5);\n  float k = slideIn > 0.0 ? smoothstep(0.0, 1.0, u_time / slideIn) : 1.0;\n  float h = bar * k;\n  if (uv.y < h || uv.y > 1.0 - h) return vec4(0.0, 0.0, 0.0, 1.0);\n  return src(uv);\n}"
+}

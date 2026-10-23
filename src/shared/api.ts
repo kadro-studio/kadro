@@ -256,6 +256,112 @@ export interface AutosaveData {
   savedAt: number;
 }
 
+/** A Shadertoy shader fetched by id: the common and image passes joined. */
+export interface ShadertoyShader {
+  id: string;
+  name: string;
+  author: string;
+  description: string;
+  code: string;
+  /** Buffer/cubemap passes, which cannot be imported. */
+  buffers: number;
+  url: string;
+}
+
+/** A video downloaded once from a TikTok link. */
+export interface LinkVideo {
+  path: string;
+  id: string;
+  title: string;
+  author: string;
+  authorId: string;
+  url: string;
+}
+
+/** The downloader used for links (yt-dlp), fetched on first use. */
+export interface LinkToolStatus {
+  installed: boolean;
+  version: string | null;
+}
+
+/** A project template in the user's library (.kadroitem text). */
+export interface TemplateFile {
+  file: string;
+  path: string;
+  text: string;
+  modified: number;
+}
+
+/** A .cube file in the user's LUT library. */
+export interface LutFile {
+  file: string;
+  path: string;
+  name: string;
+}
+
+/** What the workshop shares. Mods are split by kind so they can be browsed separately. */
+export type WorkshopKind = 'effect' | 'transition' | 'element' | 'look' | 'textStyle' | 'lut' | 'theme' | 'template';
+
+export interface WorkshopQuery {
+  kind?: WorkshopKind;
+  search?: string;
+  sort?: 'popular' | 'new' | 'liked';
+  /** The signed-in user's own items, including those awaiting review. */
+  mine?: boolean;
+  page?: number;
+  perPage?: number;
+}
+
+export interface WorkshopItem {
+  id: number;
+  kind: WorkshopKind;
+  title: string;
+  description: string;
+  author: string;
+  version: string;
+  license: string;
+  tags: string[];
+  created: string;
+  updated: string;
+  downloads: number;
+  likes: number;
+  liked: boolean;
+  status: 'publish' | 'pending' | 'draft' | 'private' | 'trash';
+  fileName: string;
+  fileSize: number;
+  preview: string | null;
+  page: string;
+}
+
+export interface WorkshopPage {
+  items: WorkshopItem[];
+  total: number;
+  pages: number;
+}
+
+export interface WorkshopPublish {
+  kind: WorkshopKind;
+  title: string;
+  description: string;
+  version: string;
+  license: string;
+  tags: string[];
+  fileName: string;
+  file: Uint8Array;
+  /** JPEG preview rendered by the app. */
+  preview: Uint8Array | null;
+  /** Item to replace with a new version (own items only). */
+  updateId?: number;
+}
+
+export interface WorkshopAccount {
+  name: string;
+  login: string;
+  /** False when the stored password was rejected. */
+  valid: boolean;
+  offline?: boolean;
+}
+
 /** A font file in the user's fonts folder. */
 export interface FontFile {
   file: string;
@@ -336,6 +442,45 @@ export interface VrApi {
   removeMod(file: string): Promise<void>;
   openModsFolder(): void;
   openModsDialog(): Promise<string[]>;
+  /** Saves a mod given as text into the mods folder (returns the file path). */
+  installModText(fileName: string, text: string): Promise<string>;
+  fetchShadertoy(id: string, key: string): Promise<ShadertoyShader>;
+
+  linkToolStatus(): Promise<LinkToolStatus>;
+  /** Downloads the user's own TikTok video once; progress on taskId (video) and taskId:tool (first-use download of yt-dlp). */
+  importLinkVideo(url: string, taskId: string): Promise<LinkVideo>;
+
+  listLuts(): Promise<LutFile[]>;
+  /** Saves .cube text into the LUT library; returns the file path. */
+  installLutText(name: string, text: string): Promise<string>;
+  addLutFiles(paths: string[]): Promise<string[]>;
+  removeLut(file: string): Promise<void>;
+  openLutsFolder(): void;
+
+  listTemplates(): Promise<TemplateFile[]>;
+  /** Saves a template (.kadroitem text) into the library; returns the file path. */
+  saveTemplate(name: string, text: string): Promise<string>;
+  removeTemplate(file: string): Promise<void>;
+
+  workshopList(q: WorkshopQuery): Promise<WorkshopPage>;
+  workshopItem(id: number): Promise<WorkshopItem>;
+  workshopLike(id: number): Promise<{ likes: number; liked: boolean }>;
+  workshopDelete(id: number): Promise<void>;
+  workshopDownload(id: number): Promise<Uint8Array>;
+  workshopPublish(p: WorkshopPublish): Promise<WorkshopItem>;
+  workshopAccount(): Promise<WorkshopAccount | null>;
+  /** Opens the workshop site to approve Kadro; the result arrives with onWorkshopAuth. */
+  workshopSignIn(): void;
+  workshopSignOut(): void;
+  /** Stores a login and application password typed by the user. */
+  workshopSaveLogin(user: string, password: string): Promise<void>;
+  /** Opens a page of the workshop site in the browser. */
+  workshopOpen(route: string): void;
+  onWorkshopAuth(cb: (ok: boolean) => void): () => void;
+  /** kadro:// links other than sign-in (e.g. installing a workshop item from the site). */
+  onDeepLink(cb: (url: string) => void): () => void;
+  /** Delivers a kadro:// link the app was started with (once). */
+  takeLink(): Promise<void>;
 
   listFonts(): Promise<FontFile[]>;
   readFont(file: string): Promise<Uint8Array>;

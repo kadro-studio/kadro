@@ -33,6 +33,9 @@ export interface FxDef {
   descriptionUk?: string;
   author?: string;
   version?: string;
+  /** Licence and original page of imported definitions (e.g. Shadertoy). */
+  license?: string;
+  sourceUrl?: string;
   params: FxParam[];
   glsl: string;
   /** Where the definition came from (built-ins are not saved into projects). */
@@ -60,7 +63,7 @@ export function validateFxDef(raw: unknown): string | null {
   if (typeof d.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{1,63}$/i.test(d.id)) return 'invalid id';
   if (d.kind !== 'effect' && d.kind !== 'transition' && d.kind !== 'generator') return 'kind must be "effect", "transition" or "generator"';
   if (typeof d.name !== 'string' || !d.name.trim()) return 'missing name';
-  if (typeof d.glsl !== 'string' || d.glsl.length > 20000) return 'missing or too large glsl';
+  if (typeof d.glsl !== 'string' || d.glsl.length > 64000) return 'missing or too large glsl';
   const fnName = d.kind === 'effect' ? 'effect' : d.kind === 'transition' ? 'transition' : 'generate';
   if (!new RegExp(`vec4\\s+${fnName}\\s*\\(\\s*vec2\\s+\\w+\\s*\\)`).test(d.glsl)) return `glsl must define vec4 ${fnName}(vec2 uv)`;
   if (/#\s*(version|extension)/.test(d.glsl)) return '#version/#extension are not allowed';

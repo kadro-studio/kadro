@@ -62,6 +62,7 @@ function stillDuration(): number {
 }
 import { clearAutosave } from './autosave';
 import { getFx } from '../engine/fx/registry';
+import { loadLut } from '../engine/lut';
 import { registerProjectFx, withEmbeddedFx } from './fxProject';
 
 const st = () => useEditor.getState();
@@ -223,6 +224,26 @@ export async function applyLookPreset(clipIds: string[], presetId: string): Prom
   }
   await prepareLook(preset.look);
   updateClips(ids, (c) => applyLookTo(c, preset.look));
+}
+
+/** Puts a LUT from the library on clips. */
+export async function applyLutToClips(clipIds: string[], lut: { path: string; name: string }): Promise<void> {
+  const p = st().project;
+  const ids = clipIds.filter((id) => {
+    const f = findClip(p, id);
+    return f && f.clip.type !== 'audio' && !f.track.locked;
+  });
+  if (ids.length === 0) {
+    toast(t('toast.selectClipFirst'));
+    return;
+  }
+  if (!(await loadLut(lut.path))) {
+    toast(t('toast.lutFailed'), 'error');
+    return;
+  }
+  updateClips(ids, (c) => {
+    c.lut = { path: lut.path, name: lut.name, amount: 100 };
+  });
 }
 
 /** Adjustment layer: effects and colour on it apply to all tracks below. */

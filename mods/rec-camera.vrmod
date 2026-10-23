@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "id": "kadro.rec-camera",
+  "kind": "effect",
+  "name": "REC camera",
+  "nameRu": "Камера REC",
+  "nameUk": "Камера REC",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "A camcorder frame with a blinking REC sign.",
+  "descriptionRu": "Рамка видеокамеры с мигающим REC.",
+  "descriptionUk": "Рамка відеокамери з блимаючим REC.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "blink",
+      "name": "Blink rate",
+      "nameRu": "Частота мигания",
+      "nameUk": "Частота блимання",
+      "min": 0,
+      "max": 3,
+      "default": 1,
+      "step": 0.1
+    },
+    {
+      "id": "corners",
+      "name": "Corners",
+      "nameRu": "Уголки",
+      "nameUk": "Кутики",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "step": 1
+    },
+    {
+      "id": "thickness",
+      "name": "Line width",
+      "nameRu": "Толщина линий",
+      "nameUk": "Товщина ліній",
+      "min": 0.5,
+      "max": 3,
+      "default": 1,
+      "step": 0.1
+    }
+  ],
+  "glsl": "// 3x5 pixel glyphs, one bit per pixel from the top-left corner.\nfloat recGlyph(int code, vec2 g) {\n  if (g.x < 0.0 || g.y < 0.0 || g.x >= 3.0 || g.y >= 5.0) return 0.0;\n  int bit = 14 - (int(g.y) * 3 + int(g.x));\n  return float((code >> bit) & 1);\n}\nvec4 effect(vec2 uv) {\n  vec4 c = src(uv);\n  float asp = u_size.x / u_size.y;\n  vec2 q = vec2(uv.x * asp, 1.0 - uv.y);\n  vec2 edge = min(q, vec2(asp, 1.0) - q);\n  float m = 0.07;\n  float arm = 0.09;\n  float th = 0.006 * thickness;\n  float h = step(m, edge.x) * step(edge.x, m + arm) * step(m, edge.y) * step(edge.y, m + th);\n  float v = step(m, edge.y) * step(edge.y, m + arm) * step(m, edge.x) * step(edge.x, m + th);\n  float frame = max(h, v) * step(0.5, corners);\n  float on = blink > 0.0 ? step(0.5, fract(u_time * blink)) : 1.0;\n  float dotA = (1.0 - smoothstep(0.016, 0.019, distance(q, vec2(m + 0.05, m + 0.055)))) * on;\n  float cell = 0.009;\n  vec2 g = (q - vec2(m + 0.085, m + 0.055 - 2.5 * cell)) / cell;\n  float text = recGlyph(27565, g) + recGlyph(31143, g - vec2(4.0, 0.0)) + recGlyph(31015, g - vec2(8.0, 0.0));\n  c.rgb = mix(c.rgb, vec3(1.0), clamp(frame + text, 0.0, 1.0) * 0.92);\n  c.rgb = mix(c.rgb, vec3(1.0, 0.12, 0.1), dotA);\n  return c;\n}"
+}

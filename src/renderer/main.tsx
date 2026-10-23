@@ -26,6 +26,7 @@ import { loadUserFonts } from './store/userFonts';
 import * as presets from './store/presets';
 import * as userFonts from './store/userFonts';
 import * as keymap from './keymap';
+import * as templates from './store/templates';
 
 applyTheme(usePrefs.getState().theme);
 void loadUserFonts();
@@ -36,6 +37,7 @@ editor.loadProject(createProject(t('top.untitled')), null);
 (window as unknown as { __vrFx: unknown }).__vrFx = { ...fxRegistry, fxThumbnail };
 (window as unknown as { __vrMods: unknown }).__vrMods = mods;
 (window as unknown as { __vrAi: unknown }).__vrAi = { ...aiTasks, aiDevice };
+(window as unknown as { __vrTpl: unknown }).__vrTpl = templates;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

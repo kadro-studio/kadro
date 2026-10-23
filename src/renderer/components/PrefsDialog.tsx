@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { StorageInfo, StorageKind } from '../../shared/api';
 import { api } from '../api';
-import { useEditor } from '../store/editor';
+import { toast, useEditor } from '../store/editor';
 import { analyzeMedia } from '../store/media';
-import { confirmAction } from '../store/prompt';
+import { askText, confirmAction } from '../store/prompt';
+import { refreshAccount, signOut, useWorkshop } from '../store/workshop';
+import { themePreview } from '../workshop/items';
+import { uid } from '../core/project';
 import { setLang, useLang, useT, type I18nKey } from '../i18n';
 import { setPrefs, setTheme, usePrefs } from '../store/prefs';
 import { ACCENTS, SURFACES, type Corners } from '../store/theme';
@@ -98,6 +101,70 @@ function GeneralPage() {
 }
 
 /** The user's own things: presets, fonts and keyboard shortcuts. */
+/** Workshop account: browser sign-in, or a login and application password typed in. */
+function WorkshopAccountSection() {
+  const t = useT();
+  const account = useWorkshop((s) => s.account);
+  const [manual, setManual] = useState(false);
+  const [user, setUser] = useState('');
+  const [password, setPassword] = useState('');
+  const saveManual = async () => {
+    await api.workshopSaveLogin(user.trim(), password.trim());
+    setPassword('');
+    await refreshAccount();
+    const a = useWorkshop.getState().account;
+    if (a?.valid) {
+      setManual(false);
+      toast(t('ws.signedIn'), 'success');
+    } else toast(t('ws.signInFailed'), 'error');
+  };
+  return (
+    <>
+      <div className="mods-section-title">{t('tab.workshop')}</div>
+      <p className="panel-hint" style={{ margin: 0 }}>
+        {account ? (account.valid ? t('ws.signedInAs', { name: account.name }) : t('prefs.ws.invalid', { name: account.name })) : t('prefs.ws.signedOut')}
+      </p>
+      <div className="row" style={{ gap: 8 }}>
+        {account ? (
+          <button className="btn" onClick={signOut}>
+            {t('prefs.ws.signOut')}
+          </button>
+        ) : (
+          <button className="btn primary" onClick={() => api.workshopSignIn()}>
+            <Icon name="globe" size={16} />
+            {t('prefs.ws.signInBrowser')}
+          </button>
+        )}
+        {!account && (
+          <button className="btn" onClick={() => setManual(!manual)}>
+            {t('prefs.ws.manual')}
+          </button>
+        )}
+      </div>
+      {manual && !account && (
+        <div className="grid-2">
+          <div className="field">
+            <label className="field-label">{t('prefs.ws.login')}</label>
+            <input className="text-input" autoComplete="off" spellCheck={false} value={user} onChange={(e) => setUser(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field-label">{t('prefs.ws.appPassword')}</label>
+            <input className="text-input" type="password" autoComplete="off" spellCheck={false} value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          <p className="panel-hint" style={{ margin: 0, gridColumn: '1 / -1' }}>
+            {t('prefs.ws.manualHint')}
+          </p>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <button className="btn primary" disabled={!user.trim() || !password.trim()} onClick={() => void saveManual()}>
+              {t('ws.signIn')}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function MinePage() {
   const t = useT();
   const presets = usePresets((p) => p);
@@ -105,6 +172,7 @@ function MinePage() {
   const customKeys = usePrefs((p) => Object.keys(p.keymap).length);
   return (
     <>
+      <WorkshopAccountSection />
       <div className="mods-section-title">{t('prefs.mine.presets')}</div>
       <p className="panel-hint" style={{ margin: 0 }}>
         {t('prefs.mine.presetsCount', { text: presets.text.length, looks: presets.looks.length, exports: presets.exports.length })}
@@ -269,7 +337,41 @@ function AppearancePage() {
         <span className="field-label">{t('theme.calm')}</span>
         <input type="checkbox" className="switch" checked={theme.calm} onChange={(e) => setTheme({ calm: e.target.checked })} />
       </label>
+      <MyThemes />
     </>
+  );
+}
+
+/** Saved and workshop themes: apply with a click. */
+function MyThemes() {
+  const t = useT();
+  const themes = usePrefs((p) => p.myThemes);
+  const current = usePrefs((p) => p.theme);
+  const save = async () => {
+    const name = await askText({ title: t('theme.saveTitle'), value: t('theme.defaultName', { n: themes.length + 1 }), ok: t('common.save'), cancel: t('common.cancel') });
+    if (name?.trim()) setPrefs({ myThemes: [...themes, { id: uid(), name: name.trim(), theme: { ...current } }] });
+  };
+  return (
+    <div className="field">
+      <label className="field-label">{t('theme.mine')}</label>
+      <div className="my-themes">
+        {themes.map((x) => (
+          <div key={x.id} className="my-theme" title={x.name}>
+            <button className="my-theme-apply" onClick={() => setTheme(x.theme)}>
+              <img src={themePreview(x.theme)} alt="" />
+              <span>{x.name}</span>
+            </button>
+            <button className="my-theme-remove" title={t('common.delete')} onClick={() => setPrefs({ myThemes: themes.filter((y) => y.id !== x.id) })}>
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+        ))}
+        <button className="btn small" onClick={() => void save()}>
+          <Icon name="plus" size={13} />
+          {t('theme.saveCurrent')}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -290,7 +392,8 @@ function PerformancePage() {
   );
 }
 
-const KEY_SITES = { pexels: 'https://www.pexels.com/api/', pixabay: 'https://pixabay.com/api/docs/' } as const;
+const KEY_SITES = { pexels: 'https://www.pexels.com/api/', pixabay: 'https://pixabay.com/api/docs/', shadertoy: 'https://www.shadertoy.com/myapps' } as const;
+const KEY_NAMES = { pexels: 'Pexels', pixabay: 'Pixabay', shadertoy: 'Shadertoy' } as const;
 
 function LibraryPage() {
   const t = useT();
@@ -300,9 +403,9 @@ function LibraryPage() {
       <p className="panel-hint" style={{ margin: 0 }}>
         {t('prefs.libraryHint')}
       </p>
-      {(['pexels', 'pixabay'] as const).map((k) => (
+      {(['pexels', 'pixabay', 'shadertoy'] as const).map((k) => (
         <div className="field" key={k}>
-          <label className="field-label">{t('prefs.apiKey', { name: k === 'pexels' ? 'Pexels' : 'Pixabay' })}</label>
+          <label className="field-label">{t('prefs.apiKey', { name: KEY_NAMES[k] })}</label>
           <div className="file-row">
             <input
               className="text-input"

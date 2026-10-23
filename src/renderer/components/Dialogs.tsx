@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppInfo, AutosaveData, EncoderChoice, ExportFormat, ExportQuality, ExportResult, HwEncoder } from '../../shared/api';
 import { setPrefs, usePrefs } from '../store/prefs';
 import { restoreAutosave } from '../store/autosave';
-import { projectDuration } from '../core/project';
+import { emptySlot, projectDuration } from '../core/project';
 import { formatBytes, formatDuration } from '../core/time';
 import { AUDIO_ONLY, runExport, type CancelToken, type ExportProgress } from '../engine/exporter';
 import { player } from '../engine/player';
@@ -21,6 +21,10 @@ import { CreditsDialog, EnhanceDialog, PasteAttributesDialog, VoiceoverDialog, t
 const ENHANCE_KINDS: EnhanceKind[] = ['stabilize', 'denoise', 'loudness', 'scenes', 'beats', 'duck'];
 import { PrefsDialog } from './PrefsDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
+import { ShadertoyDialog } from './ShadertoyDialog';
+import { PublishDialog } from './PublishDialog';
+import { LinkImportDialog } from './LinkImportDialog';
+import { FillTemplateDialog, TemplatesDialog } from './TemplateDialogs';
 
 export function Dialogs() {
   const dialog = useEditor((s) => s.dialog);
@@ -37,6 +41,11 @@ export function Dialogs() {
   if (dialog === 'paste-attrs') return <PasteAttributesDialog onClose={close} />;
   if (dialog === 'voiceover') return <VoiceoverDialog onClose={close} />;
   if (dialog === 'credits') return <CreditsDialog onClose={close} />;
+  if (dialog === 'shadertoy') return <ShadertoyDialog onClose={close} />;
+  if (dialog === 'publish') return <PublishDialog onClose={close} />;
+  if (dialog === 'link') return <LinkImportDialog onClose={close} />;
+  if (dialog === 'templates') return <TemplatesDialog onClose={close} />;
+  if (dialog === 'fillTemplate') return <FillTemplateDialog onClose={close} />;
   if (dialog && ENHANCE_KINDS.includes(dialog as EnhanceKind)) return <EnhanceDialog kind={dialog as EnhanceKind} onClose={close} />;
   return null;
 }
@@ -272,6 +281,14 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
       }
     >
       {duration <= 0 && <div className="error-box">{t('export.empty')}</div>}
+      {project.media.some(emptySlot) && (
+        <p className="panel-hint" style={{ margin: 0 }}>
+          {t('export.emptySlots')}{' '}
+          <button className="link-btn" onClick={() => openDialog('fillTemplate')}>
+            {t('tpl.fill')}
+          </button>
+        </p>
+      )}
       <div className="field">
         <label className="field-label">{t('export.file')}</label>
         <div className="file-row">

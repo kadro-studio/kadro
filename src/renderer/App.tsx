@@ -9,13 +9,14 @@ import { Timeline } from './components/timeline/Timeline';
 import { api } from './api';
 import { APP_NAME } from '../shared/brand';
 import { useT, useLang } from './i18n';
-import { handleCloseRequest, openProjectFile, syncDirtyFlag } from './store/actions';
+import { handleCloseRequest, openProjectFile, setLeftTab, syncDirtyFlag } from './store/actions';
 import { PromptHost } from './components/PromptHost';
 import { TooltipHost } from './ui/Tooltip';
 import { isDirty, toast, useEditor } from './store/editor';
 import { importFiles, startProxyProgressListener } from './store/media';
 import { pendingRecovery, startAutosave } from './store/autosave';
 import { reloadMods } from './store/mods';
+import { handleWorkshopLink, initWorkshop, refreshAccount } from './store/workshop';
 import { ContextMenuHost } from './ui/ContextMenu';
 
 interface Layout {
@@ -97,11 +98,20 @@ export function App() {
     const stopAutosave = startAutosave();
     void reloadMods();
     void pendingRecovery().then((data) => data && useEditor.setState({ recovery: data }));
-    void api.takeOpenFile().then((file) => {
-      if (file) void openProjectFile(file);
-    });
-    const stopOpen = api.onOpenFile((file) => void openProjectFile(file));
+    // Project files open; workshop files (.kadroitem, .vrmod, .cube) install.
+    const openFile = (file: string) => void (/\.vrproj$/i.test(file) ? openProjectFile(file) : importFiles([file]));
+    void api.takeOpenFile().then((file) => file && openFile(file));
+    const stopOpen = api.onOpenFile(openFile);
     const stopClose = api.onCloseRequest(() => void handleCloseRequest());
+    void initWorkshop();
+    const stopAuth = api.onWorkshopAuth((ok) => {
+      toast(ok ? t('ws.signedIn') : t('ws.signInFailed'), ok ? 'success' : 'error');
+      void refreshAccount();
+    });
+    const stopLinks = api.onDeepLink((url) => {
+      if (handleWorkshopLink(url)) setLeftTab('workshop');
+    });
+    void api.takeLink();
     const onRejection = (e: PromiseRejectionEvent) => {
       console.error(e.reason);
       toast(t('toast.unexpected', { err: e.reason instanceof Error ? e.reason.message : String(e.reason) }), 'error');
@@ -114,6 +124,8 @@ export function App() {
       stopAutosave();
       stopOpen();
       stopClose();
+      stopAuth();
+      stopLinks();
     };
   }, [t]);
 

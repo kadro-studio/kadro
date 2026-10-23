@@ -65,3 +65,14 @@ export async function removeMod(file: string): Promise<void> {
 export function openModsFolder(): void {
   void shell.openPath(modsDir());
 }
+
+/** Saves a mod given as text (e.g. converted from Shadertoy) into the mods folder. */
+export async function installModText(fileName: string, text: string): Promise<string> {
+  const base = path.basename(fileName).replace(/[^A-Za-z0-9._-]/g, '_');
+  if (!base.toLowerCase().endsWith('.vrmod')) throw new Error('Not a mod file name');
+  if (Buffer.byteLength(text, 'utf8') > MAX_MOD_BYTES) throw new Error('Mod is too large');
+  JSON.parse(text);
+  const file = path.join(modsDir(), base);
+  await fs.promises.writeFile(file, text, 'utf8');
+  return file;
+}

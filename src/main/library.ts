@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import type { LibraryItem, LibraryKind, LibraryResult, LibrarySearch } from '../shared/api';
+import type { LibraryItem, LibraryKind, LibraryResult, LibrarySearch, ShadertoyShader } from '../shared/api';
 
 const UA = 'Kadro/0.1 (free open-source video editor)';
 const PAGE = 24;
@@ -16,7 +16,7 @@ async function getJson(url: string, headers: Record<string, string> = {}): Promi
   const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', ...headers }, signal: AbortSignal.timeout(20000) });
   if (!r.ok) {
     const body = await r.text().catch(() => '');
-    const detail = /"detail"s*:s*"([^"]+)/.exec(body)?.[1] ?? body.slice(0, 120);
+    const detail = /"detail"\s*:\s*"([^"]+)/.exec(body)?.[1] ?? body.slice(0, 120);
     // Key-based sources answer 401/403 for a wrong key.
     if ((r.status === 401 || r.status === 403) && headers.Authorization) throw new Error('API key rejected');
     if ((r.status === 401 || r.status === 403 || r.status === 400) && /key/i.test(url) && /key/i.test(detail)) throw new Error('API key rejected');
@@ -346,4 +346,38 @@ export async function downloadLibraryItem(item: LibraryItem, onProgress: (p: num
   }
   onProgress(1);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Shadertoy (one shader by id, with the user's free API key)
+
+interface StPass {
+  type: string;
+  name?: string;
+  code: string;
+}
+
+interface StResponse {
+  Error?: string;
+  Shader?: { info: { id: string; name: string; username: string; description?: string; tags?: string[] }; renderpass: StPass[] };
+}
+
+export async function fetchShadertoy(id: string, key: string): Promise<ShadertoyShader> {
+  if (!/^[A-Za-z0-9]{4,12}$/.test(id)) throw new Error('Invalid shader id');
+  const data = (await getJson(`https://www.shadertoy.com/api/v1/shaders/${id}?key=${encodeURIComponent(key)}`)) as StResponse;
+  if (data.Error || !data.Shader) throw new Error(data.Error ?? 'Shader not found');
+  const passes = data.Shader.renderpass;
+  const image = passes.find((p) => p.type === 'image');
+  if (!image) throw new Error('No image pass');
+  const common = passes.filter((p) => p.type === 'common').map((p) => p.code);
+  const info = data.Shader.info;
+  return {
+    id: info.id,
+    name: info.name,
+    author: info.username,
+    description: stripHtml(info.description).slice(0, 300),
+    code: [...common, image.code].join('\n'),
+    buffers: passes.filter((p) => p.type === 'buffer' || p.type === 'cubemap').length,
+    url: `https://www.shadertoy.com/view/${info.id}`,
+  };
 }

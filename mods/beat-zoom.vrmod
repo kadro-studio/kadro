@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "id": "kadro.beat-zoom",
+  "kind": "effect",
+  "name": "Beat zoom",
+  "nameRu": "Удар в ритм",
+  "nameUk": "Удар у ритм",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "Zooms in on every beat, like a bass drop.",
+  "descriptionRu": "Наезд на каждый бит, как на басовом ударе.",
+  "descriptionUk": "Наїзд на кожен біт, як на басовому ударі.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "bpm",
+      "name": "Tempo (BPM)",
+      "nameRu": "Темп (BPM)",
+      "nameUk": "Темп (BPM)",
+      "min": 40,
+      "max": 220,
+      "default": 120,
+      "step": 1
+    },
+    {
+      "id": "amount",
+      "name": "Strength",
+      "nameRu": "Сила",
+      "nameUk": "Сила",
+      "min": 0,
+      "max": 0.5,
+      "default": 0.14,
+      "step": 0.01
+    },
+    {
+      "id": "sharpness",
+      "name": "Snap",
+      "nameRu": "Резкость",
+      "nameUk": "Різкість",
+      "min": 1,
+      "max": 14,
+      "default": 6,
+      "step": 0.1
+    }
+  ],
+  "glsl": "vec4 effect(vec2 uv) {\n  float beat = fract(u_time * bpm / 60.0);\n  float k = amount * exp(-beat * sharpness);\n  return src(0.5 + (uv - 0.5) / (1.0 + k));\n}"
+}

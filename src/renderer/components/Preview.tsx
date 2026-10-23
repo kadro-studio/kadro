@@ -11,7 +11,7 @@ import { shortcutLabel, withShortcut } from '../keymap';
 import { commitPreview, previewEdit, select, toast, useEditor } from '../store/editor';
 import { setPrefs, usePrefs } from '../store/prefs';
 import { saveSnapshot, toggleLoop } from '../commands';
-import { openProjectFile } from '../store/actions';
+import { openDialog, openProjectFile } from '../store/actions';
 import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/controls';
 import { LevelMeter, ScopesPanel } from './Scopes';
@@ -97,6 +97,10 @@ export function Preview() {
                 <img className="empty-logo" src="./logo.png" alt="" draggable={false} />
                 <h3>{t('preview.emptyTitle')}</h3>
                 <div>{t('preview.emptyHint', { key: shortcutLabel('import') || '—' })}</div>
+                <button className="btn empty-template" onClick={() => openDialog('templates')}>
+                  <Icon name="layers" size={15} />
+                  {t('tpl.start')}
+                </button>
                 <RecentProjects />
               </div>
             </div>

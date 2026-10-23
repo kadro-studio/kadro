@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "id": "kadro.dreamy",
+  "kind": "effect",
+  "name": "Dreamy glow",
+  "nameRu": "Мечта",
+  "nameUk": "Мрія",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "A soft glow with a gentle warm haze.",
+  "descriptionRu": "Мягкое свечение с тёплой дымкой.",
+  "descriptionUk": "М’яке сяйво з теплим серпанком.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "amount",
+      "name": "Strength",
+      "nameRu": "Сила",
+      "nameUk": "Сила",
+      "min": 0,
+      "max": 1,
+      "default": 0.6,
+      "step": 0.01
+    },
+    {
+      "id": "radius",
+      "name": "Glow size",
+      "nameRu": "Размер свечения",
+      "nameUk": "Розмір сяйва",
+      "min": 1,
+      "max": 20,
+      "default": 8,
+      "step": 0.5
+    },
+    {
+      "id": "warmth",
+      "name": "Warmth",
+      "nameRu": "Теплота",
+      "nameUk": "Теплота",
+      "min": -1,
+      "max": 1,
+      "default": 0.3,
+      "step": 0.01
+    }
+  ],
+  "glsl": "vec4 effect(vec2 uv) {\n  vec4 c = src(uv);\n  vec3 blur = vec3(0.0);\n  for (int i = 0; i < 16; i++) {\n    float a = float(i) * 2.399963;\n    float r = sqrt(float(i) + 0.5) / 4.0;\n    blur += src(uv + vec2(cos(a), sin(a)) * r * radius * 4.0 / u_size).rgb;\n  }\n  blur /= 16.0;\n  vec3 soft = 1.0 - (1.0 - c.rgb) * (1.0 - blur * 0.8);\n  vec3 col = mix(c.rgb, soft, amount);\n  col = mix(col, vec3(luma(col)), amount * 0.15);\n  col += vec3(0.06, 0.02, -0.04) * warmth * amount;\n  c.rgb = clamp(col, 0.0, 1.0);\n  return c;\n}"
+}

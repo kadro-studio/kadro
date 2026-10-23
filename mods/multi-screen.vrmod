@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "id": "kadro.multi-screen",
+  "kind": "effect",
+  "name": "Multi-screen",
+  "nameRu": "Мультиэкран",
+  "nameUk": "Мультиекран",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "The clip repeated in a grid.",
+  "descriptionRu": "Клип повторяется сеткой.",
+  "descriptionUk": "Кліп повторюється сіткою.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "tiles",
+      "name": "Grid size",
+      "nameRu": "Размер сетки",
+      "nameUk": "Розмір сітки",
+      "min": 2,
+      "max": 6,
+      "default": 3,
+      "step": 1
+    },
+    {
+      "id": "gap",
+      "name": "Gap",
+      "nameRu": "Зазор",
+      "nameUk": "Проміжок",
+      "min": 0,
+      "max": 0.05,
+      "default": 0.01,
+      "step": 0.001
+    }
+  ],
+  "glsl": "vec4 effect(vec2 uv) {\n  float n = floor(tiles + 0.5);\n  vec2 cell = fract(uv * n);\n  vec2 g = vec2(gap * n) * vec2(u_size.y / u_size.x, 1.0) * 0.5;\n  if (any(lessThan(cell, g)) || any(greaterThan(cell, 1.0 - g))) return vec4(0.0, 0.0, 0.0, 1.0);\n  return src((cell - g) / (1.0 - 2.0 * g));\n}"
+}

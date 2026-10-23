@@ -21,7 +21,7 @@ export interface Prefs {
   showScopes: boolean;
   theme: ThemePrefs;
   /** Free API keys for optional library sources. */
-  libraryKeys: { pexels?: string; pixabay?: string };
+  libraryKeys: { pexels?: string; pixabay?: string; shadertoy?: string };
   /** Seconds for photos, titles and elements added to the timeline. */
   stillDuration: number;
   /** Scroll the timeline to keep the playhead in view during playback. */
@@ -30,6 +30,8 @@ export interface Prefs {
   loopPlayback: boolean;
   /** User keyboard shortcuts: command id -> combos (see keymap.ts). */
   keymap: Record<string, string[]>;
+  /** Saved and installed appearance themes. */
+  myThemes: { id: string; name: string; theme: ThemePrefs }[];
   recent: RecentProject[];
 }
 
@@ -47,6 +49,7 @@ const DEFAULTS: Prefs = {
   followPlayhead: true,
   loopPlayback: false,
   keymap: {},
+  myThemes: [],
   recent: [],
 };
 

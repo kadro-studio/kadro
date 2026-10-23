@@ -349,6 +349,13 @@ export interface MediaAsset {
   hasAlpha?: boolean;
   /** Author and licence of media taken from the online library. */
   credit?: MediaCredit;
+  /** Template slot: path is empty until the user picks a file; kept after filling so it can be replaced. */
+  slot?: TemplateSlot;
+}
+
+export interface TemplateSlot {
+  /** 1-based order in which slots are filled (first use on the timeline). */
+  index: number;
 }
 
 export interface MediaCredit {

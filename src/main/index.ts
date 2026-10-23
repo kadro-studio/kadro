@@ -8,7 +8,11 @@ import { ffmpegPath, ffmpegVersion, hwEncoders } from './ffmpeg';
 import * as autosave from './autosave';
 import * as mods from './mods';
 import * as fonts from './fonts';
+import * as luts from './luts';
+import * as workshop from './workshop';
 import * as library from './library';
+import * as tiktok from './tiktok';
+import * as templates from './templates';
 import * as storage from './storage';
 import { APP_NAME, TITLE_BAR_COLOR, TITLE_BAR_HEIGHT, TITLE_BAR_SYMBOLS } from '../shared/brand';
 import type {
@@ -25,6 +29,8 @@ import type {
   MediaKind,
   StabilizeOptions,
   StorageKind,
+  WorkshopPublish,
+  WorkshopQuery,
 } from '../shared/api';
 
 // Tests and automation can run against a throwaway profile.
@@ -63,21 +69,46 @@ function nativeClosePrompt(): void {
 let quitting = false;
 let rendererCrashed = false;
 
-/** A project file passed on the command line (opened from Explorer). */
-function projectArg(argv: string[]): string | null {
-  return argv.slice(1).find((a) => /\.vrproj$/i.test(a) && fs.existsSync(a)) ?? null;
+/** A project or workshop file passed on the command line (opened from Explorer). */
+function fileArg(argv: string[]): string | null {
+  return argv.slice(1).find((a) => /\.(vrproj|kadroitem|vrmod|cube)$/i.test(a) && fs.existsSync(a)) ?? null;
 }
-let pendingOpen = projectArg(process.argv);
+let pendingOpen = fileArg(process.argv);
+
+/** A kadro:// link (workshop sign-in, workshop item) passed by the browser. */
+function linkArg(argv: string[]): string | null {
+  return argv.slice(1).find((a) => /^kadro:\/\//i.test(a)) ?? null;
+}
+let pendingLink = linkArg(process.argv);
+
+/** Sign-in links are handled here (they carry the password); others go to the page. */
+function handleLink(url: string): void {
+  let host = '';
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return;
+  }
+  if (host === 'auth') {
+    const ok = workshop.acceptAuthRedirect(url);
+    win?.webContents.send('workshop:auth', ok);
+    return;
+  }
+  win?.webContents.send('app:deepLink', url);
+}
 
 // One window per installation: opening another project file hands it to the
 // running instance. Development runs (and tests) may start several copies.
 if (app.isPackaged && !app.requestSingleInstanceLock()) app.quit();
+if (app.isPackaged) app.setAsDefaultProtocolClient('kadro');
 app.on('second-instance', (_e, argv) => {
   if (!win || win.isDestroyed()) return;
   if (win.isMinimized()) win.restore();
   win.focus();
-  const file = projectArg(argv);
+  const file = fileArg(argv);
   if (file) win.webContents.send('app:openFile', file);
+  const link = linkArg(argv);
+  if (link) handleLink(link);
 });
 
 // ---------------------------------------------------------------------------
@@ -268,6 +299,12 @@ function registerIpc(): void {
   ipcMain.handle('mods:catalog', () => mods.listCatalog());
   ipcMain.handle('mods:install', (_e, paths: string[]) => mods.installMods(paths));
   ipcMain.handle('mods:remove', (_e, file: string) => mods.removeMod(file));
+  ipcMain.handle('mods:installText', (_e, fileName: string, text: string) => mods.installModText(fileName, text));
+  ipcMain.handle('shadertoy:fetch', (_e, id: string, key: string) => library.fetchShadertoy(id, key));
+  ipcMain.handle('link:toolStatus', () => tiktok.linkToolStatus());
+  ipcMain.handle('link:import', (e, url: string, taskId: string) =>
+    tiktok.importLinkVideo(url, taskProgress(e, `${taskId}:tool`), taskProgress(e, taskId)),
+  );
   ipcMain.on('mods:folder', () => mods.openModsFolder());
   ipcMain.handle('dialog:openMods', async () => {
     const r = await dialog.showOpenDialog(win!, {
@@ -322,6 +359,34 @@ function registerIpc(): void {
   ipcMain.on('app:toggleDevTools', () => win?.webContents.toggleDevTools());
   ipcMain.handle('app:storage', () => storage.storageInfo());
   ipcMain.handle('app:clearStorage', (_e, kind: StorageKind) => storage.clearStorage(kind));
+  ipcMain.handle('app:takeLink', () => {
+    const link = pendingLink;
+    pendingLink = null;
+    if (link) handleLink(link);
+  });
+  ipcMain.handle('luts:list', () => luts.listLuts());
+  ipcMain.handle('luts:installText', (_e, name: string, text: string) => luts.installLutText(name, text));
+  ipcMain.handle('luts:add', (_e, paths: string[]) => luts.addLutFiles(paths));
+  ipcMain.handle('luts:remove', (_e, file: string) => luts.removeLut(file));
+  ipcMain.on('luts:folder', () => luts.openLutsFolder());
+  ipcMain.handle('templates:list', () => templates.listTemplates());
+  ipcMain.handle('templates:save', (_e, name: string, text: string) => templates.saveTemplateText(name, text));
+  ipcMain.handle('templates:remove', (_e, file: string) => templates.removeTemplate(file));
+  ipcMain.handle('workshop:list', (_e, q: WorkshopQuery) => workshop.listItems(q));
+  ipcMain.handle('workshop:item', (_e, id: number) => workshop.getItem(id));
+  ipcMain.handle('workshop:like', (_e, id: number) => workshop.likeItem(id));
+  ipcMain.handle('workshop:delete', (_e, id: number) => workshop.deleteItem(id));
+  ipcMain.handle('workshop:download', (_e, id: number) => workshop.downloadItem(id));
+  ipcMain.handle('workshop:publish', (_e, p: WorkshopPublish) => workshop.publishItem(p));
+  ipcMain.handle('workshop:account', () => workshop.account());
+  ipcMain.handle('workshop:saveLogin', (_e, user: string, password: string) => workshop.saveAuth(user, password));
+  ipcMain.on('workshop:signIn', () => void shell.openExternal(workshop.authorizeUrl()));
+  ipcMain.on('workshop:signOut', () => workshop.clearAuth());
+  ipcMain.on('workshop:open', (_e, route: string) => {
+    // Pages of our own workshop site only.
+    const url = new URL(route, workshop.workshopSite() + '/');
+    if (url.origin === new URL(workshop.workshopSite()).origin) void shell.openExternal(url.toString());
+  });
   ipcMain.handle('app:takeOpenFile', () => {
     const file = pendingOpen;
     pendingOpen = null;

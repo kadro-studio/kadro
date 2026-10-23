@@ -59,6 +59,40 @@ const api: VrApi = {
   removeMod: (file) => ipcRenderer.invoke('mods:remove', file),
   openModsFolder: () => ipcRenderer.send('mods:folder'),
   openModsDialog: () => ipcRenderer.invoke('dialog:openMods'),
+  installModText: (fileName, text) => ipcRenderer.invoke('mods:installText', fileName, text),
+  fetchShadertoy: (id, key) => ipcRenderer.invoke('shadertoy:fetch', id, key),
+  linkToolStatus: () => ipcRenderer.invoke('link:toolStatus'),
+  importLinkVideo: (url, taskId) => ipcRenderer.invoke('link:import', url, taskId),
+  listLuts: () => ipcRenderer.invoke('luts:list'),
+  installLutText: (name, text) => ipcRenderer.invoke('luts:installText', name, text),
+  addLutFiles: (paths) => ipcRenderer.invoke('luts:add', paths),
+  removeLut: (file) => ipcRenderer.invoke('luts:remove', file),
+  openLutsFolder: () => ipcRenderer.send('luts:folder'),
+  listTemplates: () => ipcRenderer.invoke('templates:list'),
+  saveTemplate: (name, text) => ipcRenderer.invoke('templates:save', name, text),
+  removeTemplate: (file) => ipcRenderer.invoke('templates:remove', file),
+  workshopList: (q) => ipcRenderer.invoke('workshop:list', q),
+  workshopItem: (id) => ipcRenderer.invoke('workshop:item', id),
+  workshopLike: (id) => ipcRenderer.invoke('workshop:like', id),
+  workshopDelete: (id) => ipcRenderer.invoke('workshop:delete', id),
+  workshopDownload: (id) => ipcRenderer.invoke('workshop:download', id),
+  workshopPublish: (p) => ipcRenderer.invoke('workshop:publish', p),
+  workshopAccount: () => ipcRenderer.invoke('workshop:account'),
+  workshopSignIn: () => ipcRenderer.send('workshop:signIn'),
+  workshopSignOut: () => ipcRenderer.send('workshop:signOut'),
+  workshopSaveLogin: (user, password) => ipcRenderer.invoke('workshop:saveLogin', user, password),
+  workshopOpen: (route) => ipcRenderer.send('workshop:open', route),
+  onWorkshopAuth: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, ok: boolean) => cb(ok);
+    ipcRenderer.on('workshop:auth', listener);
+    return () => ipcRenderer.off('workshop:auth', listener);
+  },
+  onDeepLink: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, url: string) => cb(url);
+    ipcRenderer.on('app:deepLink', listener);
+    return () => ipcRenderer.off('app:deepLink', listener);
+  },
+  takeLink: () => ipcRenderer.invoke('app:takeLink'),
   listFonts: () => ipcRenderer.invoke('fonts:list'),
   readFont: (file) => ipcRenderer.invoke('fonts:read', file),
   installFonts: (paths) => ipcRenderer.invoke('fonts:install', paths),

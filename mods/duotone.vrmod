@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "id": "kadro.duotone",
+  "kind": "effect",
+  "name": "Duotone",
+  "nameRu": "Дуотон",
+  "nameUk": "Дуотон",
+  "author": "Kadro",
+  "version": "1.0.0",
+  "description": "A two-colour poster look.",
+  "descriptionRu": "Двухцветный постерный стиль.",
+  "descriptionUk": "Двоколірний постерний стиль.",
+  "tags": [
+    "trend"
+  ],
+  "params": [
+    {
+      "id": "hueDark",
+      "name": "Shadow hue",
+      "nameRu": "Оттенок теней",
+      "nameUk": "Відтінок тіней",
+      "min": 0,
+      "max": 360,
+      "default": 250,
+      "step": 1
+    },
+    {
+      "id": "hueLight",
+      "name": "Highlight hue",
+      "nameRu": "Оттенок светов",
+      "nameUk": "Відтінок світла",
+      "min": 0,
+      "max": 360,
+      "default": 40,
+      "step": 1
+    },
+    {
+      "id": "contrast",
+      "name": "Contrast",
+      "nameRu": "Контраст",
+      "nameUk": "Контраст",
+      "min": 0.5,
+      "max": 2,
+      "default": 1.15,
+      "step": 0.01
+    },
+    {
+      "id": "amount",
+      "name": "Strength",
+      "nameRu": "Сила",
+      "nameUk": "Сила",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "step": 0.01
+    }
+  ],
+  "glsl": "vec3 duoHue(float h) {\n  return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);\n}\nvec4 effect(vec2 uv) {\n  vec4 c = src(uv);\n  float l = clamp((luma(c.rgb) - 0.5) * contrast + 0.5, 0.0, 1.0);\n  vec3 dark = duoHue(hueDark / 360.0) * 0.3;\n  vec3 light = mix(duoHue(hueLight / 360.0), vec3(1.0), 0.45);\n  c.rgb = mix(c.rgb, mix(dark, light, l), amount);\n  return c;\n}"
+}
