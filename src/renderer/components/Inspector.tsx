@@ -1,6 +1,6 @@
 import type { Draft } from 'immer';
 import { ANIMATIONS, FILTERS, TRANSITIONS } from '../core/effects';
-import { fillScale } from '../core/geometry';
+import { fillScale, stretchOf } from '../core/geometry';
 import { isAnimated, keyframeAt, propValue, setPropAt, toggleKeyframe, clearKeyframes } from '../core/keyframes';
 import { defaultAdjust, defaultCrop, defaultTransform, defaultWheels, findClip, maxClipDuration, mediaMap, projectDuration } from '../core/project';
 import { setClipSpeed } from '../core/edit';
@@ -303,6 +303,14 @@ function TransformSection({ clip, m, local, project, set }: { clip: Clip; m: Med
         onChange={(v, f) => setProp('y', v, f)} keyframe={kfControl(clip, 'y', local, fps)} />
       <SliderField label={t('p.scale')} value={Math.round(prop('scale') * 1000) / 10} min={1} max={2000} softMax={400} step={1} unit="%" defaultValue={100}
         onChange={(v, f) => setProp('scale', v / 100, f)} keyframe={kfControl(clip, 'scale', local, fps)} />
+      {(clip.type === 'video' || clip.type === 'image') && (
+        <>
+          <SliderField label={t('p.stretchX')} value={Math.round(clip.transform.stretchX * 1000) / 10} min={5} max={1000} softMax={300} step={1} unit="%" defaultValue={100}
+            onChange={(v, f) => set((c) => void (c.transform.stretchX = v / 100), f)} />
+          <SliderField label={t('p.stretchY')} value={Math.round(clip.transform.stretchY * 1000) / 10} min={5} max={1000} softMax={300} step={1} unit="%" defaultValue={100}
+            onChange={(v, f) => set((c) => void (c.transform.stretchY = v / 100), f)} />
+        </>
+      )}
       <SliderField label={t('p.rotation')} value={prop('rotation')} min={-3600} max={3600} softMax={180} step={1} unit="°" defaultValue={0}
         onChange={(v, f) => setProp('rotation', v, f)} keyframe={kfControl(clip, 'rotation', local, fps)} />
       <SliderField label={t('p.opacity')} value={Math.round(prop('opacity') * 100)} min={0} max={100} step={1} unit="%" defaultValue={100}
@@ -313,7 +321,7 @@ function TransformSection({ clip, m, local, project, set }: { clip: Clip; m: Med
         </button>
         {m && (
           <button className="btn small" onClick={() => set((c) => {
-            setPropAt(c, 'scale', local, Math.round(fillScale(m, W, H) * 1000) / 1000, tol);
+            setPropAt(c, 'scale', local, Math.round(fillScale(m, W, H, stretchOf(c)) * 1000) / 1000, tol);
             setPropAt(c, 'x', local, 0, tol);
             setPropAt(c, 'y', local, 0, tol);
           }, true)}>

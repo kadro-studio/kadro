@@ -28,6 +28,8 @@ export interface Prefs {
   followPlayhead: boolean;
   /** Playback starts over at the end (of the in/out range when it is set). */
   loopPlayback: boolean;
+  /** Look for a new release on start (the installed version downloads it in the background). */
+  autoUpdate: boolean;
   /** User keyboard shortcuts: command id -> combos (see keymap.ts). */
   keymap: Record<string, string[]>;
   /** Saved and installed appearance themes. */
@@ -48,6 +50,7 @@ const DEFAULTS: Prefs = {
   stillDuration: 5,
   followPlayhead: true,
   loopPlayback: false,
+  autoUpdate: true,
   keymap: {},
   myThemes: [],
   recent: [],

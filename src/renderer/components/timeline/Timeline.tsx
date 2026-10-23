@@ -29,7 +29,7 @@ import {
   duplicateSelection,
   freezeFrame,
   openDialog,
-  paste,
+  pasteFromClipboard,
   removeMarker,
   renameMarker,
   updateMarker,
@@ -592,7 +592,7 @@ export function Timeline() {
       { label: t('ctx.split'), shortcut: sc('split'), onClick: () => splitAt(playheadInside ? s.playhead : at, [clip.id]) },
       { label: t('ctx.copy'), shortcut: sc('copy'), onClick: copySelection },
       { label: t('ctx.cut'), shortcut: sc('cut'), onClick: cutSelection },
-      { label: t('ctx.paste'), shortcut: sc('paste'), onClick: () => paste(at), disabled: !s.clipboard },
+      { label: t('ctx.paste'), shortcut: sc('paste'), onClick: () => void pasteFromClipboard(at) },
       { label: t('ctx.duplicate'), shortcut: sc('duplicate'), onClick: duplicateSelection },
       { label: `${t('menu.pasteAttrs')}…`, shortcut: sc('pasteAttrs'), onClick: () => openDialog('paste-attrs'), disabled: !s.clipboard },
     ];
@@ -647,7 +647,7 @@ export function Timeline() {
     const at = timeAt(e.clientX);
     const s = useEditor.getState();
     openContextMenu(e.clientX, e.clientY, [
-      { label: t('ctx.paste'), shortcut: sc('paste'), onClick: () => paste(at), disabled: !s.clipboard },
+      { label: t('ctx.paste'), shortcut: sc('paste'), onClick: () => void pasteFromClipboard(at) },
       { label: t('tl.marker'), onClick: () => addMarker(at) },
       { separator: true },
       { label: t('tl.addVideoTrack'), onClick: () => addTrack('video') },

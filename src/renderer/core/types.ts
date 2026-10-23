@@ -119,6 +119,9 @@ export interface Transform {
   opacity: number;
   flipH: boolean;
   flipV: boolean;
+  /** Width and height stretch of pictures (video, image) on top of scale; 1 keeps the proportions. */
+  stretchX: number;
+  stretchY: number;
 }
 
 /** Fractions (0..1) hidden from each edge. */

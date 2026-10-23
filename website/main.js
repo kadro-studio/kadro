@@ -76,7 +76,7 @@
     q2: 'Windows says “Windows protected your PC”. What do I do?',
     a2: 'That is how SmartScreen treats new programs without a paid code-signing certificate. Click “More info” → “Run anyway”. The source is open and you can build the installer yourself.',
     q3: 'Do I need the internet?',
-    a3: 'No. Only the first time you use an AI feature does the app download its model once (40–250 MB), and the online library of course needs a connection.',
+    a3: 'No. Only the first time you use an AI feature does the app download its model once (40–250 MB), and the online library and the workshop of course need a connection. On start Kadro checks whether a new version is out; you can turn that off in the settings.',
     q4: 'Which systems are supported?',
     a4: 'Windows 10 and 11 (64-bit). macOS and Linux builds are planned.',
     q5: 'Can I use it for commercial work?',
@@ -158,7 +158,7 @@
     "q2": "Windows пише «Систему Windows захищено». Що робити?",
     "a2": "Так SmartScreen реагує на нові програми без платного цифрового підпису. Натисніть «Докладніше» → «Усе одно запустити». Вихідний код відкритий, і інсталятор можна зібрати самостійно.",
     "q3": "Чи потрібен інтернет?",
-    "a3": "Ні. Лише під час першого використання ШІ-функцій програма один раз завантажує моделі (від 40 до 250 МБ), а онлайн-бібліотека, звісно, працює через мережу.",
+    "a3": "Ні. Лише під час першого використання ШІ-функцій програма один раз завантажує моделі (від 40 до 250 МБ), а онлайн-бібліотека й майстерня, звісно, працюють через мережу. Під час запуску Kadro перевіряє, чи не вийшла нова версія, — це можна вимкнути в налаштуваннях.",
     "q4": "Які системи підтримуються?",
     "a4": "Windows 10 і 11 (64-біт). Збірки для macOS і Linux заплановані.",
     "q5": "Чи можна використовувати для комерційних проєктів?",
@@ -171,6 +171,8 @@
     "footer.note": "MIT. FFmpeg використовується як окрема програма під власною ліцензією.",
   };
   const SOON = { ru: 'скоро', uk: 'незабаром', en: EN['support.soon'] };
+  const DOWNLOADS = { uk: 'Завантажень: {n}', ru: 'Скачиваний: {n}', en: 'Downloads: {n}' };
+  const LOCALE = { uk: 'uk-UA', ru: 'ru-RU', en: 'en-US' };
   const COPY = { uk: ['Копіювати', 'Скопійовано'], ru: ['Копировать', 'Скопировано'], en: ['Copy', 'Copied'] };
   const WALLET_WARN = {
     uk: 'Надсилайте монету лише в мережі, вказаній поруч з адресою: переказ в іншій мережі втрачається.',
@@ -201,6 +203,7 @@
     document.getElementById('lang').value = lang;
     for (const img of document.querySelectorAll('[data-shot]')) img.src = `assets/${img.dataset.shot}-${lang}.webp`;
     renderLinks(lang);
+    renderDownloads(lang);
     try {
       localStorage.setItem('kadro.lang', lang);
     } catch {
@@ -271,6 +274,44 @@
     renderWallets(lang);
   }
 
+  // Download counter: installer and portable downloads of every release on GitHub,
+  // kept for an hour so visitors do not use up the API limit.
+  let downloads = null;
+  const DL_KEY = 'kadro.downloads';
+
+  function renderDownloads(lang) {
+    const el = document.getElementById('downloads');
+    if (!el) return;
+    el.hidden = !downloads;
+    if (downloads) el.textContent = (DOWNLOADS[lang] ?? DOWNLOADS.en).replace('{n}', downloads.toLocaleString(LOCALE[lang] ?? 'en-US'));
+  }
+
+  async function loadDownloads() {
+    if (!site.repo) return;
+    try {
+      const cached = JSON.parse(localStorage.getItem(DL_KEY) ?? 'null');
+      if (cached && Date.now() - cached.at < 3600000) {
+        downloads = cached.n;
+        return;
+      }
+    } catch {
+      // private mode
+    }
+    try {
+      const r = await fetch(`https://api.github.com/repos/${site.repo}/releases?per_page=100`);
+      if (!r.ok) return;
+      const releases = await r.json();
+      downloads = releases.reduce((sum, rel) => sum + rel.assets.filter((a) => a.name.endsWith('.exe')).reduce((s, a) => s + a.download_count, 0), 0);
+      try {
+        localStorage.setItem(DL_KEY, JSON.stringify({ n: downloads, at: Date.now() }));
+      } catch {
+        // private mode
+      }
+    } catch {
+      // offline or rate-limited: the counter just stays hidden
+    }
+  }
+
   let walletsOpen = false;
 
   /** Crypto addresses with copy buttons, shown under the donation cards. */
@@ -320,5 +361,6 @@
   const saved = stored();
   const initial = ['uk', 'ru', 'en'].includes(saved) ? saved : nav.startsWith('uk') ? 'uk' : nav.startsWith('ru') ? 'ru' : 'en';
   apply(initial);
+  loadDownloads().then(() => renderDownloads(document.documentElement.lang));
   document.getElementById('lang').addEventListener('change', (e) => apply(e.target.value));
 })();

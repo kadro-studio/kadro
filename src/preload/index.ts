@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { VrApi } from '../shared/api';
+import type { UpdateStatus, VrApi } from '../shared/api';
 
 const api: VrApi = {
   openMediaDialog: () => ipcRenderer.invoke('dialog:openMedia'),
@@ -61,6 +61,8 @@ const api: VrApi = {
   openModsDialog: () => ipcRenderer.invoke('dialog:openMods'),
   installModText: (fileName, text) => ipcRenderer.invoke('mods:installText', fileName, text),
   fetchShadertoy: (id, key) => ipcRenderer.invoke('shadertoy:fetch', id, key),
+  readClipboard: () => ipcRenderer.invoke('clipboard:read'),
+  writeClipboardText: (text) => ipcRenderer.invoke('clipboard:writeText', text),
   linkToolStatus: () => ipcRenderer.invoke('link:toolStatus'),
   importLinkVideo: (url, taskId) => ipcRenderer.invoke('link:import', url, taskId),
   listLuts: () => ipcRenderer.invoke('luts:list'),
@@ -82,6 +84,14 @@ const api: VrApi = {
   workshopSignOut: () => ipcRenderer.send('workshop:signOut'),
   workshopSaveLogin: (user, password) => ipcRenderer.invoke('workshop:saveLogin', user, password),
   workshopOpen: (route) => ipcRenderer.send('workshop:open', route),
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  updateStatus: () => ipcRenderer.invoke('update:status'),
+  installUpdate: () => ipcRenderer.send('update:install'),
+  onUpdateStatus: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, s: UpdateStatus) => cb(s);
+    ipcRenderer.on('update:changed', listener);
+    return () => ipcRenderer.off('update:changed', listener);
+  },
   onWorkshopAuth: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, ok: boolean) => cb(ok);
     ipcRenderer.on('workshop:auth', listener);

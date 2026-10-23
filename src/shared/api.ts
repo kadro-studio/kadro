@@ -268,6 +268,22 @@ export interface ShadertoyShader {
   url: string;
 }
 
+/** Where an update of the installed app stands. */
+export type UpdateStatus =
+  | { state: 'idle' | 'checking' | 'latest' | 'dev' }
+  | { state: 'downloading'; version: string; progress: number }
+  /** Downloaded: installed on restart (or on the next quit). */
+  | { state: 'ready'; version: string }
+  /** Portable copy: a newer release to download by hand. */
+  | { state: 'available'; version: string; url: string }
+  | { state: 'error'; message: string };
+
+/** System clipboard content usable in a project: files (pictures are saved to a file first) or text. */
+export interface ClipboardContent {
+  files: string[];
+  text: string;
+}
+
 /** A video downloaded once from a TikTok link. */
 export interface LinkVideo {
   path: string;
@@ -445,6 +461,15 @@ export interface VrApi {
   /** Saves a mod given as text into the mods folder (returns the file path). */
   installModText(fileName: string, text: string): Promise<string>;
   fetchShadertoy(id: string, key: string): Promise<ShadertoyShader>;
+
+  checkForUpdates(): Promise<UpdateStatus>;
+  updateStatus(): Promise<UpdateStatus>;
+  /** Restarts into the downloaded update. */
+  installUpdate(): void;
+  onUpdateStatus(cb: (s: UpdateStatus) => void): () => void;
+
+  readClipboard(): Promise<ClipboardContent>;
+  writeClipboardText(text: string): Promise<void>;
 
   linkToolStatus(): Promise<LinkToolStatus>;
   /** Downloads the user's own TikTok video once; progress on taskId (video) and taskId:tool (first-use download of yt-dlp). */

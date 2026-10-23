@@ -1146,6 +1146,16 @@ button {
 .sel-handle.ne { right: -6px; top: -6px; cursor: nesw-resize; }
 .sel-handle.sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
 .sel-handle.se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+/* Side handles stretch pictures along one axis. */
+.sel-handle.side { border-radius: 5px; }
+.sel-handle.n,
+.sel-handle.s { left: 50%; width: 16px; height: 8px; margin-left: -8px; cursor: ns-resize; }
+.sel-handle.n { top: -5px; }
+.sel-handle.s { bottom: -5px; }
+.sel-handle.w,
+.sel-handle.e { top: 50%; width: 8px; height: 16px; margin-top: -8px; cursor: ew-resize; }
+.sel-handle.w { left: -5px; }
+.sel-handle.e { right: -5px; }
 .sel-rotate {
   position: absolute;
   left: 50%;
@@ -3405,4 +3415,32 @@ kbd {
   color: #fff;
   font-size: 22px;
   font-weight: 700;
+}
+
+/* Update of the app is ready / available */
+.update-banner {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 440px;
+  padding: 10px 10px 10px 14px;
+  border-radius: calc(10px * var(--r));
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--hairline));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  color: var(--accent);
+}
+.update-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12.5px;
+}
+.update-text span {
+  color: var(--text-dim);
 }

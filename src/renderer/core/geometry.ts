@@ -27,15 +27,21 @@ export function contentSize(clip: Clip, media: MediaAsset | undefined, frameW: n
   }
   if (!media || !media.width || !media.height) return { w: frameW, h: frameH };
   const fit = Math.min(frameW / media.width, frameH / media.height);
-  return { w: media.width * fit, h: media.height * fit };
+  const s = stretchOf(clip);
+  return { w: media.width * fit * s.x, h: media.height * fit * s.y };
 }
 
-/** Scale at which a media clip would cover the whole frame. */
-export function fillScale(media: MediaAsset | undefined, frameW: number, frameH: number): number {
+/** Width and height stretch: pictures only (text and shapes keep their own sizes). */
+export function stretchOf(clip: Clip): { x: number; y: number } {
+  if (clip.type !== 'video' && clip.type !== 'image') return { x: 1, y: 1 };
+  return { x: clip.transform.stretchX || 1, y: clip.transform.stretchY || 1 };
+}
+
+/** Scale at which a media clip (stretched or not) would cover the whole frame. */
+export function fillScale(media: MediaAsset | undefined, frameW: number, frameH: number, stretch = { x: 1, y: 1 }): number {
   if (!media || !media.width || !media.height) return 1;
   const fit = Math.min(frameW / media.width, frameH / media.height);
-  const cover = Math.max(frameW / media.width, frameH / media.height);
-  return cover / fit;
+  return Math.max(frameW / (media.width * fit * stretch.x), frameH / (media.height * fit * stretch.y));
 }
 
 export function layerBox(plan: LayerPlan, content: Size, frameW: number, frameH: number): Box {

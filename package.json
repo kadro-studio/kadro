@@ -14,7 +14,7 @@
     "start": "electron .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "smoke": "node scripts/smoke.mjs",
-    "dist": "node scripts/font-notices.mjs && npm run build && node scripts/make-icon.mjs && electron-builder --win",
+    "dist": "node scripts/font-notices.mjs && npm run build && node scripts/make-icon.mjs && electron-builder --win --publish never",
     "icon": "node scripts/make-icon.mjs",
     "art": "node scripts/make-installer-art.mjs",
     "workshop:zip": "node scripts/pack-workshop.mjs"
@@ -121,6 +121,14 @@
           "kadro"
         ]
       }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kadro-studio",
+        "repo": "kadro",
+        "releaseType": "release"
+      }
     ]
   },
   "dependencies": {
@@ -160,6 +168,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.0.0",
     "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.9",
     "esbuild": "^0.28.2",
     "immer": "^11.2.7",
     "playwright-core": "^1.64.1",

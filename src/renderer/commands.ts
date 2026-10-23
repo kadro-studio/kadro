@@ -22,7 +22,7 @@ import {
   reverseClip,
   openDialog,
   openProjectFile,
-  paste,
+  pasteFromClipboard,
   saveProject,
   selectAll,
   splitAtPlayhead,
@@ -35,6 +35,7 @@ import { setPrefs, usePrefs } from './store/prefs';
 import { commandFor, comboFromEvent, shortcutLabel } from './keymap';
 import { exportSrt } from './ai/tasks';
 import { importSubtitles } from './store/tools';
+import { checkUpdatesNow } from './store/updates';
 import type { MenuEntry } from './ui/ContextMenu';
 
 export async function saveSnapshot(): Promise<void> {
@@ -79,7 +80,7 @@ const RUN: Record<string, () => void> = {
   redo,
   cut: cutSelection,
   copy: copySelection,
-  paste: () => paste(),
+  paste: () => void pasteFromClipboard(),
   pasteAttrs: () => openDialog('paste-attrs'),
   duplicate: duplicateSelection,
   selectAll,
@@ -217,7 +218,7 @@ export function menus(): MenuDef[] {
         { separator: true },
         { label: t('menu.cut'), shortcut: sc('cut'), onClick: cutSelection, disabled: !hasSel },
         { label: t('menu.copy'), shortcut: sc('copy'), onClick: copySelection, disabled: !hasSel },
-        { label: t('menu.paste'), shortcut: sc('paste'), onClick: () => paste(), disabled: !s.clipboard },
+        { label: t('menu.paste'), shortcut: sc('paste'), onClick: () => void pasteFromClipboard() },
         { label: t('menu.duplicate'), shortcut: sc('duplicate'), onClick: duplicateSelection, disabled: !hasSel },
         { label: t('menu.delete'), shortcut: sc('delete'), onClick: () => deleteSelection(false), disabled: !hasSel },
         { label: t('menu.rippleDelete'), shortcut: sc('rippleDelete'), onClick: () => deleteSelection(true), disabled: !hasSel },
@@ -271,6 +272,7 @@ export function menus(): MenuDef[] {
         { separator: true },
         { label: t('menu.website'), onClick: () => window.open(SITE_URL) },
         { label: t('menu.support'), onClick: () => window.open(`${SITE_URL}#support`) },
+        { label: t('upd.check'), onClick: () => void checkUpdatesNow() },
         { label: t('menu.reportBug'), onClick: () => window.open(`${SOURCE_URL}/issues`) },
         { separator: true },
         { label: t('menu.about'), onClick: () => openDialog('about') },

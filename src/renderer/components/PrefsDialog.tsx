@@ -14,6 +14,7 @@ import { Modal } from './Modal';
 import { openDialog } from '../store/actions';
 import { exportPresetsFile, importPresetsFile, usePresets } from '../store/presets';
 import { addUserFonts, removeUserFont, useUserFonts } from '../store/userFonts';
+import { checkUpdatesNow } from '../store/updates';
 import { Icon } from '../ui/Icon';
 
 type Tab = 'general' | 'appearance' | 'mine' | 'performance' | 'library' | 'storage';
@@ -61,6 +62,7 @@ function GeneralPage() {
   const autosave = usePrefs((p) => p.autosaveMinutes);
   const still = usePrefs((p) => p.stillDuration);
   const follow = usePrefs((p) => p.followPlayhead);
+  const autoUpdate = usePrefs((p) => p.autoUpdate);
   return (
     <>
       <div className="field">
@@ -96,6 +98,16 @@ function GeneralPage() {
         <span className="field-label">{t('prefs.followPlayhead')}</span>
         <input type="checkbox" className="switch" checked={follow} onChange={(e) => setPrefs({ followPlayhead: e.target.checked })} />
       </label>
+      <label className="field toggle-field">
+        <span className="field-label">{t('prefs.autoUpdate')}</span>
+        <input type="checkbox" className="switch" checked={autoUpdate} onChange={(e) => setPrefs({ autoUpdate: e.target.checked })} />
+      </label>
+      <span className="panel-hint" style={{ margin: 0 }}>
+        {t('prefs.autoUpdateHint')}{' '}
+        <button className="link-btn" onClick={() => void checkUpdatesNow()}>
+          {t('upd.checkNow')}
+        </button>
+      </span>
     </>
   );
 }

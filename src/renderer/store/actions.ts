@@ -169,11 +169,11 @@ export function addMediaClip(mediaId: string, opts: PlaceOptions = {}): void {
   placeNewClip(clip, kind, opts);
 }
 
-export function addTextClip(presetId: string, opts: PlaceOptions = {}): void {
+export function addTextClip(presetId: string, opts: PlaceOptions = {}, content?: string): void {
   const preset = TEXT_PRESETS.find((p) => p.id === presetId) ?? TEXT_PRESETS[0];
   const { width, height } = st().project.settings;
   const k = Math.min(width, height) / 1080;
-  const style = { ...defaultTextStyle(), ...preset.style, content: t(preset.sampleKey) };
+  const style = { ...defaultTextStyle(), ...preset.style, content: content ?? t(preset.sampleKey) };
   style.fontSize = Math.round(style.fontSize * k);
   style.backgroundPadding = Math.round(style.backgroundPadding * k);
   style.strokeWidth = Math.round(style.strokeWidth * k * 10) / 10;
@@ -413,6 +413,9 @@ export function duplicateSelection(): void {
   select(newIds);
 }
 
+/** Text our last clip copy left on the system clipboard (see pasteFromClipboard). */
+let copyMark: string | null = null;
+
 export function copySelection(): void {
   const p = st().project;
   const found = st().selection.map((id) => findClip(p, id)).filter((f) => !!f);
@@ -421,6 +424,49 @@ export function copySelection(): void {
   useEditor.setState({
     clipboard: { clips: found.map((f) => ({ clip: { ...structuredClone(f.clip), start: f.clip.start - minStart }, trackId: f.track.id })) },
   });
+  // Like any copy, this replaces what other programs copied: their files or text no longer win on paste.
+  copyMark = found.map((f) => f.clip.name).join('\n') || APP_NAME;
+  void api.writeClipboardText(copyMark).catch(() => (copyMark = null));
+}
+
+/**
+ * Ctrl+V: whatever was copied last. Files and pictures from other programs go to
+ * the media bin and onto the timeline at the playhead (or the given time), text becomes a title, and
+ * clips copied here are pasted as before.
+ */
+export async function pasteFromClipboard(time = st().playhead): Promise<void> {
+  const sys = await api.readClipboard().catch(() => null);
+  if (sys?.files.length) {
+    const assets = await importFiles(sys.files);
+    // Pictures saved from the clipboard get a readable name instead of their hash.
+    const pictures = assets.filter((a) => /^pasted-[0-9a-f]{12}\.(png|jpg)$/.test(a.name)).map((a) => a.id);
+    if (pictures.length) {
+      edit((d) => {
+        for (const m of d.media) if (pictures.includes(m.id)) m.name = t('paste.picture');
+      });
+    }
+    let at = time;
+    const ids: string[] = [];
+    for (const a of assets) {
+      addMediaClip(a.id, { time: at });
+      const added = findClip(st().project, st().selection[0] ?? '')?.clip;
+      if (!added) continue;
+      ids.push(added.id);
+      at = clipEnd(added);
+    }
+    if (ids.length) {
+      select(ids);
+      toast(t('paste.media', { n: ids.length }), 'success');
+    }
+    return;
+  }
+  const text = sys?.text.trim() ?? '';
+  const cb = st().clipboard;
+  if (text && text !== copyMark?.trim()) {
+    addTextClip('title', { time }, text.slice(0, 1000));
+    return;
+  }
+  if (cb && cb.clips.length) paste(time);
 }
 
 export function cutSelection(): void {

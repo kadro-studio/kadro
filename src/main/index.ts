@@ -12,6 +12,8 @@ import * as luts from './luts';
 import * as workshop from './workshop';
 import * as library from './library';
 import * as tiktok from './tiktok';
+import * as systemClipboard from './clipboard';
+import * as updates from './updates';
 import * as templates from './templates';
 import * as storage from './storage';
 import { APP_NAME, TITLE_BAR_COLOR, TITLE_BAR_HEIGHT, TITLE_BAR_SYMBOLS } from '../shared/brand';
@@ -301,6 +303,18 @@ function registerIpc(): void {
   ipcMain.handle('mods:remove', (_e, file: string) => mods.removeMod(file));
   ipcMain.handle('mods:installText', (_e, fileName: string, text: string) => mods.installModText(fileName, text));
   ipcMain.handle('shadertoy:fetch', (_e, id: string, key: string) => library.fetchShadertoy(id, key));
+  ipcMain.handle('update:check', () => updates.checkForUpdates());
+  ipcMain.handle('update:status', () => updates.updateStatus());
+  ipcMain.on('update:install', () => {
+    // The interface has already asked about unsaved changes.
+    forceClose = true;
+    updates.installUpdate();
+  });
+  updates.onUpdateStatus((s) => {
+    if (win && !win.isDestroyed()) win.webContents.send('update:changed', s);
+  });
+  ipcMain.handle('clipboard:read', () => systemClipboard.readClipboard());
+  ipcMain.handle('clipboard:writeText', (_e, text: string) => systemClipboard.writeClipboardText(String(text).slice(0, 100_000)));
   ipcMain.handle('link:toolStatus', () => tiktok.linkToolStatus());
   ipcMain.handle('link:import', (e, url: string, taskId: string) =>
     tiktok.importLinkVideo(url, taskProgress(e, `${taskId}:tool`), taskProgress(e, taskId)),

@@ -17,6 +17,8 @@ import { importFiles, startProxyProgressListener } from './store/media';
 import { pendingRecovery, startAutosave } from './store/autosave';
 import { reloadMods } from './store/mods';
 import { handleWorkshopLink, initWorkshop, refreshAccount } from './store/workshop';
+import { initUpdates } from './store/updates';
+import { UpdateBanner } from './components/UpdateBanner';
 import { ContextMenuHost } from './ui/ContextMenu';
 
 interface Layout {
@@ -135,6 +137,8 @@ export function App() {
     syncDirtyFlag();
   }, [name, filePath, dirty, lang]);
 
+  useEffect(() => initUpdates(), []);
+
   // Files dropped anywhere outside the timeline go to the media bin.
   useEffect(() => {
     let depth = 0;
@@ -152,9 +156,16 @@ export function App() {
     const over = (e: DragEvent) => {
       if (isFiles(e)) e.preventDefault();
     };
-    const drop = (e: DragEvent) => {
+    const reset = () => {
       depth = 0;
       setFileDrag(false);
+    };
+    // No mouse moves happen during a drag: the first one after it means it is over
+    // (dropped where the event did not reach us, or cancelled outside the window).
+    const moved = () => {
+      if (depth > 0) reset();
+    };
+    const drop = (e: DragEvent) => {
       if (!isFiles(e) || e.defaultPrevented) return;
       e.preventDefault();
       const paths = [...(e.dataTransfer?.files ?? [])].map((f) => api.getPathForFile(f)).filter(Boolean);
@@ -163,12 +174,17 @@ export function App() {
     window.addEventListener('dragenter', enter);
     window.addEventListener('dragleave', leave);
     window.addEventListener('dragover', over);
+    // The timeline stops the drop event, so the hint is cleared before targets see it.
+    window.addEventListener('drop', reset, true);
     window.addEventListener('drop', drop);
+    window.addEventListener('mousemove', moved);
     return () => {
       window.removeEventListener('dragenter', enter);
       window.removeEventListener('dragleave', leave);
       window.removeEventListener('dragover', over);
+      window.removeEventListener('drop', reset, true);
       window.removeEventListener('drop', drop);
+      window.removeEventListener('mousemove', moved);
     };
   }, []);
 
@@ -210,6 +226,7 @@ export function App() {
       <PromptHost />
       <TooltipHost />
       <Toasts />
+      <UpdateBanner />
       {fileDrag && <div className="drop-overlay">{t('media.dropHint')}</div>}
     </div>
   );

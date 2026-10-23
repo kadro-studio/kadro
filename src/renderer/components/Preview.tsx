@@ -138,7 +138,7 @@ function planContent(plan: LayerPlan, media: Map<string, import('../core/types')
   return contentSize(clip, m, s.width, s.height, clip.text ? measureText(clip.text) : undefined);
 }
 
-type DragKind = 'move' | 'scale' | 'rotate';
+type DragKind = 'move' | 'scale' | 'rotate' | 'stretchX' | 'stretchY';
 
 function TransformOverlay({ box }: { box: StageBox }) {
   const project = useEditor((s) => s.project);
@@ -180,6 +180,15 @@ function TransformOverlay({ box }: { box: StageBox }) {
     const startY = e.clientY;
     const d0 = Math.max(4, Math.hypot(startX - ax, startY - ay));
     const a0 = Math.atan2(startY - ay, startX - ax);
+    // Side handles stretch along the layer's own axes, so rotation is taken out.
+    const rad = (plan.rotation * Math.PI) / 180;
+    const along = (cx: number, cy: number, axis: 'x' | 'y') => {
+      const dx = cx - ax;
+      const dy = cy - ay;
+      return Math.abs(axis === 'x' ? dx * Math.cos(rad) + dy * Math.sin(rad) : -dx * Math.sin(rad) + dy * Math.cos(rad));
+    };
+    const sx0 = clip.transform.stretchX;
+    const sy0 = clip.transform.stretchY;
 
     const onMove = (ev: PointerEvent) => {
       previewEdit((d) => {
@@ -196,6 +205,12 @@ function TransformOverlay({ box }: { box: StageBox }) {
           setGuides({ v, h });
           setPropAt(c, 'x', local, Math.round(nx), tol);
           setPropAt(c, 'y', local, Math.round(ny), tol);
+        } else if (kind === 'stretchX' || kind === 'stretchY') {
+          const axis = kind === 'stretchX' ? 'x' : 'y';
+          const ratio = along(ev.clientX, ev.clientY, axis) / Math.max(4, along(startX, startY, axis));
+          const v = Math.min(20, Math.max(0.05, Math.round((axis === 'x' ? sx0 : sy0) * ratio * 1000) / 1000));
+          if (axis === 'x') c.transform.stretchX = v;
+          else c.transform.stretchY = v;
         } else if (kind === 'scale') {
           const dist = Math.hypot(ev.clientX - ax, ev.clientY - ay);
           setPropAt(c, 'scale', local, Math.max(0.01, Math.round(s0 * (dist / d0) * 1000) / 1000), tol);
@@ -218,6 +233,7 @@ function TransformOverlay({ box }: { box: StageBox }) {
 
   const w = lb.w * k;
   const h = lb.h * k;
+  const stretchable = found.clip.type === 'video' || found.clip.type === 'image';
   const x = box.left + lb.cx * k - w / 2;
   const y = box.top + lb.cy * k - h / 2;
   return (
@@ -232,6 +248,10 @@ function TransformOverlay({ box }: { box: StageBox }) {
         {(['nw', 'ne', 'sw', 'se'] as const).map((c) => (
           <div key={c} className={`sel-handle ${c}`} onPointerDown={begin('scale')} />
         ))}
+        {stretchable &&
+          (['n', 's', 'w', 'e'] as const).map((c) => (
+            <div key={c} className={`sel-handle side ${c}`} onPointerDown={begin(c === 'w' || c === 'e' ? 'stretchX' : 'stretchY')} />
+          ))}
         <div className="sel-rotate" onPointerDown={begin('rotate')} />
       </div>
     </>

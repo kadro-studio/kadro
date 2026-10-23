@@ -102,6 +102,8 @@ npm start
 npm run dist
 ```
 
+Выпуск: к релизу `vX.Y.Z` на GitHub прикладываются `Kadro-Setup-X.Y.Z.exe`, `Kadro-Setup-X.Y.Z.exe.blockmap`, `latest.yml` и `Kadro-X.Y.Z-portable.exe`. По `latest.yml` установленные копии сами скачивают новую версию (electron-updater проверяет её SHA-512) и ставят при перезапуске; portable-версия только сообщает о новом релизе. Проверку при запуске можно выключить в настройках.
+
 Название и цвета заголовка окна задаются в `src/shared/brand.ts`, имя установщика — в `package.json` (`productName`, `build`). Иконка: `build/icon.png`, из неё `npm run icon` собирает `build/icon.ico`; картинки установщика рисуются из `build/installer-art.html` командой `npm run art`.
 
 FFmpeg и FFprobe ставятся автоматически через пакеты `ffmpeg-static` и `ffprobe-static`. Чтобы использовать свои сборки, задайте переменные окружения `VR_FFMPEG` и `VR_FFPROBE`.

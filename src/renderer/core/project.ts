@@ -25,7 +25,7 @@ export const DEFAULT_IMAGE_DURATION = 5;
 export const DEFAULT_TEXT_DURATION = 5;
 
 export function defaultTransform(): Transform {
-  return { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, flipH: false, flipV: false };
+  return { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, flipH: false, flipV: false, stretchX: 1, stretchY: 1 };
 }
 
 export function defaultCrop(): Crop {
