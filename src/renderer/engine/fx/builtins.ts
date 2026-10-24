@@ -243,6 +243,74 @@ vec4 effect(vec2 uv) {
   vec3 d = src(uv - px).rgb - src(uv + px).rgb;
   return vec4(vec3(0.5 + luma(d) * amount * 2.0), src(uv).a);
 }`),
+
+  effect('fx.motionBlur', 'Motion blur', 'Размытие движения', [p('amount', 'Length', 'Длина', 0, 80, 24, 1), p('angle', 'Angle', 'Угол', 0, 360, 0, 1)], `
+vec4 effect(vec2 uv) {
+  float a = radians(angle);
+  vec2 dir = vec2(cos(a), sin(a)) * amount / u_size;
+  vec4 acc = vec4(0.0);
+  for (int i = 0; i < 24; i++) acc += src(uv + dir * (float(i) / 23.0 - 0.5));
+  return acc / 24.0;
+}`),
+
+  effect('fx.tiltShift', 'Tilt-shift', 'Тилт-шифт', [
+    p('center', 'Position', 'Положение', 0, 1, 0.5, 0.01),
+    p('band', 'Focus width', 'Ширина фокуса', 0.05, 0.8, 0.25, 0.01),
+    p('amount', 'Blur', 'Размытие', 0, 16, 8, 0.5),
+  ], `
+vec4 effect(vec2 uv) {
+  float d = max(0.0, abs(uv.y - center) - band * 0.5);
+  float r = clamp(d / 0.25, 0.0, 1.0) * amount;
+  vec4 acc = vec4(0.0);
+  float sum = 0.0;
+  for (int x = -3; x <= 3; x++) {
+    for (int y = -3; y <= 3; y++) {
+      float w = max(0.0, 1.0 - length(vec2(x, y)) / 4.5);
+      acc += src(uv + vec2(float(x), float(y)) * r / 3.0 / u_size) * w;
+      sum += w;
+    }
+  }
+  vec4 c = acc / sum;
+  // A miniature looks a little more colourful.
+  c.rgb = mix(vec3(luma(c.rgb)), c.rgb, 1.0 + 0.25 * clamp(amount / 8.0, 0.0, 1.0));
+  return c;
+}`),
+
+  effect('fx.prism', 'Prism', 'Призма', [AMOUNT, p('pulse', 'Pulse', 'Пульсация', 0, 1, 0, 0.01), p('speed', 'Speed', 'Скорость', 0.5, 8, 2, 0.1)], `
+vec4 effect(vec2 uv) {
+  vec2 d = uv - 0.5;
+  float k = amount * 0.035 * mix(1.0, 0.5 + 0.5 * sin(u_time * speed * 6.2831853), pulse);
+  vec4 c = src(uv);
+  c.r = src(0.5 + d * (1.0 + k)).r;
+  c.b = src(0.5 + d * (1.0 - k)).b;
+  return c;
+}`),
+
+  effect('fx.flicker', 'Flicker', 'Мерцание', [AMOUNT, p('speed', 'Speed', 'Скорость', 2, 30, 12, 1)], `
+vec4 effect(vec2 uv) {
+  float n = rand(vec2(floor(u_time * speed), 1.7));
+  vec4 c = src(uv);
+  c.rgb *= 1.0 + (n - 0.5) * amount * 1.2;
+  return c;
+}`),
+
+  effect('fx.rainbow', 'Rainbow', 'Радуга', [AMOUNT, p('speed', 'Speed', 'Скорость', 0, 6, 1, 0.05)], `
+vec3 hueTurn(vec3 c, float a) {
+  const vec3 k = vec3(0.57735);
+  float cs = cos(a);
+  return c * cs + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - cs);
+}
+vec4 effect(vec2 uv) {
+  vec4 c = src(uv);
+  c.rgb = mix(c.rgb, clamp(hueTurn(c.rgb, u_time * speed * 2.0 + uv.x * 3.0), 0.0, 1.0), amount);
+  return c;
+}`),
+
+  effect('fx.doubleVision', 'Double vision', 'Двоение', [AMOUNT, p('speed', 'Speed', 'Скорость', 0, 10, 3, 0.1)], `
+vec4 effect(vec2 uv) {
+  vec2 off = vec2(sin(u_time * speed), cos(u_time * speed * 0.7)) * amount * 30.0 / u_size;
+  return mix(src(uv), src(uv + off), 0.45);
+}`),
 ];
 
 export const BUILTIN_TRANSITIONS: FxDef[] = [
@@ -354,6 +422,102 @@ vec4 transition(vec2 uv) {
   vec4 b = toColor(0.5 + (uv - 0.5) * mix(0.7, 1.0, progress));
   return vec4(b.rgb * mix(0.4, 1.0, progress), b.a);
 }`),
+  transition('tr.cube', 'Cube', 'Куб', [p('depth', 'Depth', 'Глубина', 0, 0.6, 0.3, 0.01)], `
+vec4 transition(vec2 uv) {
+  float a = progress * PI * 0.5;
+  // The outgoing face turns away to the left while the new one comes round from the right.
+  float edge = cos(a) / (cos(a) + sin(a));
+  if (uv.x < edge) {
+    float x = uv.x / max(edge, 1e-4);
+    float s = 1.0 - depth * sin(a) * (1.0 - x);
+    float y = (uv.y - 0.5) / s + 0.5;
+    if (y < 0.0 || y > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 c = fromColor(vec2(x, y));
+    return vec4(c.rgb * (1.0 - 0.45 * sin(a)), c.a);
+  }
+  float x = (uv.x - edge) / max(1.0 - edge, 1e-4);
+  float s = 1.0 - depth * cos(a) * x;
+  float y = (uv.y - 0.5) / s + 0.5;
+  if (y < 0.0 || y > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);
+  vec4 c = toColor(vec2(x, y));
+  return vec4(c.rgb * (1.0 - 0.45 * cos(a)), c.a);
+}`),
+
+  transition('tr.flip', 'Flip', 'Переворот', [], `
+vec4 transition(vec2 uv) {
+  // Quick to turn edge-on, slower to land: the card is side-on a little before the middle.
+  float a = pow(progress, 0.75) * PI;
+  bool front = a < PI * 0.5;
+  float w = abs(cos(a));
+  float x = (uv.x - 0.5) / max(w, 1e-4) + 0.5;
+  // The side turning towards the viewer looks taller.
+  float s = 1.0 + 0.25 * sin(a) * (x - 0.5) * (front ? 1.0 : -1.0);
+  float y = (uv.y - 0.5) / s + 0.5;
+  if (x < 0.0 || x > 1.0 || y < 0.0 || y > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);
+  vec4 c = front ? fromColor(vec2(x, y)) : toColor(vec2(x, y));
+  return vec4(c.rgb * (0.55 + 0.45 * w), c.a);
+}`),
+
+  transition('tr.filmRoll', 'Film roll', 'Плёнка', [p('blur', 'Blur', 'Размытие', 0, 0.3, 0.12, 0.01)], `
+vec4 transition(vec2 uv) {
+  float e = progress < 0.5 ? 4.0 * progress * progress * progress : 1.0 - pow(-2.0 * progress + 2.0, 3.0) / 2.0;
+  float smear = sin(progress * PI) * blur;
+  vec4 acc = vec4(0.0);
+  for (int i = 0; i < 16; i++) {
+    float y = uv.y + e + (float(i) / 15.0 - 0.5) * smear;
+    acc += y < 1.0 ? fromColor(vec2(uv.x, y)) : toColor(vec2(uv.x, y - 1.0));
+  }
+  return acc / 16.0;
+}`),
+
+  transition('tr.rgbSlide', 'RGB slide', 'RGB-рывок', [p('split', 'Split', 'Расслоение', 0, 0.12, 0.03, 0.005)], `
+vec4 slideAt(vec2 q, float e) {
+  q.x += e;
+  return q.x < 1.0 ? fromColor(q) : toColor(vec2(q.x - 1.0, q.y));
+}
+vec4 transition(vec2 uv) {
+  float e = progress < 0.5 ? 4.0 * progress * progress * progress : 1.0 - pow(-2.0 * progress + 2.0, 3.0) / 2.0;
+  vec2 off = vec2(sin(progress * PI) * split, 0.0);
+  return vec4(slideAt(uv + off, e).r, slideAt(uv, e).g, slideAt(uv - off, e).b, 1.0);
+}`),
+
+  transition('tr.lightLeak', 'Light leak', 'Засветка', [p('intensity', 'Intensity', 'Яркость', 0, 1, 0.9, 0.01)], `
+vec4 transition(vec2 uv) {
+  float f = sin(progress * PI);
+  vec4 c = mix(fromColor(uv), toColor(uv), smoothstep(0.35, 0.65, progress));
+  vec2 q = (uv - vec2(0.15 + progress * 0.7, 0.6)) * vec2(ratio, 1.0);
+  float leak = exp(-dot(q, q) * 2.5);
+  vec3 warm = mix(vec3(1.0, 0.42, 0.12), vec3(1.0, 0.86, 0.55), uv.y);
+  c.rgb = 1.0 - (1.0 - c.rgb) * (1.0 - warm * leak * f * intensity);
+  c.rgb += f * f * intensity * 0.2;
+  return c;
+}`),
+
+  transition('tr.squeeze', 'Squeeze', 'Сжатие', [], `
+vec4 transition(vec2 uv) {
+  float e = progress < 0.5 ? 4.0 * progress * progress * progress : 1.0 - pow(-2.0 * progress + 2.0, 3.0) / 2.0;
+  float cut = 1.0 - e;
+  if (uv.x < cut) return fromColor(vec2(uv.x / max(cut, 1e-4), uv.y));
+  return toColor(vec2((uv.x - cut) / max(e, 1e-4), uv.y));
+}`),
+
+  transition('tr.bounce', 'Bounce', 'Отскок', [], `
+float bounceOut(float t) {
+  if (t < 1.0 / 2.75) return 7.5625 * t * t;
+  if (t < 2.0 / 2.75) { t -= 1.5 / 2.75; return 7.5625 * t * t + 0.75; }
+  if (t < 2.5 / 2.75) { t -= 2.25 / 2.75; return 7.5625 * t * t + 0.9375; }
+  t -= 2.625 / 2.75;
+  return 7.5625 * t * t + 0.984375;
+}
+vec4 transition(vec2 uv) {
+  // The new picture drops in from the top and bounces.
+  float y = uv.y - (1.0 - bounceOut(progress));
+  if (y < 0.0) {
+    vec4 a = fromColor(uv);
+    return vec4(a.rgb * (1.0 - 0.5 * progress), a.a);
+  }
+  return toColor(vec2(uv.x, y));
+}`),
 ];
 
 // Ukrainian names, looked up by the Russian ones.
@@ -369,6 +533,10 @@ const UK: Record<string, string> = {
   Режим: 'Режим', Радиус: 'Радіус', Поворот: 'Поворот', Сегменты: 'Сегменти', 'Размер ячейки': 'Розмір комірки',
   'Размер точек': 'Розмір точок', Размер: 'Розмір', Клетки: 'Клітинки', Плитки: 'Плитки', Полосы: 'Смуги', Мягкость: 'М’якість',
   Скорость: 'Швидкість', 'Толщина линий': 'Товщина ліній', Порог: 'Поріг', Обороты: 'Оберти',
+  'Размытие движения': 'Розмиття руху', 'Тилт-шифт': 'Тілт-шифт', Призма: 'Призма', Мерцание: 'Мерехтіння', Радуга: 'Веселка',
+  Двоение: 'Двоїння', Куб: 'Куб', Переворот: 'Переворот', Плёнка: 'Плівка', 'RGB-рывок': 'RGB-ривок', Засветка: 'Засвітка',
+  Сжатие: 'Стиснення', Отскок: 'Відскок', Длина: 'Довжина', Положение: 'Положення', 'Ширина фокуса': 'Ширина фокуса',
+  Размытие: 'Розмиття', Пульсация: 'Пульсація', Глубина: 'Глибина', Расслоение: 'Розшарування',
 };
 for (const def of [...BUILTIN_EFFECTS, ...BUILTIN_TRANSITIONS]) {
   if (def.nameRu) def.nameUk = UK[def.nameRu];

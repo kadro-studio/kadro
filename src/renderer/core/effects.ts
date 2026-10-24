@@ -52,7 +52,8 @@ export function effectiveAdjust(clip: Clip): { adjust: Adjust; colorize: [number
 
 export const ANIMATIONS = [
   'none', 'fade', 'slideLeft', 'slideRight', 'slideUp', 'slideDown',
-  'zoomIn', 'zoomOut', 'pop', 'spin', 'blur', 'drop', 'typewriter',
+  'zoomIn', 'zoomOut', 'pop', 'spin', 'blur', 'drop',
+  'whipLeft', 'whipRight', 'zoomBlur', 'shake', 'flicker', 'swing', 'typewriter',
 ] as const;
 export type AnimationType = (typeof ANIMATIONS)[number];
 
@@ -120,6 +121,36 @@ export function animationModifier(type: string, rawP: number): Modifier {
     case 'drop':
       m.dy = -(1 - bounceOut(p)) * 0.5;
       m.opacity = Math.min(1, p * 4);
+      break;
+    case 'whipLeft':
+    case 'whipRight': {
+      // A fast throw with motion blur that settles sharply.
+      const fast = 1 - Math.pow(1 - p, 5);
+      m.dx = (type === 'whipLeft' ? -1 : 1) * (1 - fast) * 0.7;
+      m.blur = (1 - fast) * 70;
+      m.opacity = Math.min(1, p * 3);
+      break;
+    }
+    case 'zoomBlur':
+      m.scale = 1 + (1 - e) * 0.6;
+      m.blur = (1 - e) * 55;
+      m.opacity = Math.min(1, p * 2);
+      break;
+    case 'shake':
+      m.dx = Math.sin(p * 42) * (1 - p) * 0.035;
+      m.dy = Math.cos(p * 37) * (1 - p) * 0.02;
+      m.rotation = Math.sin(p * 31) * (1 - p) * 4;
+      m.opacity = Math.min(1, p * 4);
+      break;
+    case 'flicker': {
+      // Blinks on and off a few times before it stays.
+      const step = Math.floor(p * 10);
+      m.opacity = p >= 0.8 ? 1 : step % 3 === 1 ? 0.08 : Math.min(1, 0.35 + p);
+      break;
+    }
+    case 'swing':
+      m.rotation = -24 * (1 - p) * Math.cos(p * Math.PI * 3);
+      m.opacity = Math.min(1, p * 3);
       break;
     case 'typewriter':
       m.reveal = p;

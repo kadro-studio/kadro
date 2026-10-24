@@ -200,7 +200,7 @@ export function TrackHeader({ track, height, onContextMenu }: { track: Track; he
 // ---------------------------------------------------------------------------
 // Clips
 
-const TYPE_ICON: Record<Clip['type'], IconName> = {
+export const TYPE_ICON: Record<Clip['type'], IconName> = {
   video: 'film',
   audio: 'music',
   image: 'image',
@@ -338,6 +338,9 @@ export interface ClipViewProps {
   waveVersion: number;
   /** Linked to another clip (a video and its sound). */
   linked: boolean;
+  /** Joined to the neighbouring piece of the same speed ramp on the left / right. */
+  joinL: boolean;
+  joinR: boolean;
   /** Length shown next to a fade handle while it is dragged. */
   fadeTip: { side: 'in' | 'out'; len: number } | null;
   onPointerDown: (e: React.PointerEvent, clip: Clip, part: 'body' | 'l' | 'r') => void;
@@ -369,7 +372,8 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
     !!clip.hsl ||
     wheelsUsed ||
     Object.values(clip.adjust).some((v) => v !== 0);
-  const cls = ['clip', clip.type, p.selected && 'selected', track.locked && 'locked', p.razor && 'razor', clip.muted && 'muted-clip']
+  const ramp = p.joinL || p.joinR;
+  const cls = ['clip', clip.type, p.selected && 'selected', track.locked && 'locked', p.razor && 'razor', clip.muted && 'muted-clip', p.joinL && 'join-l', p.joinR && 'join-r']
     .filter(Boolean)
     .join(' ');
   const label = clip.type === 'text' && clip.text ? clip.text.content.split('\n')[0] : clip.name;
@@ -382,10 +386,10 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
       onContextMenu={(e) => p.onContextMenu(e, clip)}
       title={clip.name}
     >
-      <div className="clip-label">
+      <div className="clip-label" style={ramp ? { visibility: 'hidden' } : undefined}>
         <Icon name={TYPE_ICON[clip.type]} size={12} />
         <span>{label}</span>
-        {clip.speed !== 1 && <span className="badge">×{+clip.speed.toFixed(2)}</span>}
+        {ramp ? <span className="badge">{t('dyn.ramp')}</span> : clip.speed !== 1 && <span className="badge">×{+clip.speed.toFixed(2)}</span>}
         {fxActive && <span className="badge">fx</span>}
         {clip.muted && hasAudio && <Icon name="volumeOff" size={12} />}
         {p.linked && <Icon name="link" size={11} className="clip-link" />}
@@ -398,6 +402,14 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
       </div>
       {clip.transition.type !== 'none' && <div className="clip-transition" style={{ width: Math.min(clip.transition.duration, clip.duration) * pps }} />}
       <FadeCurves clip={clip} width={width} pps={pps} />
+      {ramp && (
+        <div
+          className="clip-speed"
+          title={`×${+clip.speed.toFixed(2)}`}
+          // 1× in the middle; 6× near the top, 1/6× near the bottom.
+          style={{ top: `${Math.min(92, Math.max(22, 57 - (Math.log(clip.speed) / Math.log(6)) * 33))}%` }}
+        />
+      )}
       {kfs.map((k) => (
         <div key={k} className="clip-kf" style={{ left: k * pps }} />
       ))}

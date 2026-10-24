@@ -59,12 +59,19 @@ import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu';
 import { IconButton } from '../../ui/controls';
 import { Icon } from '../../ui/Icon';
 import { defaultAdjust, defaultChroma, defaultWheels } from '../../core/project';
-import { ClipView, FadeGlyph, HEADER_W, PlayheadLine, RulerCanvas, RulerPlayhead, TrackHeader, trackHeight } from './parts';
+import { ClipView, FadeGlyph, HEADER_W, PlayheadLine, RulerCanvas, RulerPlayhead, TrackHeader, trackHeight, TYPE_ICON } from './parts';
 import { DND } from '../dnd';
+import { openDynamic } from '../DynamicDialog';
 import { setPrefs, usePrefs } from '../../store/prefs';
 import { shortcutLabel, withShortcut } from '../../keymap';
 
 const sc = (id: string): string | undefined => shortcutLabel(id) || undefined;
+
+/** True when a video clip is among the selected ones (the dynamic tools then open on the speed ramp). */
+function firstVideoSelected(): boolean {
+  const s = useEditor.getState();
+  return s.selection.some((id) => findClip(s.project, id)?.clip.type === 'video');
+}
 
 const SNAP_PX = 9;
 
@@ -125,6 +132,7 @@ const TOOLBAR_ITEMS: { id: string; label: I18nKey }[] = [
   { id: 'marker', label: 'tl.marker' },
   { id: 'voice', label: 'vo.title' },
   { id: 'montage', label: 'mt.short' },
+  { id: 'dynamic', label: 'dyn.title' },
   { id: 'snap', label: 'tl.snap' },
   { id: 'link', label: 'tl.linking' },
   { id: 'tracks', label: 'tb.tracks' },
@@ -208,6 +216,31 @@ export function Timeline() {
   const media = useMemo(() => mediaMap(project), [project]);
   const selSet = useMemo(() => new Set(selection), [selection]);
   const paired = useMemo(() => pairedLinks(project), [project]);
+  // Pieces of one speed ramp (same link, side by side on a track) are drawn as one clip:
+  // `joins` flattens the pieces' inner edges and `runs` gives each ramp one frame and label.
+  const { joins, runs } = useMemo(() => {
+    const joins = new Map<string, { l: boolean; r: boolean }>();
+    const runs = new Map<string, { ids: string[]; start: number; end: number; clip: Clip }[]>();
+    const tol = 0.5 / project.settings.fps;
+    for (const tr of project.tracks) {
+      const list = [...tr.clips].sort((a, b) => a.start - b.start);
+      list.forEach((c, i) => {
+        const prev = list[i - 1];
+        const next = list[i + 1];
+        const l = !!c.link && !!prev && prev.link === c.link && Math.abs(clipEnd(prev) - c.start) <= tol;
+        const r = !!c.link && !!next && next.link === c.link && Math.abs(clipEnd(c) - next.start) <= tol;
+        if (!l && !r) return;
+        joins.set(c.id, { l, r });
+        const own = runs.get(tr.id) ?? [];
+        if (!l) own.push({ ids: [], start: c.start, end: clipEnd(c), clip: c });
+        const run = own[own.length - 1];
+        run.ids.push(c.id);
+        run.end = clipEnd(c);
+        runs.set(tr.id, own);
+      });
+    }
+    return { joins, runs };
+  }, [project]);
   const hasClips = project.tracks.some((tr) => tr.clips.length > 0);
 
   useLayoutEffect(() => {
@@ -749,6 +782,7 @@ export function Timeline() {
     if (selection.length > 1 && !oneGroup(s.project, selection)) {
       items.push({ label: t('link.link'), shortcut: sc('linkClips'), onClick: () => linkClips(selection) });
     }
+    if (clip.type !== 'audio') items.push({ label: `⚡ ${t('dyn.title')}…`, onClick: () => openDynamic(clip.type === 'video' ? 'ramp' : 'camera') });
     if (clip.type === 'video') items.push({ label: t('tool.freeze'), shortcut: sc('freeze'), onClick: () => void freezeFrame() });
     if (clip.type === 'video' || clip.type === 'audio') items.push({ label: t('tool.reverse'), shortcut: sc('reverse'), onClick: () => void reverseClip(clip.id) });
     if (clip.type === 'video') {
@@ -923,6 +957,7 @@ export function Timeline() {
         {show('marker') && <IconButton icon="marker" title={withShortcut(t('tl.marker'), 'marker')} onClick={() => addMarker()} />}
         {show('voice') && <IconButton icon="mic" title={t('vo.title')} onClick={() => openDialog('voiceover')} />}
         {show('montage') && <IconButton icon="wand" title={t('mt.tip')} onClick={() => openDialog('autoMontage')} />}
+        {show('dynamic') && <IconButton icon="zap" title={t('dyn.tip')} onClick={() => openDynamic(firstVideoSelected() ? 'ramp' : 'camera')} />}
         <div className="sep" />
         {show('snap') && <IconButton icon="magnet" title={withShortcut(t('tl.snap'), 'snapping')} active={snapping} onClick={() => useEditor.setState({ snapping: !snapping })} />}
         {show('link') && <IconButton icon="link" title={withShortcut(t('tl.linkingTip'), 'linking')} active={linking} onClick={() => useEditor.setState({ linking: !linking })} />}
@@ -1018,11 +1053,26 @@ export function Timeline() {
                       razor={tool === 'razor'}
                       waveVersion={waveVersion}
                       linked={!!clip.link && paired.has(clip.link)}
+                      joinL={!!joins.get(clip.id)?.l}
+                      joinR={!!joins.get(clip.id)?.r}
                       fadeTip={fadeTip?.id === clip.id ? fadeTip : null}
                       onPointerDown={onClipPointerDown}
                       onFadeDown={onFadeDown}
                       onContextMenu={clipMenu}
                     />
+                  ))}
+                  {(runs.get(track.id) ?? []).map((run) => (
+                    <div
+                      key={run.ids[0]}
+                      className={`clip-run ${run.ids.some((id) => selSet.has(id)) ? 'selected' : ''}`}
+                      style={{ left: run.start * pps, width: Math.max(2, (run.end - run.start) * pps) }}
+                    >
+                      <div className="clip-label">
+                        <Icon name={TYPE_ICON[run.clip.type]} size={12} />
+                        <span>{run.clip.name}</span>
+                        <span className="badge">{t('dyn.ramp')}</span>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

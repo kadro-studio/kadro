@@ -22,6 +22,7 @@ import { FontPicker } from '../ui/FontPicker';
 import { isVariableFont, textWeight } from '../engine/fonts';
 import { MAX_VOLUME } from '../store/enhance';
 import { saveLookPreset, saveTextPreset } from '../store/presets';
+import { openDynamic, type DynTool } from './DynamicDialog';
 import {
   ColorField,
   ColorWheelField,
@@ -47,16 +48,11 @@ const TYPE_COLOR: Record<Clip['type'], string> = {
 
 type ClipRecipe = (c: Draft<Clip>) => void;
 
-function clipSetter(clipId: string) {
+function clipSetter(clipId: string, more: string[] = []) {
+  const ids = new Set([clipId, ...more]);
   return (recipe: ClipRecipe, final: boolean) => {
     const r = (d: Draft<Project>) => {
-      for (const tr of d.tracks) {
-        const c = tr.clips.find((x) => x.id === clipId);
-        if (c) {
-          recipe(c);
-          return;
-        }
-      }
+      for (const tr of d.tracks) for (const c of tr.clips) if (ids.has(c.id)) recipe(c);
     };
     // The final value lands on top of any live preview (one undo step from before it),
     // so a control that previewed without committing never loses its change.
@@ -105,6 +101,9 @@ export function Inspector() {
   const media = mediaMap(project);
   const m = clip.mediaId ? media.get(clip.mediaId) : undefined;
   const set = clipSetter(clip.id);
+  // The other pieces of a speed ramp: colour, effects, position and sound settings go to all of them.
+  const pieces = useEditor.getState().linking && clip.link ? found.track.clips.filter((c) => c.link === clip.link && c.type === clip.type && c.id !== clip.id).map((c) => c.id) : [];
+  const setAll = pieces.length ? clipSetter(clip.id, pieces) : set;
   const visual = clip.type !== 'audio';
   const local = playhead - clip.start;
 
@@ -117,6 +116,11 @@ export function Inspector() {
         </span>
       </div>
       <div className="inspector-body" key={clip.id}>
+        {pieces.length > 0 && (
+          <span className="panel-hint" style={{ margin: 0 }}>
+            {t('dyn.pieceHint', { n: pieces.length + 1 })}
+          </span>
+        )}
         <ClipSection clip={clip} set={set} fps={project.settings.fps} />
         {clip.type === 'text' && <TextSection clip={clip} set={set} />}
         {clip.type === 'color' && (
@@ -126,7 +130,7 @@ export function Inspector() {
         )}
         {clip.type === 'shape' && clip.shape && <ShapeSection clip={clip} set={set} />}
         {clip.type === 'overlay' && clip.overlay && <OverlaySection clip={clip} set={set} />}
-        {visual && clip.type !== 'adjustment' && <TransformSection clip={clip} m={m} local={local} project={project} set={set} />}
+        {visual && clip.type !== 'adjustment' && <TransformSection clip={clip} m={m} local={local} project={project} set={setAll} />}
         {clip.type === 'adjustment' && (
           <Section id="adjustment" title={t('elements.adjustment')}>
             <span className="panel-hint" style={{ margin: 0 }}>
@@ -140,19 +144,20 @@ export function Inspector() {
         <FadeSection clip={clip} />
         {visual && <AnimationSection clip={clip} set={set} />}
         {visual && <TransitionSection clip={clip} set={set} />}
+        {visual && <DynamicSection clip={clip} />}
         {(clip.type === 'video' || clip.type === 'audio') && <SpeedSection clip={clip} m={m} />}
-        {clipHasAudio(clip, media) && <AudioSection clip={clip} set={set} local={local} fps={project.settings.fps} />}
+        {clipHasAudio(clip, media) && <AudioSection clip={clip} set={setAll} local={local} fps={project.settings.fps} />}
         {clip.type === 'video' && clip.detached && <LinkedSoundSection clip={clip} project={project} />}
-        {visual && clip.type !== 'color' && <EffectsSection clip={clip} set={set} />}
-        {pro && visual && clip.type !== 'shape' && <WheelsSection clip={clip} set={set} />}
-        {pro && visual && clip.type !== 'shape' && <CurvesSection clip={clip} set={set} />}
-        {pro && visual && clip.type !== 'shape' && <HslSection clip={clip} set={set} />}
-        {visual && <ColorSection clip={clip} set={set} />}
-        {visual && <FilterSection clip={clip} set={set} />}
-        {pro && (clip.type === 'video' || clip.type === 'image') && <ChromaSection clip={clip} set={set} />}
-        {(clip.type === 'video' || clip.type === 'image') && <CropSection clip={clip} set={set} />}
-        {pro && visual && clip.type !== 'color' && <MaskSection clip={clip} set={set} />}
-        {pro && visual && <BlendSection clip={clip} set={set} />}
+        {visual && clip.type !== 'color' && <EffectsSection clip={clip} set={setAll} />}
+        {pro && visual && clip.type !== 'shape' && <WheelsSection clip={clip} set={setAll} />}
+        {pro && visual && clip.type !== 'shape' && <CurvesSection clip={clip} set={setAll} />}
+        {pro && visual && clip.type !== 'shape' && <HslSection clip={clip} set={setAll} />}
+        {visual && <ColorSection clip={clip} set={setAll} />}
+        {visual && <FilterSection clip={clip} set={setAll} />}
+        {pro && (clip.type === 'video' || clip.type === 'image') && <ChromaSection clip={clip} set={setAll} />}
+        {(clip.type === 'video' || clip.type === 'image') && <CropSection clip={clip} set={setAll} />}
+        {pro && visual && clip.type !== 'color' && <MaskSection clip={clip} set={setAll} />}
+        {pro && visual && <BlendSection clip={clip} set={setAll} />}
         {!pro && (
           <button className="link-btn simple-more" onClick={() => setPrefs({ simpleMode: false })}>
             {t('simple.showAll')}
@@ -711,6 +716,31 @@ function AnimationSection({ clip, set }: { clip: Clip; set: Setter }) {
         <SliderField label={t('p.duration')} value={clip.animOut.duration} min={0.1} max={maxDur} step={0.1} unit="s"
           onChange={(v, f) => set((c) => void (c.animOut.duration = v), f)} />
       )}
+    </Section>
+  );
+}
+
+/** Shortcuts to the dynamic editing tools for this clip. */
+function DynamicSection({ clip }: { clip: Clip }) {
+  const t = useT();
+  const tools: { id: DynTool; label: I18nKey; video?: boolean }[] = [
+    { id: 'ramp', label: 'dyn.ramp', video: true },
+    { id: 'camera', label: 'dyn.camera' },
+    { id: 'beat', label: 'dyn.beat' },
+    { id: 'zoomCuts', label: 'dyn.zoomCuts' },
+    { id: 'boomerang', label: 'dyn.boomerang', video: true },
+  ];
+  return (
+    <Section id="dynamic" title={t('dyn.title')}>
+      <div className="row wrap">
+        {tools
+          .filter((x) => !x.video || clip.type === 'video')
+          .map((x) => (
+            <button key={x.id} className="btn small" onClick={() => openDynamic(x.id)}>
+              {t(x.label)}…
+            </button>
+          ))}
+      </div>
     </Section>
   );
 }

@@ -35,7 +35,8 @@ export type DialogKind =
   | 'fillTemplate'
   | 'newProject'
   | 'welcome'
-  | 'autoMontage';
+  | 'autoMontage'
+  | 'dynamic';
 
 export interface Toast {
   id: number;

@@ -28,6 +28,7 @@ import { FillTemplateDialog, TemplatesDialog } from './TemplateDialogs';
 import { NewProjectDialog } from './NewProjectDialog';
 import { WelcomeDialog } from './Onboarding';
 import { AutoMontageDialog } from './AutoMontageDialog';
+import { DynamicDialog } from './DynamicDialog';
 
 export function Dialogs() {
   const dialog = useEditor((s) => s.dialog);
@@ -52,6 +53,7 @@ export function Dialogs() {
   if (dialog === 'newProject') return <NewProjectDialog onClose={close} />;
   if (dialog === 'welcome') return <WelcomeDialog onClose={close} />;
   if (dialog === 'autoMontage') return <AutoMontageDialog onClose={close} />;
+  if (dialog === 'dynamic') return <DynamicDialog onClose={close} />;
   if (dialog && ENHANCE_KINDS.includes(dialog as EnhanceKind)) return <EnhanceDialog kind={dialog as EnhanceKind} onClose={close} />;
   return null;
 }

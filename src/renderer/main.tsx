@@ -10,6 +10,7 @@ import * as media from './store/media';
 import * as enhance from './store/enhance';
 import * as prefsStore from './store/prefs';
 import * as tools from './store/tools';
+import * as dynamic from './store/dynamic';
 import { player } from './engine/player';
 import { runExport } from './engine/exporter';
 import { Compositor } from './engine/gl';
@@ -32,7 +33,7 @@ void loadUserFonts();
 editor.loadProject(actions.freshProject(t('top.untitled')), null);
 
 // Automation/debug handle (used by scripts/smoke.mjs and handy in DevTools).
-(window as unknown as { __vr: unknown }).__vr = { ...actions, ...editor, ...media, ...enhance, ...prefsStore, ...tools, ...presets, ...userFonts, ...keymap, player, runExport, setLang, Compositor };
+(window as unknown as { __vr: unknown }).__vr = { ...actions, ...editor, ...media, ...enhance, ...prefsStore, ...tools, ...dynamic, ...presets, ...userFonts, ...keymap, player, runExport, setLang, Compositor };
 (window as unknown as { __vrFx: unknown }).__vrFx = { ...fxRegistry, fxThumbnail };
 (window as unknown as { __vrMods: unknown }).__vrMods = mods;
 (window as unknown as { __vrAi: unknown }).__vrAi = { ...aiTasks, aiDevice };

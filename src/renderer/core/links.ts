@@ -58,12 +58,16 @@ export function splitLinked(p: Project, clipId: string, t: number, minLen: numbe
   for (const g of group) {
     if (g.track.locked && g.clip.id !== clipId) continue;
     const right = splitClip(g.track, g.clip.id, t, minLen);
-    if (!right) continue;
+    if (!right) {
+      // Members wholly after the cut (the rest of a speed ramp) go with the right halves.
+      if (linked && g.clip.start >= t - EPS && g.clip.id !== clipId) pieces.push(g.clip);
+      continue;
+    }
     rights.set(g.clip.id, right);
     const piece = g.track.clips.find((c) => c.id === right);
     if (piece) pieces.push(piece);
   }
-  relink(pieces);
+  if (rights.size) relink(pieces);
   return rights;
 }
 

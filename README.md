@@ -17,6 +17,7 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 - New projects in a ready format — YouTube, TikTok/Reels/Shorts, square, Instagram post, 4K, cinema — or Automatic: the project takes the size and frame rate of the first video you add
 - Ready-made templates (stories slideshow, YouTube intro, beat cut, travel film): put your clips into the numbered slots and the edit is done
 - Auto montage to the beat: pick a song and your clips, and Kadro cuts them on the beat with transitions, a zoom punch on every cut and a slow zoom on photos
+- Dynamics (⚡ on the timeline, or the Dynamics section of a clip): speed ramps like CapCut's curve speed (montage, hero, bullet, jump cut, flash in/out…), camera moves (zoom, pan, handheld, pulse, tilt), a punch, shake, swing or blink on every beat of the music or on your markers, zoom cuts for talking videos, and boomerangs
 
 **Editing**
 - Multi-track timeline: add, remove and rename tracks; hide, mute, solo and lock them; drag to change track height
@@ -37,7 +38,7 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 - Colour correction, lift / gamma / gain colour wheels, RGB curves, HSL selective colour (8 ranges), 3D LUT import (`.cube`), 15 film-look filters
 - Your own filters: colour, curves, LUT and clip effects saved as one preset and applied to any clip
 - Adjustment layers, 18 blend modes (overlay, soft light, colour dodge/burn, colour, luminosity…), chroma key, masks
-- 20 shader effects and 12 shader transitions plus 22 classic transitions, in and out animations
+- 26 shader effects (motion blur, tilt-shift, prism, flicker, rainbow, double vision…) and 19 shader transitions (cube, flip, film roll, RGB slide, light leak, squeeze, bounce…) plus 22 classic transitions; 18 in and out animations, among them whips, zoom blur, shake, flicker and swing
 - One-click layouts: picture-in-picture, split screen, three columns, 2×2 grid
 - Background fill for a picture that does not cover the frame (a vertical phone video in a 16:9 project): its own blurred copy or a colour, for one clip or all of them
 - Stabilisation of shaky footage (vid.stab, two passes)
