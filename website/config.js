@@ -1,6 +1,6 @@
 // Site settings. Empty links are shown as "coming soon".
 window.KADRO_SITE = {
-  version: '0.2.1',
+  version: '0.3.0',
   // GitHub repository as "account/name". Download, source, release and issue links
   // below are derived from it when left empty.
   repo: 'kadro-studio/kadro',
