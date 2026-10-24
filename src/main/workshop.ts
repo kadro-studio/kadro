@@ -6,14 +6,50 @@ import { app, safeStorage } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WorkshopAccount, WorkshopPublish, WorkshopQuery } from '../shared/api';
-import { WORKSHOP_URL } from '../shared/brand';
+import { SITE_URL, WORKSHOP_URL } from '../shared/brand';
 
 const MAX_DOWNLOAD = 64 * 1024 * 1024;
 const UA = `${app.getName()}/${app.getVersion()} (+${WORKSHOP_URL})`;
 
+/**
+ * The website publishes the workshop's address and whether it is open
+ * (website/workshop.json), so the server can open or move without a new app
+ * release. Offline, the built-in address is used.
+ */
+interface RemoteConfig {
+  url: string;
+  open: boolean;
+}
+let remote: RemoteConfig | null = null;
+let remoteAt = 0;
+const REMOTE_TTL = 30 * 60_000;
+
+async function loadRemote(): Promise<void> {
+  if (process.env.KADRO_WORKSHOP_URL || (remote && Date.now() - remoteAt < REMOTE_TTL)) return;
+  try {
+    const r = await fetch(`${SITE_URL}workshop.json`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return;
+    const j = (await r.json()) as Partial<RemoteConfig>;
+    const url = (typeof j.url === 'string' ? j.url : WORKSHOP_URL).replace(/\/+$/, '');
+    if (new URL(url).protocol !== 'https:') return;
+    remote = { url, open: j.open !== false };
+    remoteAt = Date.now();
+  } catch {
+    // offline or not published yet
+  }
+}
+
+/** Thrown while the website says the workshop is not open yet. */
+const CLOSED = 'WORKSHOP_CLOSED';
+
+async function ready(): Promise<void> {
+  await loadRemote();
+  if (remote && !remote.open) throw new Error(CLOSED);
+}
+
 /** Site root; tests point it at a local WordPress through KADRO_WORKSHOP_URL. */
 export function workshopSite(): string {
-  return (process.env.KADRO_WORKSHOP_URL || WORKSHOP_URL).replace(/\/+$/, '');
+  return (process.env.KADRO_WORKSHOP_URL || remote?.url || WORKSHOP_URL).replace(/\/+$/, '');
 }
 
 function apiBase(): string {
@@ -69,7 +105,8 @@ function authHeader(): Record<string, string> {
 }
 
 /** WordPress page that creates an application password and sends it back to kadro://auth. */
-export function authorizeUrl(): string {
+export async function authorizeUrl(): Promise<string> {
+  await ready();
   const u = new URL(`${workshopSite()}/wp-admin/authorize-application.php`);
   u.searchParams.set('app_name', 'Kadro');
   u.searchParams.set('app_id', '6b1d6f0e-3d4c-4f6a-9a5e-4b2f9c1d7e21');
@@ -94,6 +131,7 @@ export function acceptAuthRedirect(url: string): boolean {
 // Requests
 
 async function call<T>(method: string, route: string, body?: FormData, auth = false): Promise<T> {
+  await ready();
   const url = checkUrl(`${apiBase()}${route}`);
   const r = await fetch(url, {
     method,
@@ -143,6 +181,7 @@ export function deleteItem(id: number): Promise<unknown> {
 
 /** Downloads an item's file (counted by the site) as bytes. */
 export async function downloadItem(id: number): Promise<Uint8Array> {
+  await ready();
   const url = checkUrl(`${apiBase()}/items/${Number(id)}/file`);
   const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(120000) });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);

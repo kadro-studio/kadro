@@ -70,7 +70,17 @@ useWorkshop.subscribe((s, prev) => {
   }
 });
 
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
+/** The main process reports this while the website says the workshop has not opened yet. */
+export const WORKSHOP_CLOSED = 'WORKSHOP_CLOSED';
+
+const rawErr = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
+const errText = (e: unknown) => {
+  const raw = rawErr(e);
+  if (raw === WORKSHOP_CLOSED) return t('ws.closedShort');
+  // No network or the server cannot be found: say so plainly.
+  if (/fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|getaddrinfo|aborted due to timeout/i.test(raw)) return t('ws.noConnection');
+  return raw;
+};
 
 let requestSeq = 0;
 
@@ -86,7 +96,7 @@ export async function loadItems(more = false): Promise<void> {
     useWorkshop.setState((x) => ({ items: more ? [...x.items, ...r.items] : r.items, page, pages: r.pages, loading: false }));
   } catch (e) {
     if (seq !== requestSeq) return;
-    useWorkshop.setState({ loading: false, error: errText(e) });
+    useWorkshop.setState({ loading: false, error: rawErr(e) === WORKSHOP_CLOSED ? WORKSHOP_CLOSED : errText(e) });
   }
 }
 

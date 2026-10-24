@@ -1084,6 +1084,10 @@ export const en = {
   'upd.restart': 'Restart and update',
   'upd.download': 'Download',
   'upd.later': 'Later',
+  'ws.closedTitle': 'The workshop opens soon',
+  'ws.closedText': 'Effects, filters, LUTs, themes and project templates from other users will appear here. Meanwhile you can import a shader from Shadertoy (Mods tab) or save your own project as a template (File → Templates).',
+  'ws.closedShort': 'The workshop has not opened yet',
+  'ws.noConnection': 'No connection to the workshop. Check the internet and try again.',
 } as const;
 
 export type I18nKey = keyof typeof en;

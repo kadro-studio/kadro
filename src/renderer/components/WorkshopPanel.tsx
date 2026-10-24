@@ -12,6 +12,7 @@ import {
   setFilter,
   toggleLike,
   useWorkshop,
+  WORKSHOP_CLOSED,
   type KindFilter,
   type Sort,
 } from '../store/workshop';
@@ -195,7 +196,16 @@ export function WorkshopPanel() {
           </label>
         )}
       </div>
-      {s.error && (
+      {s.error === WORKSHOP_CLOSED && (
+        <div className="ws-empty">
+          <Icon name="workshop" size={26} />
+          <strong>{t('ws.closedTitle')}</strong>
+          <span className="panel-hint" style={{ margin: 0 }}>
+            {t('ws.closedText')}
+          </span>
+        </div>
+      )}
+      {s.error && s.error !== WORKSHOP_CLOSED && (
         <div className="ws-empty">
           <Icon name="alert" size={22} />
           <span>{t('ws.unavailable')}</span>

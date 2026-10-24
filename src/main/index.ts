@@ -394,7 +394,12 @@ function registerIpc(): void {
   ipcMain.handle('workshop:publish', (_e, p: WorkshopPublish) => workshop.publishItem(p));
   ipcMain.handle('workshop:account', () => workshop.account());
   ipcMain.handle('workshop:saveLogin', (_e, user: string, password: string) => workshop.saveAuth(user, password));
-  ipcMain.on('workshop:signIn', () => void shell.openExternal(workshop.authorizeUrl()));
+  ipcMain.on('workshop:signIn', () => {
+    workshop
+      .authorizeUrl()
+      .then((url) => shell.openExternal(url))
+      .catch(() => win?.webContents.send('workshop:auth', false));
+  });
   ipcMain.on('workshop:signOut', () => workshop.clearAuth());
   ipcMain.on('workshop:open', (_e, route: string) => {
     // Pages of our own workshop site only.

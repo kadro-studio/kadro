@@ -4,8 +4,15 @@
   // A local copy of the site may point at a test WordPress: ?api=http://127.0.0.1:9400
   const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
   const override = local ? new URLSearchParams(location.search).get('api') : null;
-  const BASE = (override || site.workshop || '').replace(/\/+$/, '');
-  const API = `${BASE}/wp-json/kadro/v1`;
+  // Address and whether the workshop is open come from ../workshop.json (the app reads it too).
+  const DEFAULT_BASE = 'https://workshop.kadro.studio';
+  let open = true;
+  let BASE = '';
+  let API = '';
+  const setBase = (url) => {
+    BASE = (url || '').replace(/\/+$/, '');
+    API = `${BASE}/wp-json/kadro/v1`;
+  };
   const KINDS = ['effect', 'transition', 'element', 'look', 'textStyle', 'lut', 'theme', 'template'];
   const PER_PAGE = 24;
 
@@ -44,6 +51,7 @@
       empty: 'Тут поки нічого немає.',
       emptySearch: 'Нічого не знайдено.',
       error: 'Майстерня зараз недоступна. Спробуйте трохи пізніше.',
+      closed: 'Майстерня відкриється найближчим часом. Тут з’являться ефекти, переходи, фільтри, LUT, теми й шаблони від користувачів Kadro.',
       notFound: 'Цей елемент не знайдено: можливо, автор його видалив.',
       by: 'Автор:',
       open: 'Відкрити в Kadro',
@@ -105,6 +113,7 @@
       empty: 'Здесь пока ничего нет.',
       emptySearch: 'Ничего не найдено.',
       error: 'Мастерская сейчас недоступна. Попробуйте чуть позже.',
+      closed: 'Мастерская откроется в ближайшее время. Здесь появятся эффекты, переходы, фильтры, LUT, темы и шаблоны от пользователей Kadro.',
       notFound: 'Этот элемент не найден: возможно, автор его удалил.',
       by: 'Автор:',
       open: 'Открыть в Kadro',
@@ -166,6 +175,7 @@
       empty: 'Nothing here yet.',
       emptySearch: 'Nothing found.',
       error: 'The workshop is unavailable right now. Please try again a bit later.',
+      closed: 'The workshop opens soon. Effects, transitions, filters, LUTs, themes and templates from Kadro users will appear here.',
       notFound: 'This item was not found: its author may have removed it.',
       by: 'By',
       open: 'Open in Kadro',
@@ -273,6 +283,8 @@
         ? t('loading')
         : state.status === 'error'
           ? t('error')
+          : state.status === 'closed'
+            ? t('closed')
           : state.items.length === 0
             ? t(state.search || state.kind ? 'emptySearch' : 'empty')
             : '';
@@ -472,6 +484,26 @@
   }
   const nav = navigator.language?.toLowerCase() ?? '';
   applyLang(['uk', 'ru', 'en'].includes(saved) ? saved : nav.startsWith('uk') ? 'uk' : nav.startsWith('ru') ? 'ru' : 'en');
-  footerLinks();
-  load().then(openFromHash);
+
+  async function loadConfig() {
+    if (override) return setBase(override);
+    try {
+      const r = await fetch('../workshop.json', { cache: 'no-cache' });
+      const c = await r.json();
+      setBase(typeof c.url === 'string' && c.url.startsWith('https://') ? c.url : DEFAULT_BASE);
+      open = c.open !== false;
+    } catch {
+      setBase(DEFAULT_BASE);
+    }
+  }
+
+  loadConfig().then(() => {
+    footerLinks();
+    if (open) return load().then(openFromHash);
+    // Not open yet: say so instead of showing an empty gallery.
+    state.status = 'closed';
+    document.querySelector('.ws-bar').hidden = true;
+    document.querySelector('[data-link=workshopSite]').hidden = true;
+    render();
+  });
 })();

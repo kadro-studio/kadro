@@ -4,8 +4,6 @@ window.KADRO_SITE = {
   // GitHub repository as "account/name". Download, source, release and issue links
   // below are derived from it when left empty.
   repo: 'kadro-studio/kadro',
-  // WordPress site with the Kadro Workshop plugin; the workshop page reads its REST API.
-  workshop: 'https://workshop.kadro.studio',
   links: {
     installer: '',
     portable: '',
