@@ -13,6 +13,8 @@ export type MenuEntry =
       checked?: boolean;
       /** Colour chip shown before the label. */
       swatch?: string;
+      /** Small picture shown before the label (e.g. a fade curve). */
+      glyph?: React.ReactNode;
     };
 
 interface MenuState {
@@ -48,6 +50,7 @@ export function MenuItems({ items, onDone }: { items: MenuEntry[]; onDone: () =>
           >
             {showChecks && <span className="check">{item.checked ? <Icon name="check" size={14} /> : null}</span>}
             {item.swatch && <span className="menu-swatch" style={{ background: item.swatch }} />}
+            {item.glyph && <span className="menu-glyph">{item.glyph}</span>}
             <span>{item.label}</span>
             {item.shortcut && <span className="shortcut">{item.shortcut}</span>}
           </button>

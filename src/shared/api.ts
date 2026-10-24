@@ -162,6 +162,33 @@ export type ExportQuality = 'high' | 'medium' | 'low';
 export type EncoderChoice = 'auto' | 'cpu' | 'nvenc' | 'qsv' | 'amf';
 export type HwEncoder = Exclude<EncoderChoice, 'auto' | 'cpu'>;
 
+/** Shape of a fade, as in Vegas: how fast it starts and ends. */
+export type FadeCurve = 'fast' | 'linear' | 'slow' | 'smooth' | 'sharp';
+
+/**
+ * Gain of a fade-in at x (0..1 through the fade); a fade-out uses the same
+ * shape mirrored in time. These are ffmpeg's afade curves, so the preview and
+ * the export sound the same.
+ */
+export function fadeShape(curve: FadeCurve | undefined, x: number): number {
+  const v = Math.max(0, Math.min(1, x));
+  switch (curve) {
+    case 'fast':
+      return 1 - (1 - v) * (1 - v);
+    case 'slow':
+      return v * v;
+    case 'smooth':
+      return (1 - Math.cos(v * Math.PI)) / 2;
+    case 'sharp':
+      return Math.acos(1 - 2 * v) / Math.PI;
+    default:
+      return v;
+  }
+}
+
+/** ffmpeg afade curve names for each shape. */
+export const FFMPEG_FADE: Record<FadeCurve, string> = { fast: 'ipar', linear: 'tri', slow: 'qua', smooth: 'hsin', sharp: 'ihsin' };
+
 export interface AudioSegment {
   path: string;
   /** Source offset and source length, seconds. */
@@ -174,6 +201,8 @@ export interface AudioSegment {
   volume: number;
   fadeIn: number;
   fadeOut: number;
+  fadeInCurve?: FadeCurve;
+  fadeOutCurve?: FadeCurve;
   /** Clip volume keyframes (segment-local seconds, linear), multiplied by `volume`. */
   volumeKeys?: { t: number; v: number }[];
   /** EQ band gains in dB: low shelf 200 Hz, peak 1 kHz, high shelf 4 kHz. */

@@ -5,7 +5,7 @@ import { propValue } from './keyframes';
 import { combine, identity, type Mask, type Modifier } from './modifiers';
 import { adjacentBefore, clipAtTime, clipEnd } from './project';
 import type { Clip, MediaAsset, Project, Track } from './types';
-import type { AudioSegment } from '../../shared/api';
+import { fadeShape, type AudioSegment } from '../../shared/api';
 
 export interface LayerPlan {
   clip: Clip;
@@ -65,7 +65,7 @@ function planFor(
     y: propValue(clip, 'y', local) + mod.dy * height,
     scale: propValue(clip, 'scale', local) * mod.scale,
     rotation: propValue(clip, 'rotation', local) + mod.rotation,
-    opacity: Math.max(0, Math.min(1, propValue(clip, 'opacity', local) * mod.opacity)),
+    opacity: Math.max(0, Math.min(1, propValue(clip, 'opacity', local) * mod.opacity * fadeGain(clip, local))),
     blur: mod.blur,
     fade: mod.fade,
     mask: mod.mask,
@@ -115,10 +115,21 @@ export function tailLength(p: Project, track: Track, clip: Clip): number {
   return Math.min(next.transition.duration, next.duration);
 }
 
+/** Fade multiplier (0..1) at clip-local time, for both the picture and the sound. */
+export function fadeGain(clip: Clip, local: number): number {
+  let g = 1;
+  if (clip.fadeIn > 0 && local < clip.fadeIn) g *= fadeShape(clip.fadeInCurve, local / clip.fadeIn);
+  const remaining = clip.duration - local;
+  if (clip.fadeOut > 0 && remaining < clip.fadeOut) g *= fadeShape(clip.fadeOutCurve, remaining / clip.fadeOut);
+  return g;
+}
+
 export function clipHasAudio(clip: Clip, media: Map<string, MediaAsset>): boolean {
-  if (clip.type === 'audio') return true;
-  if (clip.type !== 'video' || !clip.mediaId) return false;
-  return media.get(clip.mediaId)?.hasAudio ?? false;
+  const m = clip.mediaId ? media.get(clip.mediaId) : undefined;
+  // The sound of a video can sit on an audio track; a silent video has none to give.
+  if (clip.type === 'audio') return m?.kind !== 'video' || m.hasAudio;
+  if (clip.type !== 'video' || !m || clip.detached) return false;
+  return m.hasAudio;
 }
 
 /** True when some track is soloed, so non-solo tracks are silent. */
@@ -133,11 +144,7 @@ function trackAudible(track: Track, solo: boolean): boolean {
 /** Linear gain of a clip at clip-local time (0 when muted). */
 export function clipGain(clip: Clip, track: Track, local: number, solo = false): number {
   if (clip.muted || !trackAudible(track, solo)) return 0;
-  let g = propValue(clip, 'volume', local) * track.volume;
-  if (clip.fadeIn > 0 && local < clip.fadeIn) g *= Math.max(0, local / clip.fadeIn);
-  const remaining = clip.duration - local;
-  if (clip.fadeOut > 0 && remaining < clip.fadeOut) g *= Math.max(0, remaining / clip.fadeOut);
-  return g;
+  return propValue(clip, 'volume', local) * track.volume * fadeGain(clip, local);
 }
 
 /** Restricts an audio plan to [start, end) and rebases it to start at 0. */
@@ -188,6 +195,8 @@ export function audioPlan(p: Project, media: Map<string, MediaAsset>): AudioSegm
         volume,
         fadeIn: Math.min(clip.fadeIn, clip.duration),
         fadeOut: Math.min(clip.fadeOut, clip.duration),
+        fadeInCurve: clip.fadeInCurve,
+        fadeOutCurve: clip.fadeOutCurve,
         volumeKeys: animated ? keys.map((k) => ({ t: k.t, v: k.v })) : undefined,
         eq: fx.low || fx.mid || fx.high ? { low: fx.low, mid: fx.mid, high: fx.high } : undefined,
         compressor: fx.compressor || undefined,

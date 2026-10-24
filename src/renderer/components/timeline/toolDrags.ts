@@ -1,8 +1,10 @@
 // Pointer gestures for the advanced timeline tools: ripple and roll trims on
 // clip edges, slip and slide on clip bodies. Each gesture previews live and
-// becomes a single undo step on release.
+// becomes a single undo step on release. Linked partners (a video's sound)
+// get the same edit on their own tracks, so the pair stays in sync.
 import type { Draft } from 'immer';
 import { rippleTrimEnd, rippleTrimStart, rollEdit, slideClip, slipClip } from '../../core/edit';
+import { edgePartners, partnersOf } from '../../core/links';
 import { adjacentAfter, adjacentBefore, clipEnd, findClip, isTimeBased, maxClipDuration } from '../../core/project';
 import { clamp, EPS, snapToFrame } from '../../core/time';
 import type { Clip, MediaAsset, Project, Track } from '../../core/types';
@@ -20,6 +22,14 @@ function trackOf(d: Draft<Project>, id: string): Draft<Track> | undefined {
 
 function track(d: Draft<Project>, id: string): Draft<Track> | undefined {
   return d.tracks.find((tr) => tr.id === id);
+}
+
+/** Partners edited along with the clip: those whose edge (or both edges) match, when linking is on. */
+function along(p: Project, clip: Clip, side: 'l' | 'r' | 'both'): { clip: Clip; track: Track }[] {
+  if (!useEditor.getState().linking) return [];
+  if (side !== 'both') return edgePartners(p, clip, side).filter((x) => !x.track.locked);
+  const ends = new Set(edgePartners(p, clip, 'r').map((x) => x.clip.id));
+  return edgePartners(p, clip, 'l').filter((x) => ends.has(x.clip.id) && !x.track.locked);
 }
 
 /** Runs a horizontal drag; `update` receives the time offset and returns a guide position. */
@@ -55,27 +65,33 @@ export function startRipple(e: PointerEvent | React.PointerEvent, clipId: string
   const f = findClip(base, clipId);
   if (!f) return;
   const { clip } = f;
-  const m = clip.mediaId ? ctx.media.get(clip.mediaId) : undefined;
   const fps = base.settings.fps;
   const minLen = 1 / fps;
+  const all = [clip, ...along(base, clip, side).map((x) => x.clip)];
+  const exclude = new Set(all.map((c) => c.id));
   runDrag(e.clientX, (dt, ev) => {
     if (side === 'r') {
       let end = clipEnd(clip) + dt;
       let at: number | null = null;
-      if (!ev.altKey) ({ time: end, at } = ctx.snap(end, new Set([clipId])));
-      end = clamp(snapToFrame(end, fps), clip.start + minLen, clip.start + maxClipDuration(clip, m));
+      if (!ev.altKey) ({ time: end, at } = ctx.snap(end, exclude));
+      const longest = Math.min(...all.map((c) => c.start + maxClipDuration(c, c.mediaId ? ctx.media.get(c.mediaId) : undefined)));
+      end = clamp(snapToFrame(end, fps), clip.start + minLen, longest);
       previewEdit((d) => {
-        const tr = trackOf(d, clipId);
-        if (tr) rippleTrimEnd(tr, clipId, end);
+        for (const c of all) {
+          const tr = trackOf(d, c.id);
+          if (tr) rippleTrimEnd(tr, c.id, end);
+        }
       });
       return at;
     }
     // The head stays in place: dragging right drops content from the start.
-    const lo = isTimeBased(clip) ? -clip.in / clip.speed : -clip.start;
+    const lo = Math.max(...all.map((c) => (isTimeBased(c) ? -c.in / c.speed : -c.start)));
     const delta = clamp(snapToFrame(dt, fps), lo, clip.duration - minLen);
     previewEdit((d) => {
-      const tr = trackOf(d, clipId);
-      if (tr) rippleTrimStart(tr, clipId, delta);
+      for (const c of all) {
+        const tr = trackOf(d, c.id);
+        if (tr) rippleTrimStart(tr, c.id, delta);
+      }
     });
     return null;
   });
@@ -91,19 +107,31 @@ export function startRoll(e: PointerEvent | React.PointerEvent, clipId: string, 
   if (!other) return false;
   const left = side === 'l' ? other : f.clip;
   const right = side === 'l' ? f.clip : other;
-  const mL = left.mediaId ? ctx.media.get(left.mediaId) : undefined;
   const minLen = 1 / fps;
-  const lo = Math.max(left.start + minLen, isTimeBased(right) ? right.start - right.in / right.speed : -Infinity);
-  const hi = Math.min(clipEnd(right) - minLen, isTimeBased(left) ? left.start + maxClipDuration(left, mL) : Infinity);
-  const trackId = f.track.id;
+  // Pairs rolled together: this cut, plus the same cut between linked partners on other tracks.
+  const pairs: { trackId: string; left: Clip; right: Clip }[] = [{ trackId: f.track.id, left, right }];
+  for (const pl of along(base, left, 'r')) {
+    const pr = partnersOf(base, right).find((x) => x.track.id === pl.track.id && adjacentAfter(x.track, pl.clip, fps)?.id === x.clip.id);
+    if (pr) pairs.push({ trackId: pl.track.id, left: pl.clip, right: pr.clip });
+  }
+  let lo = -Infinity;
+  let hi = Infinity;
+  for (const q of pairs) {
+    const mL = q.left.mediaId ? ctx.media.get(q.left.mediaId) : undefined;
+    lo = Math.max(lo, q.left.start + minLen, isTimeBased(q.right) ? q.right.start - q.right.in / q.right.speed : -Infinity);
+    hi = Math.min(hi, clipEnd(q.right) - minLen, isTimeBased(q.left) ? q.left.start + maxClipDuration(q.left, mL) : Infinity);
+  }
+  const exclude = new Set(pairs.flatMap((q) => [q.left.id, q.right.id]));
   runDrag(e.clientX, (dt, ev) => {
     let cut = right.start + dt;
     let at: number | null = null;
-    if (!ev.altKey) ({ time: cut, at } = ctx.snap(cut, new Set([left.id, right.id])));
+    if (!ev.altKey) ({ time: cut, at } = ctx.snap(cut, exclude));
     cut = clamp(snapToFrame(cut, fps), lo, hi);
     previewEdit((d) => {
-      const tr = track(d, trackId);
-      if (tr) rollEdit(tr, left.id, right.id, cut);
+      for (const q of pairs) {
+        const tr = track(d, q.trackId);
+        if (tr) rollEdit(tr, q.left.id, q.right.id, cut);
+      }
     });
     return at;
   });
@@ -115,13 +143,15 @@ export function startSlip(e: PointerEvent | React.PointerEvent, clipId: string, 
   const f = findClip(base, clipId);
   if (!f || !isTimeBased(f.clip)) return false;
   const { clip } = f;
-  const m = clip.mediaId ? ctx.media.get(clip.mediaId) : undefined;
+  const all = [clip, ...along(base, clip, 'both').map((x) => x.clip).filter(isTimeBased)];
   runDrag(e.clientX, (dt) => {
     // Dragging right reveals earlier source material.
     const sourceDelta = snapToFrame(-dt, base.settings.fps) * clip.speed;
     previewEdit((d) => {
-      const c = trackOf(d, clipId)?.clips.find((x) => x.id === clipId);
-      if (c) slipClip(c, sourceDelta, m);
+      for (const one of all) {
+        const c = trackOf(d, one.id)?.clips.find((x) => x.id === one.id);
+        if (c) slipClip(c, sourceDelta, one.mediaId ? ctx.media.get(one.mediaId) : undefined);
+      }
     });
     return null;
   });
@@ -135,25 +165,36 @@ export function startSlide(e: PointerEvent | React.PointerEvent, clipId: string,
   const { clip, track: tr } = f;
   const fps = base.settings.fps;
   const minLen = 1 / fps;
-  const prev = adjacentBefore(tr, clip, fps);
-  const next = adjacentAfter(tr, clip, fps);
-  const gaps = gapBounds(tr, clip);
-  let lo = prev ? prev.start + minLen : gaps.prevEnd;
-  let hi = next ? clipEnd(next) - minLen - clip.duration : gaps.nextStart - clip.duration;
-  if (prev && isTimeBased(prev)) hi = Math.min(hi, prev.start + maxClipDuration(prev, prev.mediaId ? ctx.media.get(prev.mediaId) : undefined));
-  if (next && isTimeBased(next)) lo = Math.max(lo, next.start - next.in / next.speed - clip.duration);
+  // The clip and its linked partner slide together, each between its own neighbours.
+  const slides = [{ clip, tr }, ...along(base, clip, 'both').map((x) => ({ clip: x.clip, tr: x.track }))].map((x) => ({
+    ...x,
+    prev: adjacentBefore(x.tr, x.clip, fps),
+    next: adjacentAfter(x.tr, x.clip, fps),
+  }));
+  let lo = -Infinity;
+  let hi = Infinity;
+  for (const { clip: c, tr: t, prev, next } of slides) {
+    const gaps = gapBounds(t, c);
+    lo = Math.max(lo, prev ? prev.start + minLen : gaps.prevEnd);
+    hi = Math.min(hi, next ? clipEnd(next) - minLen - c.duration : gaps.nextStart - c.duration);
+    if (prev && isTimeBased(prev)) hi = Math.min(hi, prev.start + maxClipDuration(prev, prev.mediaId ? ctx.media.get(prev.mediaId) : undefined));
+    if (next && isTimeBased(next)) lo = Math.max(lo, next.start - next.in / next.speed - c.duration);
+  }
+  const exclude = new Set(slides.flatMap((x) => [x.clip.id, x.prev?.id ?? '', x.next?.id ?? '']));
   runDrag(e.clientX, (dt, ev) => {
     let start = clip.start + dt;
     let at: number | null = null;
     if (!ev.altKey) {
-      const s = ctx.snap(start, new Set([clip.id, prev?.id ?? '', next?.id ?? '']));
+      const s = ctx.snap(start, exclude);
       start = s.time;
       at = s.at;
     }
     start = clamp(snapToFrame(start, fps), lo, hi);
     previewEdit((d) => {
-      const t = track(d, tr.id);
-      if (t) slideClip(t, clipId, start, prev?.id ?? null, next?.id ?? null);
+      for (const x of slides) {
+        const t = track(d, x.tr.id);
+        if (t) slideClip(t, x.clip.id, start, x.prev?.id ?? null, x.next?.id ?? null);
+      }
     });
     return at;
   });

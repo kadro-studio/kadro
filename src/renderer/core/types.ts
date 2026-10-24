@@ -1,6 +1,6 @@
-import type { MediaKind } from '../../shared/api';
+import type { FadeCurve, MediaKind } from '../../shared/api';
 
-export type { MediaKind };
+export type { FadeCurve, MediaKind };
 
 export type TrackKind = 'video' | 'audio';
 /** 'adjustment' applies its effects and colour to everything below it; 'shape' is a vector graphic. */
@@ -294,10 +294,18 @@ export interface Clip {
   keyframes: Partial<Record<AnimProp, Keyframe[]>>;
 
   volume: number;
+  /** Fades of the picture and the sound, seconds (the handles on the clip's top corners). */
   fadeIn: number;
   fadeOut: number;
+  /** Linear when missing. */
+  fadeInCurve?: FadeCurve;
+  fadeOutCurve?: FadeCurve;
   muted: boolean;
   audioFx: AudioFx;
+  /** Clips with the same link (a video and its sound) are selected, moved, trimmed and cut together. */
+  link?: string;
+  /** This video's sound lives in a separate audio clip, so the video itself is silent. */
+  detached?: boolean;
 
   text: TextStyle | null;
   shape: ShapeStyle | null;

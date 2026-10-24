@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { ffmpegPath, hwEncoders, tailLog } from './ffmpeg';
 import {
   AUDIO_FX,
+  FFMPEG_FADE,
   frameBytes,
   type AudioSegment,
   type DecoderSpec,
@@ -209,8 +210,10 @@ function audioGraph(segments: AudioSegment[], firstInput: number, total: number)
     f.push(...audioFxFilters(seg));
     if (seg.volumeKeys?.length) f.push(`volume='${volumeExpr(seg.volumeKeys, seg.volume)}':eval=frame`);
     else if (Math.abs(seg.volume - 1) > 1e-4) f.push(`volume=${seg.volume.toFixed(4)}`);
-    if (seg.fadeIn > 0) f.push(`afade=t=in:st=0:d=${seg.fadeIn.toFixed(4)}`);
-    if (seg.fadeOut > 0) f.push(`afade=t=out:st=${Math.max(0, seg.duration - seg.fadeOut).toFixed(4)}:d=${seg.fadeOut.toFixed(4)}`);
+    if (seg.fadeIn > 0) f.push(`afade=t=in:st=0:d=${seg.fadeIn.toFixed(4)}:curve=${FFMPEG_FADE[seg.fadeInCurve ?? 'linear']}`);
+    if (seg.fadeOut > 0) {
+      f.push(`afade=t=out:st=${Math.max(0, seg.duration - seg.fadeOut).toFixed(4)}:d=${seg.fadeOut.toFixed(4)}:curve=${FFMPEG_FADE[seg.fadeOutCurve ?? 'linear']}`);
+    }
     f.push(`atrim=0:${seg.duration.toFixed(6)}`);
     const delay = Math.max(0, Math.round(seg.start * 1000));
     if (delay > 0) f.push(`adelay=${delay}:all=1`);

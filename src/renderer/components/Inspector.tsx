@@ -3,16 +3,16 @@ import { ANIMATIONS, FILTERS, TRANSITIONS } from '../core/effects';
 import { fillScale, stretchOf } from '../core/geometry';
 import { isAnimated, keyframeAt, propValue, setPropAt, toggleKeyframe, clearKeyframes } from '../core/keyframes';
 import { defaultAdjust, defaultCrop, defaultTransform, defaultWheels, findClip, maxClipDuration, mediaMap, projectDuration } from '../core/project';
-import { setClipSpeed } from '../core/edit';
 import { clipHasAudio } from '../core/scene';
 import { formatTimecode } from '../core/time';
-import type { Adjust, AnimProp, BlendMode, Clip, MediaAsset, Project, ShapeKind, ShapeStyle, TextAlign } from '../core/types';
+import type { Adjust, AnimProp, BlendMode, Clip, FadeCurve, MediaAsset, Project, ShapeKind, ShapeStyle, TextAlign } from '../core/types';
 import { player } from '../engine/player';
 import { useLang, useT, type I18nKey } from '../i18n';
-import { addEffect, applyTransition, deleteSelection, detachAudio, moveEffect, openDialog, removeEffect } from '../store/actions';
+import { addEffect, applyTransition, deleteSelection, detachAudio, FADE_CURVES, moveEffect, openDialog, removeEffect, restoreAudio, setFade, speedRecipe } from '../store/actions';
+import { oneGroup, partnersOf } from '../core/links';
 import { fxOfKind, useFx } from '../engine/fx/registry';
 import { fxName } from '../engine/fx/types';
-import { edit, previewEdit, toast, useEditor } from '../store/editor';
+import { edit, previewEdit, select, toast, useEditor } from '../store/editor';
 import { setPrefs, usePrefs } from '../store/prefs';
 import { api } from '../api';
 import { loadLut } from '../engine/lut';
@@ -76,7 +76,8 @@ export function Inspector() {
   const pro = !usePrefs((p) => p.simpleMode);
 
   if (selection.length === 0) return <ProjectInfo project={project} />;
-  if (selection.length > 1) {
+  // A video and its linked sound are one thing to edit: the clicked one is shown.
+  if (selection.length > 1 && !oneGroup(project, selection)) {
     return (
       <>
         <div className="inspector-head">
@@ -136,10 +137,12 @@ export function Inspector() {
               keyframe={kfControl(clip, 'opacity', local, project.settings.fps)} />
           </Section>
         )}
+        <FadeSection clip={clip} />
         {visual && <AnimationSection clip={clip} set={set} />}
         {visual && <TransitionSection clip={clip} set={set} />}
         {(clip.type === 'video' || clip.type === 'audio') && <SpeedSection clip={clip} m={m} />}
         {clipHasAudio(clip, media) && <AudioSection clip={clip} set={set} local={local} fps={project.settings.fps} />}
+        {clip.type === 'video' && clip.detached && <LinkedSoundSection clip={clip} project={project} />}
         {visual && clip.type !== 'color' && <EffectsSection clip={clip} set={set} />}
         {pro && visual && clip.type !== 'shape' && <WheelsSection clip={clip} set={set} />}
         {pro && visual && clip.type !== 'shape' && <CurvesSection clip={clip} set={set} />}
@@ -655,6 +658,42 @@ function BlendSection({ clip, set }: { clip: Clip; set: Setter }) {
   );
 }
 
+/** Fade in / out of the picture and the sound, with Vegas's curve shapes. Linked partners follow. */
+function FadeSection({ clip }: { clip: Clip }) {
+  const t = useT();
+  const curves = FADE_CURVES.map((c) => ({ value: c as string, label: t(`fade.${c}` as I18nKey) }));
+  const field = (side: 'in' | 'out') => {
+    const len = side === 'in' ? clip.fadeIn : clip.fadeOut;
+    const other = side === 'in' ? clip.fadeOut : clip.fadeIn;
+    const curve = (side === 'in' ? clip.fadeInCurve : clip.fadeOutCurve) ?? 'linear';
+    const max = Math.max(0.1, Math.min(10, clip.duration - other));
+    const preview = (v: number) =>
+      previewEdit((d) => {
+        const c = d.tracks.flatMap((x) => x.clips).find((x) => x.id === clip.id);
+        if (c && side === 'in') c.fadeIn = v;
+        else if (c) c.fadeOut = v;
+      });
+    return (
+      <>
+        <SliderField label={t(side === 'in' ? 'p.fadeIn' : 'p.fadeOut')} value={Math.min(len, max)} min={0} max={max} step={0.05} unit="s" defaultValue={0}
+          onChange={(v, final) => (final ? setFade(clip.id, side, { len: v }) : preview(v))} />
+        {len > 0 && (
+          <SelectField label={t('fade.curve')} value={curve} options={curves} onChange={(v) => setFade(clip.id, side, { curve: v as FadeCurve })} />
+        )}
+      </>
+    );
+  };
+  return (
+    <Section id="fades" title={t('sec.fades')}>
+      {field('in')}
+      {field('out')}
+      <span className="panel-hint" style={{ margin: 0 }}>
+        {t('fade.hint')}
+      </span>
+    </Section>
+  );
+}
+
 function AnimationSection({ clip, set }: { clip: Clip; set: Setter }) {
   const t = useT();
   const types = ANIMATIONS.filter((a) => a !== 'typewriter' || clip.type === 'text');
@@ -781,7 +820,7 @@ const SPEED_PRESETS = [0.25, 0.5, 1, 1.5, 2, 4];
 function SpeedSection({ clip, m }: { clip: Clip; m: MediaAsset | undefined }) {
   const t = useT();
   const apply = (v: number, final: boolean) => {
-    const r = (d: Draft<Project>) => setClipSpeed(d, clip.id, Math.min(16, Math.max(0.1, v)), m);
+    const r = speedRecipe(clip.id, v);
     if (final) edit(r);
     else previewEdit(r);
   };
@@ -806,7 +845,6 @@ function SpeedSection({ clip, m }: { clip: Clip; m: MediaAsset | undefined }) {
 
 function AudioSection({ clip, set, local, fps }: { clip: Clip; set: Setter; local: number; fps: number }) {
   const t = useT();
-  const maxFade = Math.max(0, Math.min(10, clip.duration / 2));
   const tol = 0.5 / fps;
   const band = (key: 'low' | 'mid' | 'high', label: I18nKey) => (
     <SliderField key={key} label={t(label)} value={clip.audioFx[key]} min={-12} max={12} step={0.5} unit="dB" defaultValue={0}
@@ -833,10 +871,6 @@ function AudioSection({ clip, set, local, fps }: { clip: Clip; set: Setter; loca
           <ToggleField label={t('p.compressor')} value={clip.audioFx.compressor} onChange={(v) => set((c) => void (c.audioFx.compressor = v), true)} />
         </>
       )}
-      <SliderField label={t('p.fadeIn')} value={clip.fadeIn} min={0} max={maxFade} step={0.1} unit="s" defaultValue={0}
-        onChange={(v, f) => set((c) => void (c.fadeIn = v), f)} />
-      <SliderField label={t('p.fadeOut')} value={clip.fadeOut} min={0} max={maxFade} step={0.1} unit="s" defaultValue={0}
-        onChange={(v, f) => set((c) => void (c.fadeOut = v), f)} />
       <ToggleField label={t('p.mute')} value={clip.muted} onChange={(v) => set((c) => void (c.muted = v), true)} />
       <div className="row wrap">
         <button className="btn small" onClick={() => openDialog('denoise')}>
@@ -851,6 +885,41 @@ function AudioSection({ clip, set, local, fps }: { clip: Clip; set: Setter; loca
         {clip.type === 'video' && (
           <button className="btn small" onClick={() => detachAudio(clip.id)}>
             {t('p.detachAudio')}
+          </button>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+/** A video whose sound is a separate clip on an audio track: shortcuts to that sound. */
+function LinkedSoundSection({ clip, project }: { clip: Clip; project: Project }) {
+  const t = useT();
+  const sound = partnersOf(project, clip).find((x) => x.clip.type === 'audio')?.clip;
+  return (
+    <Section id="audio" title={t('sec.audio')}>
+      <span className="panel-hint" style={{ margin: 0 }}>
+        {t(sound ? 'link.soundHint' : 'link.noSound')}
+      </span>
+      <div className="row wrap">
+        {sound ? (
+          <>
+            <button className="btn small" onClick={() => select([sound.id])}>
+              {t('link.editSound')}
+            </button>
+            <button
+              className="btn small"
+              onClick={() => {
+                select([clip.id, sound.id]);
+                openDialog('silence');
+              }}
+            >
+              {t('enh.silence')}…
+            </button>
+          </>
+        ) : (
+          <button className="btn small" onClick={() => restoreAudio(clip.id)}>
+            {t('link.restore')}
           </button>
         )}
       </div>

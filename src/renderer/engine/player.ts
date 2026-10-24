@@ -322,7 +322,8 @@ class Player implements SourceProvider {
       entry = undefined;
     }
     if (!entry) {
-      const el = document.createElement(m.kind === 'audio' ? 'audio' : 'video');
+      // A video's sound on an audio track plays without decoding its picture.
+      const el = document.createElement(m.kind === 'audio' || clip.type === 'audio' ? 'audio' : 'video');
       el.crossOrigin = 'anonymous';
       el.preload = 'auto';
       el.muted = false;

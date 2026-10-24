@@ -24,6 +24,8 @@ export interface Prefs {
   libraryKeys: { pexels?: string; pixabay?: string; shadertoy?: string };
   /** Seconds for photos, titles and elements added to the timeline. */
   stillDuration: number;
+  /** A video's sound goes to an audio track as a linked clip (like Vegas). */
+  splitAudio: boolean;
   /** Scroll the timeline to keep the playhead in view during playback. */
   followPlayhead: boolean;
   /** Playback starts over at the end (of the in/out range when it is set). */
@@ -72,6 +74,7 @@ const DEFAULTS: Prefs = {
   theme: DEFAULT_THEME,
   libraryKeys: {},
   stillDuration: 5,
+  splitAudio: true,
   followPlayhead: true,
   loopPlayback: false,
   autoUpdate: true,

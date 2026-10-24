@@ -22,16 +22,15 @@ import {
   closeGaps,
   cloneClip,
   insertClip,
-  openGap,
   placeClip,
   removeClips,
   rippleDelete,
   setClipSpeed,
-  splitClip,
 } from '../core/edit';
+import { edgePartners, insertGap, relink, splitLinked, withPartners } from '../core/links';
 import { TEXT_PRESETS } from '../core/textPresets';
 import { clamp, EPS, snapToFrame } from '../core/time';
-import type { Clip, ClipType, Marker, MediaAsset, Project, ShapeKind, Track, TrackKind } from '../core/types';
+import type { Clip, ClipType, FadeCurve, Marker, MediaAsset, Project, ShapeKind, Track, TrackKind } from '../core/types';
 import type { I18nKey } from '../i18n';
 import { clipHasAudio } from '../core/scene';
 import { clearWaveforms } from '../engine/waveforms';
@@ -113,39 +112,54 @@ export interface PlaceOptions {
   insert?: boolean;
 }
 
-function placeNewClip(clip: Clip, kind: TrackKind, opts: PlaceOptions): void {
+/**
+ * Audio track for the sound of a video placed on `video`: the one with the same
+ * number (V1 → A1) when it has room, else any with room, else a new one. Music
+ * already there is never overwritten. In an insert edit the same-number track
+ * is used, as the insert makes room on it.
+ */
+function soundTrackFor(d: Draft<Project>, video: Track, sound: Clip, insert: boolean): Track {
+  const audio = d.tracks.filter((tr) => tr.kind === 'audio');
+  const same = audio[d.tracks.filter((tr) => tr.kind === 'video').indexOf(video)];
+  if (same && !same.locked && (insert || isFree(same, sound.start, clipEnd(sound)))) return same;
+  const free = insert ? undefined : audio.find((tr) => !tr.locked && isFree(tr, sound.start, clipEnd(sound)));
+  return free ?? addTrackDraft(d, 'audio');
+}
+
+/** Puts a new clip on the timeline; `sound` is a video's own sound, placed on an audio track below it. */
+function placeNewClip(clip: Clip, kind: TrackKind, opts: PlaceOptions, sound?: Clip): void {
   const p = st().project;
   clip.start = snapToFrame(Math.max(0, opts.time ?? st().playhead), fps());
   const end = clipEnd(clip);
+  if (sound) sound.start = clip.start;
   edit((d) => {
-    if (opts.newTrack) {
-      insertClip(addTrackDraft(d, kind), clip);
-      return;
-    }
     let track: Track | undefined;
-    if (opts.trackId) {
+    if (opts.trackId && !opts.newTrack) {
       const target = trackIn(d, opts.trackId);
       if (target && target.kind === kind && !target.locked) track = target;
     }
-    if (track && opts.insert) {
-      // Split whatever straddles the insertion point, then push the rest right.
-      const straddling = track.clips.find((c) => c.start < clip.start - EPS && clipEnd(c) > clip.start + EPS);
-      if (straddling) splitClip(track, straddling.id, clip.start, frameLen());
-      openGap(track, clip.start, clip.duration);
+    if (opts.newTrack) {
+      track = addTrackDraft(d, kind);
       insertClip(track, clip);
+    } else if (track && opts.insert) {
+      // Cut whatever straddles the insertion point and push the rest (with linked sound) right.
+      const soundTrack = sound ? soundTrackFor(d, track, sound, true) : null;
+      insertGap(d, soundTrack ? [track.id, soundTrack.id] : [track.id], clip.start, clip.duration, frameLen(), st().linking);
+      insertClip(track, clip);
+      if (sound && soundTrack) insertClip(soundTrack, sound);
       return;
-    }
-    if (track && opts.overwrite) {
+    } else if (track && opts.overwrite) {
       placeClip(track, clip);
-      return;
+    } else {
+      if (!track || !isFree(track, clip.start, end)) {
+        const free = freeTrack(p, kind, clip.start, end, opts.trackId);
+        track = free ? trackIn(d, free.id) : addTrackDraft(d, kind);
+      }
+      insertClip(track!, clip);
     }
-    if (!track || !isFree(track, clip.start, end)) {
-      const free = freeTrack(p, kind, clip.start, end, opts.trackId);
-      track = free ? trackIn(d, free.id) : addTrackDraft(d, kind);
-    }
-    insertClip(track!, clip);
+    if (sound) insertClip(soundTrackFor(d, track!, sound, false), sound);
   });
-  select([clip.id]);
+  select(sound ? [clip.id, sound.id] : [clip.id]);
 }
 
 function clipTypeFor(media: MediaAsset): ClipType {
@@ -194,6 +208,13 @@ export function addMediaClip(mediaId: string, opts: PlaceOptions = {}): void {
   const timeBased = type === 'video' || type === 'audio';
   const duration = timeBased && media.duration > 0 ? media.duration : stillDuration();
   const clip = makeClip(type, { name: media.name, mediaId, duration });
+  // Like Vegas: a video's sound goes to an audio track, linked to the picture.
+  if (type === 'video' && media.hasAudio && usePrefs.getState().splitAudio) {
+    clip.link = uid();
+    clip.detached = true;
+    placeNewClip(clip, kind, opts, makeClip('audio', { name: media.name, mediaId, duration, link: clip.link }));
+    return;
+  }
   placeNewClip(clip, kind, opts);
 }
 
@@ -348,13 +369,15 @@ function editableSelection(): string[] {
   });
 }
 
-export function splitAt(time: number, ids?: string[]): void {
+/** Cuts clips at `time` (the selection, or everything there); linked partners are cut with them. */
+export function splitAt(time: number, ids?: string[], linked = st().linking): void {
   const p = st().project;
   const tt = snapToFrame(time, fps());
   let targets = ids ?? editableSelection();
+  if (linked) targets = withPartners(p, targets);
   targets = targets.filter((id) => {
     const f = findClip(p, id);
-    return f && tt > f.clip.start && tt < clipEnd(f.clip);
+    return f && !f.track.locked && tt > f.clip.start && tt < clipEnd(f.clip);
   });
   if (targets.length === 0) {
     for (const tr of p.tracks) {
@@ -368,11 +391,13 @@ export function splitAt(time: number, ids?: string[]): void {
   }
   const newIds: string[] = [];
   edit((d) => {
+    const done = new Set<string>();
     for (const id of targets) {
-      const tr = d.tracks.find((x) => x.clips.some((c) => c.id === id));
-      if (!tr) continue;
-      const right = splitClip(tr, id, tt, frameLen());
-      if (right) newIds.push(right);
+      if (done.has(id)) continue;
+      for (const [from, right] of splitLinked(d, id, tt, frameLen(), linked)) {
+        done.add(from);
+        newIds.push(right);
+      }
     }
   });
   if (st().selection.length > 0) select(newIds);
@@ -425,6 +450,7 @@ export function duplicateSelection(): void {
   if (ids.length === 0) return;
   const newIds: string[] = [];
   edit((d) => {
+    const copies: Clip[] = [];
     for (const id of ids) {
       const tr = d.tracks.find((x) => x.clips.some((c) => c.id === id));
       const src = tr?.clips.find((c) => c.id === id);
@@ -435,8 +461,10 @@ export function duplicateSelection(): void {
       // Insert edit: push later clips on the track to make room.
       for (const c of tr.clips) if (c.start >= copy.start - EPS) c.start += copy.duration;
       insertClip(tr, copy);
+      copies.push(copy);
       newIds.push(copy.id);
     }
+    relink(copies);
   });
   select(newIds);
 }
@@ -508,14 +536,17 @@ export function paste(time = st().playhead): void {
   const at = snapToFrame(time, fps());
   const newIds: string[] = [];
   edit((d) => {
+    const copies: Clip[] = [];
     for (const { clip, trackId } of cb.clips) {
       const kind: TrackKind = clip.type === 'audio' ? 'audio' : 'video';
       let tr = trackIn(d, trackId);
       if (!tr || tr.locked || tr.kind !== kind) tr = d.tracks.find((x) => x.kind === kind && !x.locked) ?? addTrackDraft(d, kind);
       const copy = { ...structuredClone(clip), id: uid(), start: at + clip.start };
       placeClip(tr, copy);
+      copies.push(copy);
       newIds.push(copy.id);
     }
+    relink(copies);
   });
   select(newIds);
 }
@@ -578,11 +609,13 @@ export function selectAll(): void {
   select(p.tracks.filter((tr) => !tr.locked).flatMap((tr) => tr.clips.map((c) => c.id)));
 }
 
+/** Moves a video's sound to a linked clip on an audio track; the video itself falls silent. */
 export function detachAudio(clipId: string): void {
   const p = st().project;
   const f = findClip(p, clipId);
   if (!f || f.clip.type !== 'video' || !clipHasAudio(f.clip, mediaMap(p))) return;
   const src = f.clip;
+  const link = src.link ?? uid();
   const audio = makeClip('audio', {
     name: src.name,
     mediaId: src.mediaId,
@@ -591,26 +624,93 @@ export function detachAudio(clipId: string): void {
     in: src.in,
     speed: src.speed,
     volume: src.volume,
+    muted: src.muted,
     fadeIn: src.fadeIn,
     fadeOut: src.fadeOut,
+    fadeInCurve: src.fadeInCurve,
+    fadeOutCurve: src.fadeOutCurve,
     audioFx: structuredClone(src.audioFx),
     keyframes: src.keyframes.volume ? { volume: structuredClone(src.keyframes.volume) } : {},
+    link,
   });
-  const free = freeTrack(p, 'audio', audio.start, clipEnd(audio));
   edit((d) => {
-    const tr = free ? trackIn(d, free.id)! : addTrackDraft(d, 'audio');
-    insertClip(tr, audio);
     const v = d.tracks.flatMap((x) => x.clips).find((c) => c.id === clipId);
-    if (v) v.muted = true;
+    const vt = d.tracks.find((x) => x.clips.some((c) => c.id === clipId));
+    if (!v || !vt) return;
+    insertClip(soundTrackFor(d, vt, audio, false), audio);
+    v.detached = true;
+    v.link = link;
+  });
+  select([clipId, audio.id]);
+}
+
+/** Gives a video whose separate sound was deleted its own sound back. */
+export function restoreAudio(clipId: string): void {
+  updateClip(clipId, (c) => {
+    c.detached = false;
+    delete c.link;
   });
 }
 
-export function setSpeed(clipId: string, speed: number): void {
+/** Links clips so they are selected, moved, trimmed and cut together. */
+export function linkClips(ids: string[]): void {
+  const editable = ids.filter((id) => findClip(st().project, id));
+  if (editable.length < 2) return;
+  const link = uid();
+  updateClips(editable, (c) => {
+    c.link = link;
+  });
+  toast(t('link.done', { n: editable.length }), 'success');
+}
+
+/** Unlinks clips from their partners, so each is edited on its own. */
+export function unlinkClips(ids: string[]): void {
+  const all = withPartners(st().project, ids);
+  if (all.length === 0) return;
+  updateClips(all, (c) => {
+    delete c.link;
+  });
+  select(ids);
+}
+
+export const FADE_CURVES: FadeCurve[] = ['fast', 'linear', 'slow', 'smooth', 'sharp'];
+
+/** Changes a clip's fade-in or fade-out (length and/or curve), and the linked partners' at the same edge. */
+export function setFade(clipId: string, side: 'in' | 'out', patch: { len?: number; curve?: FadeCurve }): void {
   const p = st().project;
   const f = findClip(p, clipId);
   if (!f) return;
-  const media = f.clip.mediaId ? p.media.find((m) => m.id === f.clip.mediaId) : undefined;
-  edit((d) => setClipSpeed(d, clipId, clamp(speed, 0.1, 16), media));
+  const ids = [clipId, ...(st().linking ? edgePartners(p, f.clip, side === 'in' ? 'l' : 'r').map((x) => x.clip.id) : [])];
+  updateClips(ids, (c) => {
+    if (patch.len !== undefined) {
+      const len = clamp(patch.len, 0, Math.max(0, c.duration - (side === 'in' ? c.fadeOut : c.fadeIn)));
+      if (side === 'in') c.fadeIn = len;
+      else c.fadeOut = len;
+    }
+    if (patch.curve) {
+      if (side === 'in') c.fadeInCurve = patch.curve;
+      else c.fadeOutCurve = patch.curve;
+    }
+  });
+}
+
+/** Recipe that changes playback speed; the linked sound or picture keeps pace. */
+export function speedRecipe(clipId: string, speed: number): (d: Draft<Project>) => void {
+  const p = st().project;
+  const ids = (st().linking ? withPartners(p, [clipId]) : [clipId]).filter((id) => {
+    const type = findClip(p, id)?.clip.type;
+    return type === 'video' || type === 'audio';
+  });
+  return (d) => {
+    for (const id of ids) {
+      const mediaId = findClip(p, id)?.clip.mediaId;
+      setClipSpeed(d, id, clamp(speed, 0.1, 16), mediaId ? p.media.find((m) => m.id === mediaId) : undefined);
+    }
+  };
+}
+
+export function setSpeed(clipId: string, speed: number): void {
+  if (findClip(st().project, clipId)) edit(speedRecipe(clipId, speed));
 }
 
 function defaultParams(type: string): Record<string, number> | undefined {
@@ -760,8 +860,8 @@ export async function freezeFrame(seconds = 3): Promise<void> {
     edit((d) => {
       const tr = trackIn(d, f.track.id);
       if (!tr) return;
-      splitClip(tr, f.clip.id, at, frameLen());
-      openGap(tr, at, seconds);
+      // The linked sound gets the same pause, so it stays in sync after the frozen frame.
+      insertGap(d, [tr.id], at, seconds, frameLen(), st().linking);
       insertClip(tr, freeze);
     });
     select([freeze.id]);
@@ -782,7 +882,11 @@ export async function reverseClip(clipId: string): Promise<void> {
     const out = await api.reverseRange(m.path, f.clip.in, f.clip.duration * f.clip.speed, m.hasAudio);
     const [rev] = await importFiles([out]);
     if (!rev) return;
-    updateClip(clipId, (c) => {
+    // A linked partner playing the same part of the same file is reversed with it.
+    const same = (c: Clip) =>
+      c.mediaId === f.clip.mediaId && Math.abs(c.in - f.clip.in) < 1e-3 && Math.abs(c.duration * c.speed - f.clip.duration * f.clip.speed) < 1e-3;
+    const ids = st().linking && m.hasAudio ? withPartners(p, [clipId]).filter((id) => { const g = findClip(p, id); return g && same(g.clip); }) : [clipId];
+    updateClips(ids, (c) => {
       c.mediaId = rev.id;
       c.in = 0;
       c.name = `${m.name} (${t('tool.reverse').toLowerCase()})`;

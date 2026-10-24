@@ -1,8 +1,8 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { mediaUrl, WAVEFORM_RATE } from '../../../shared/api';
+import { fadeShape, mediaUrl, WAVEFORM_RATE } from '../../../shared/api';
 import { keyframeTimes } from '../../core/keyframes';
 import { formatRuler } from '../../core/time';
-import type { Clip, MediaAsset, MediaRuntime, Track } from '../../core/types';
+import type { Clip, FadeCurve, MediaAsset, MediaRuntime, Track } from '../../core/types';
 import { getWaveform } from '../../engine/waveforms';
 import { useT } from '../../i18n';
 import { renameTrack, setTrackFlag } from '../../store/actions';
@@ -280,6 +280,52 @@ function Filmstrip({ clip, rt, pps, height }: { clip: Clip; rt: MediaRuntime | u
   return <div className="clip-strip">{tiles}</div>;
 }
 
+/** Points of a fade curve in a 0..100 high box: from silent/transparent at the bottom to full at the top. */
+function fadePoints(x0: number, len: number, curve: FadeCurve | undefined, out: boolean): string {
+  const pts: string[] = [];
+  const n = 24;
+  for (let k = 0; k <= n; k++) {
+    const f = k / n;
+    const g = fadeShape(curve, out ? 1 - f : f);
+    pts.push(`${(x0 + f * len).toFixed(1)},${((1 - g) * 100).toFixed(1)}`);
+  }
+  return pts.join(' ');
+}
+
+/** Vegas-style fades drawn over the clip: the curve, and shade where it is faded. */
+function FadeCurves({ clip, width, pps }: { clip: Clip; width: number; pps: number }) {
+  const fi = Math.min(clip.fadeIn, clip.duration) * pps;
+  const fo = Math.min(clip.fadeOut, clip.duration) * pps;
+  if (fi <= 0 && fo <= 0) return null;
+  const inPts = fi > 0 ? fadePoints(0, fi, clip.fadeInCurve, false) : '';
+  const outPts = fo > 0 ? fadePoints(width - fo, fo, clip.fadeOutCurve, true) : '';
+  return (
+    <svg className="clip-fades" viewBox={`0 0 ${width} 100`} preserveAspectRatio="none">
+      {fi > 0 && (
+        <>
+          <polygon className="shade" points={`0,0 ${inPts}`} />
+          <polyline className="line" points={inPts} vectorEffect="non-scaling-stroke" />
+        </>
+      )}
+      {fo > 0 && (
+        <>
+          <polygon className="shade" points={`${outPts} ${width},0`} />
+          <polyline className="line" points={outPts} vectorEffect="non-scaling-stroke" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** A small picture of a fade curve, for menus. */
+export function FadeGlyph({ curve, out = false }: { curve: FadeCurve; out?: boolean }) {
+  return (
+    <svg className="fade-glyph" viewBox="-4 -8 108 116" width={24} height={16} preserveAspectRatio="none">
+      <polyline points={fadePoints(0, 100, curve, out)} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 export interface ClipViewProps {
   clip: Clip;
   track: Track;
@@ -290,16 +336,25 @@ export interface ClipViewProps {
   rt: MediaRuntime | undefined;
   razor: boolean;
   waveVersion: number;
+  /** Linked to another clip (a video and its sound). */
+  linked: boolean;
+  /** Length shown next to a fade handle while it is dragged. */
+  fadeTip: { side: 'in' | 'out'; len: number } | null;
   onPointerDown: (e: React.PointerEvent, clip: Clip, part: 'body' | 'l' | 'r') => void;
+  onFadeDown: (e: React.PointerEvent, clip: Clip, side: 'in' | 'out') => void;
   onContextMenu: (e: React.MouseEvent, clip: Clip) => void;
 }
 
 export const ClipView = memo(function ClipView(p: ClipViewProps) {
+  const t = useT();
   const { clip, track, pps } = p;
   const left = clip.start * pps;
   const width = Math.max(2, clip.duration * pps);
   const bodyH = p.height - 6 - 17 - 2;
-  const hasAudio = clip.type === 'audio' || (clip.type === 'video' && !!p.media?.hasAudio);
+  const hasAudio = clip.type === 'audio' || (clip.type === 'video' && !clip.detached && !!p.media?.hasAudio);
+  // Fade handles sit on the top corners, at the inner end of each fade.
+  const fadeX = (len: number) => Math.min(Math.max(0, Math.min(len, clip.duration) * pps - 5), width - 10);
+  const fadeHandles = !track.locked && !p.razor && width >= 26;
   const thumbs = usePrefs((s) => s.clipThumbs);
   const waves = usePrefs((s) => s.clipWaves);
   const showStrip = thumbs && (clip.type === 'video' || clip.type === 'image');
@@ -333,6 +388,7 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
         {clip.speed !== 1 && <span className="badge">×{+clip.speed.toFixed(2)}</span>}
         {fxActive && <span className="badge">fx</span>}
         {clip.muted && hasAudio && <Icon name="volumeOff" size={12} />}
+        {p.linked && <Icon name="link" size={11} className="clip-link" />}
       </div>
       <div className="clip-body">
         {showStrip && <Filmstrip clip={clip} rt={p.rt} pps={pps} height={bodyH} />}
@@ -341,8 +397,7 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
         {hasAudio && waves && <Waveform clip={clip} pps={pps} color={clip.type === 'audio' ? '#a5f3d0' : 'rgba(255,255,255,0.8)'} waveVersion={p.waveVersion} />}
       </div>
       {clip.transition.type !== 'none' && <div className="clip-transition" style={{ width: Math.min(clip.transition.duration, clip.duration) * pps }} />}
-      {clip.fadeIn > 0 && <div className="clip-fade in" style={{ width: clip.fadeIn * pps }} />}
-      {clip.fadeOut > 0 && <div className="clip-fade out" style={{ width: clip.fadeOut * pps }} />}
+      <FadeCurves clip={clip} width={width} pps={pps} />
       {kfs.map((k) => (
         <div key={k} className="clip-kf" style={{ left: k * pps }} />
       ))}
@@ -351,6 +406,27 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
           <div className="clip-trim l" onPointerDown={(e) => (e.stopPropagation(), p.onPointerDown(e, clip, 'l'))} />
           <div className="clip-trim r" onPointerDown={(e) => (e.stopPropagation(), p.onPointerDown(e, clip, 'r'))} />
         </>
+      )}
+      {fadeHandles && (
+        <>
+          <div
+            className={`fade-handle in ${clip.fadeIn > 0 ? 'set' : ''}`}
+            style={{ left: fadeX(clip.fadeIn) }}
+            title={t('fade.handle')}
+            onPointerDown={(e) => p.onFadeDown(e, clip, 'in')}
+          />
+          <div
+            className={`fade-handle out ${clip.fadeOut > 0 ? 'set' : ''}`}
+            style={{ right: fadeX(clip.fadeOut) }}
+            title={t('fade.handle')}
+            onPointerDown={(e) => p.onFadeDown(e, clip, 'out')}
+          />
+        </>
+      )}
+      {p.fadeTip && (
+        <span className="fade-tip" style={p.fadeTip.side === 'in' ? { left: fadeX(p.fadeTip.len) + 12 } : { right: fadeX(p.fadeTip.len) + 12 }}>
+          {t('prefs.seconds', { n: p.fadeTip.len.toFixed(2) })}
+        </span>
       )}
     </div>
   );

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Draft } from 'immer';
-import { clearRange, insertClip, openGap, splitClip, trimBounds, trimEndTo, trimStartTo } from '../../core/edit';
+import { clearRange, insertClip, trimBounds, trimEndTo, trimStartTo } from '../../core/edit';
+import { edgePartners, insertGap, oneGroup, pairedLinks, partnersOf, withPartners } from '../../core/links';
 import { clipAtTime, clipEnd, displayTracks, findClip, mediaMap, projectDuration, tracksOfKind } from '../../core/project';
+import { clipHasAudio } from '../../core/scene';
 import { clamp, snapToFrame } from '../../core/time';
 import type { Clip, Project, ShapeKind, Track } from '../../core/types';
 import { player } from '../../engine/player';
@@ -27,17 +29,22 @@ import {
   deleteSelection,
   detachAudio,
   duplicateSelection,
+  FADE_CURVES,
   freezeFrame,
+  linkClips,
   openDialog,
   pasteFromClipboard,
   removeMarker,
   renameMarker,
   updateMarker,
   removeTrack,
+  restoreAudio,
   reverseClip,
   selectForward,
+  setFade,
   splitAllTracks,
   splitAt,
+  unlinkClips,
   updateClip,
   zoomBy,
   zoomToFit,
@@ -52,7 +59,7 @@ import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu';
 import { IconButton } from '../../ui/controls';
 import { Icon } from '../../ui/Icon';
 import { defaultAdjust, defaultChroma, defaultWheels } from '../../core/project';
-import { ClipView, HEADER_W, PlayheadLine, RulerCanvas, RulerPlayhead, TrackHeader, trackHeight } from './parts';
+import { ClipView, FadeGlyph, HEADER_W, PlayheadLine, RulerCanvas, RulerPlayhead, TrackHeader, trackHeight } from './parts';
 import { DND } from '../dnd';
 import { setPrefs, usePrefs } from '../../store/prefs';
 import { shortcutLabel, withShortcut } from '../../keymap';
@@ -119,6 +126,7 @@ const TOOLBAR_ITEMS: { id: string; label: I18nKey }[] = [
   { id: 'voice', label: 'vo.title' },
   { id: 'montage', label: 'mt.short' },
   { id: 'snap', label: 'tl.snap' },
+  { id: 'link', label: 'tl.linking' },
   { id: 'tracks', label: 'tb.tracks' },
   { id: 'zoom', label: 'tb.zoom' },
 ];
@@ -145,10 +153,13 @@ type DragState =
       startY: number;
       moved: boolean;
       clickedSelected: boolean;
+      /** Selection a plain click (without dragging) leaves: the clip and its linked partners. */
+      clickIds: string[];
       dt: number;
       trackDelta: number;
     }
-  | { kind: 'trim'; base: Project; id: string; side: 'l' | 'r'; startX: number };
+  /** `ids`: the clip and linked partners whose edge is at the same place, trimmed together. */
+  | { kind: 'trim'; base: Project; id: string; ids: string[]; side: 'l' | 'r'; startX: number };
 
 export function Timeline() {
   const t = useT();
@@ -157,6 +168,7 @@ export function Timeline() {
   const selection = useEditor((s) => s.selection);
   const tool = useEditor((s) => s.tool);
   const snapping = useEditor((s) => s.snapping);
+  const linking = useEditor((s) => s.linking);
   const runtime = useEditor((s) => s.runtime);
   const waveVersion = useEditor((s) => s.waveVersion);
   const snapLine = useEditor((s) => s.snapLine);
@@ -186,6 +198,7 @@ export function Timeline() {
   const [view, setView] = useState({ w: 800, scrollLeft: 0 });
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const drag = useRef<DragState | null>(null);
+  const [fadeTip, setFadeTip] = useState<{ id: string; side: 'in' | 'out'; len: number } | null>(null);
   const insertOnDrop = useRef(false);
   const pendingScroll = useRef<number | null>(null);
 
@@ -194,6 +207,7 @@ export function Timeline() {
   const rows = displayTracks(project);
   const media = useMemo(() => mediaMap(project), [project]);
   const selSet = useMemo(() => new Set(selection), [selection]);
+  const paired = useMemo(() => pairedLinks(project), [project]);
   const hasClips = project.tracks.some((tr) => tr.clips.length > 0);
 
   useLayoutEffect(() => {
@@ -301,24 +315,25 @@ export function Timeline() {
       moved.push({ clip, target });
     }
     const movedIds = new Set(st.ids);
+    if (final && insert && moved.length) {
+      // Insert edit: the moved block opens room on its tracks (and on tracks of linked partners).
+      const t0 = Math.min(...moved.map((m) => m.clip.start));
+      const t1 = Math.max(...moved.map((m) => clipEnd(m.clip)));
+      insertGap(d, moved.map((m) => m.target.id), t0, t1 - t0, 1 / fps, useEditor.getState().linking);
+    }
     for (const { clip, target } of moved) {
-      if (final && insert) {
-        const straddling = target.clips.find((c) => c.start < clip.start - 1e-6 && clipEnd(c) > clip.start + 1e-6);
-        if (straddling) splitClip(target, straddling.id, clip.start, 1 / fps);
-        openGap(target, clip.start, clip.duration);
-      } else if (final) {
-        clearRange(target, clip.start, clipEnd(clip), movedIds);
-      }
+      if (final && !insert) clearRange(target, clip.start, clipEnd(clip), movedIds);
       insertClip(target, clip);
     }
   };
 
   const applyTrim = (d: Draft<Project>, st: Extract<DragState, { kind: 'trim' }>, newEdge: number) => {
-    const tr = d.tracks.find((x) => x.clips.some((c) => c.id === st.id));
-    const clip = tr?.clips.find((c) => c.id === st.id);
-    if (!tr || !clip) return;
-    if (st.side === 'l') trimStartTo(clip, newEdge);
-    else trimEndTo(clip, newEdge);
+    for (const id of st.ids) {
+      const clip = d.tracks.flatMap((x) => x.clips).find((c) => c.id === id);
+      if (!clip) continue;
+      if (st.side === 'l') trimStartTo(clip, newEdge);
+      else trimEndTo(clip, newEdge);
+    }
   };
 
   const toolContext = (): DragContext => ({
@@ -388,31 +403,35 @@ export function Timeline() {
     const found = findClip(s.project, clip.id);
     if (!found || found.track.locked) return;
 
+    // Linked clips (a video and its sound) go together; Alt picks just this one.
+    const linked = s.linking && !e.altKey;
+    const group = (id: string) => (linked ? withPartners(s.project, [id]) : [id]);
+
     if (s.tool === 'razor') {
       let tt = snapToFrame(timeAt(e.clientX), s.project.settings.fps);
       if (s.snapping && Math.abs(tt - s.playhead) * pps < SNAP_PX) tt = s.playhead;
       if (e.shiftKey) splitAllTracks(tt);
-      else splitAt(tt, [clip.id]);
+      else splitAt(tt, [clip.id], linked);
       return;
     }
 
     // Advanced tools handle the gesture themselves; otherwise fall through to select/move/trim.
     const tools = toolContext();
     if (part !== 'body' && s.tool === 'ripple') {
-      select([clip.id]);
+      select(group(clip.id));
       startRipple(e, clip.id, part, tools);
       return;
     }
     if (part !== 'body' && s.tool === 'roll') {
-      select([clip.id]);
+      select(group(clip.id));
       if (startRoll(e, clip.id, part, tools)) return;
     }
     if (part === 'body' && s.tool === 'slip') {
-      select([clip.id]);
+      select(group(clip.id));
       if (startSlip(e, clip.id, tools)) return;
     }
     if (part === 'body' && s.tool === 'slide') {
-      select([clip.id]);
+      select(group(clip.id));
       startSlide(e, clip.id, tools);
       return;
     }
@@ -423,23 +442,82 @@ export function Timeline() {
     if (s.tool === 'forward' && part === 'body') {
       ids = selectForward(clip.start, e.shiftKey ? found.track.id : undefined);
     } else if (additive) {
-      ids = wasSelected ? s.selection.filter((x) => x !== clip.id) : [...s.selection, clip.id];
+      const g = group(clip.id);
+      ids = wasSelected ? s.selection.filter((x) => !g.includes(x)) : [...s.selection, ...g.filter((x) => !s.selection.includes(x))];
       select(ids);
       if (wasSelected) return;
     } else if (!wasSelected) {
-      ids = [clip.id];
+      ids = group(clip.id);
       select(ids);
     }
 
     if (part === 'body') {
-      startMove(e, ids, clip.id, wasSelected && !additive);
+      startMove(e, ids, clip.id, wasSelected && !additive, group(clip.id));
     } else {
-      select([clip.id]);
-      beginDrag({ kind: 'trim', base: s.project, id: clip.id, side: part, startX: e.clientX });
+      select(group(clip.id));
+      const together = linked ? edgePartners(s.project, clip, part).map((x) => x.clip.id) : [];
+      beginDrag({ kind: 'trim', base: s.project, id: clip.id, ids: [clip.id, ...together], side: part, startX: e.clientX });
     }
   };
 
-  const startMove = (e: React.PointerEvent, ids: string[], anchorId: string, clickedSelected: boolean) => {
+  // Fades: drag a top corner of a clip, like in Vegas. Linked partners with the same edge fade too.
+  const onFadeDown = (e: React.PointerEvent, clip: Clip, side: 'in' | 'out') => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const s = useEditor.getState();
+    const found = findClip(s.project, clip.id);
+    if (!found || found.track.locked) return;
+    const linked = s.linking && !e.altKey;
+    const ids = [clip.id, ...(linked ? edgePartners(s.project, clip, side === 'in' ? 'l' : 'r').map((x) => x.clip.id) : [])];
+    if (!s.selection.includes(clip.id)) select(linked ? withPartners(s.project, [clip.id]) : [clip.id]);
+    player.pause();
+    const base = s.project;
+    const fps = base.settings.fps;
+    const x0 = e.clientX;
+    const len0 = side === 'in' ? clip.fadeIn : clip.fadeOut;
+    const room = (c: Clip) => Math.max(0, c.duration - (side === 'in' ? c.fadeOut : c.fadeIn));
+    const max = Math.min(...ids.map((id) => room(findClip(base, id)?.clip ?? clip)));
+    const points = snapPoints(base, new Set(ids), s.playhead);
+    let moved = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!moved && Math.abs(ev.clientX - x0) < 2) return;
+      moved = true;
+      const st = useEditor.getState();
+      const dx = (ev.clientX - x0) / st.pxPerSec;
+      let len = side === 'in' ? len0 + dx : len0 - dx;
+      let at: number | null = null;
+      if (st.snapping && !ev.altKey) {
+        // The inner end of the fade snaps to the playhead, markers and other clips' edges.
+        const edge = side === 'in' ? clip.start + len : clipEnd(clip) - len;
+        const snap = snapDelta([edge], points, SNAP_PX / st.pxPerSec);
+        if (snap.at !== null) {
+          len += side === 'in' ? snap.delta : -snap.delta;
+          at = snap.at;
+        }
+      }
+      len = clamp(snapToFrame(len, fps), 0, max);
+      previewEdit((d) => {
+        for (const c of d.tracks.flatMap((x) => x.clips)) {
+          if (!ids.includes(c.id)) continue;
+          if (side === 'in') c.fadeIn = len;
+          else c.fadeOut = len;
+        }
+      });
+      setFadeTip({ id: clip.id, side, len });
+      useEditor.setState({ snapLine: at });
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setFadeTip(null);
+      useEditor.setState({ snapLine: null });
+      if (moved) commitPreview();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  const startMove = (e: React.PointerEvent, ids: string[], anchorId: string, clickedSelected: boolean, clickIds: string[] = [anchorId]) => {
     const s = useEditor.getState();
     const editable = ids.filter((id) => {
       const f = findClip(s.project, id);
@@ -454,6 +532,7 @@ export function Timeline() {
       startY: e.clientY,
       moved: false,
       clickedSelected,
+      clickIds,
       dt: 0,
       trackDelta: 0,
     });
@@ -505,14 +584,23 @@ export function Timeline() {
       } else {
         const f = findClip(st.base, st.id);
         if (!f) return;
-        const m = f.clip.mediaId ? media.get(f.clip.mediaId) : undefined;
         const minLen = 1 / st.base.settings.fps;
-        const b = trimBounds(f.track, f.clip, m, minLen);
+        // Linked partners trimmed along can narrow how far the edge may go.
+        const bounds = st.ids.map((id) => {
+          const g = findClip(st.base, id) ?? f;
+          return trimBounds(g.track, g.clip, g.clip.mediaId ? media.get(g.clip.mediaId) : undefined, minLen);
+        });
+        const b = {
+          minStart: Math.max(...bounds.map((x) => x.minStart)),
+          maxEnd: Math.min(...bounds.map((x) => x.maxEnd)),
+          maxStartForMin: Math.min(...bounds.map((x) => x.maxStartForMin)),
+          minEndForMin: Math.max(...bounds.map((x) => x.minEndForMin)),
+        };
         const dt = (ev.clientX - st.startX) / state.pxPerSec;
         let edge = st.side === 'l' ? f.clip.start + dt : clipEnd(f.clip) + dt;
         let at: number | null = null;
         if (state.snapping && !ev.altKey) {
-          const snap = snapDelta([edge], snapPoints(st.base, new Set([st.id]), state.playhead), threshold);
+          const snap = snapDelta([edge], snapPoints(st.base, new Set(st.ids), state.playhead), threshold);
           edge += snap.delta;
           at = snap.at;
         }
@@ -532,7 +620,7 @@ export function Timeline() {
       if (!st) return;
       if (st.kind === 'move') {
         if (!st.moved) {
-          if (st.clickedSelected) select([st.anchorId]);
+          if (st.clickedSelected) select(st.clickIds);
           return;
         }
         // Ctrl on release: insert edit (push clips right) instead of overwriting.
@@ -623,19 +711,44 @@ export function Timeline() {
     e.preventDefault();
     e.stopPropagation();
     const s = useEditor.getState();
-    if (!s.selection.includes(clip.id)) select([clip.id]);
+    if (!s.selection.includes(clip.id)) select(s.linking ? withPartners(s.project, [clip.id]) : [clip.id]);
     const at = timeAt(e.clientX);
     const playheadInside = s.playhead > clip.start && s.playhead < clipEnd(clip);
-    const hasAudio = clip.type === 'video' && !!(clip.mediaId && media.get(clip.mediaId)?.hasAudio);
-    const items: MenuEntry[] = [
+    const hasAudio = clip.type === 'video' && clipHasAudio(clip, media);
+    const items: MenuEntry[] = [];
+    // Right-click on a fade: its curve, like Vegas's Fade Type.
+    const local = at - clip.start;
+    const fadeSide = clip.fadeIn > 0 && local <= clip.fadeIn ? 'in' : clip.fadeOut > 0 && local >= clip.duration - clip.fadeOut ? 'out' : null;
+    if (fadeSide) {
+      const current = (fadeSide === 'in' ? clip.fadeInCurve : clip.fadeOutCurve) ?? 'linear';
+      items.push({ label: t(fadeSide === 'in' ? 'fade.curveIn' : 'fade.curveOut'), disabled: true, onClick: () => undefined });
+      for (const curve of FADE_CURVES) {
+        items.push({
+          label: t(`fade.${curve}` as I18nKey),
+          glyph: <FadeGlyph curve={curve} out={fadeSide === 'out'} />,
+          checked: current === curve,
+          onClick: () => setFade(clip.id, fadeSide, { curve }),
+        });
+      }
+      items.push({ label: t('fade.remove'), onClick: () => setFade(clip.id, fadeSide, { len: 0 }) }, { separator: true });
+    }
+    const selection = useEditor.getState().selection;
+    items.push(
       { label: t('ctx.split'), shortcut: sc('split'), onClick: () => splitAt(playheadInside ? s.playhead : at, [clip.id]) },
       { label: t('ctx.copy'), shortcut: sc('copy'), onClick: copySelection },
       { label: t('ctx.cut'), shortcut: sc('cut'), onClick: cutSelection },
       { label: t('ctx.paste'), shortcut: sc('paste'), onClick: () => void pasteFromClipboard(at) },
       { label: t('ctx.duplicate'), shortcut: sc('duplicate'), onClick: duplicateSelection },
       { label: `${t('menu.pasteAttrs')}…`, shortcut: sc('pasteAttrs'), onClick: () => openDialog('paste-attrs'), disabled: !s.clipboard },
-    ];
+    );
     if (hasAudio) items.push({ label: t('ctx.detachAudio'), shortcut: sc('detachAudio'), onClick: () => detachAudio(clip.id) });
+    if (clip.type === 'video' && clip.detached && partnersOf(s.project, clip).length === 0) {
+      items.push({ label: t('link.restore'), onClick: () => restoreAudio(clip.id) });
+    }
+    if (partnersOf(s.project, clip).length) items.push({ label: t('link.unlink'), shortcut: sc('unlinkClips'), onClick: () => unlinkClips([clip.id]) });
+    if (selection.length > 1 && !oneGroup(s.project, selection)) {
+      items.push({ label: t('link.link'), shortcut: sc('linkClips'), onClick: () => linkClips(selection) });
+    }
     if (clip.type === 'video') items.push({ label: t('tool.freeze'), shortcut: sc('freeze'), onClick: () => void freezeFrame() });
     if (clip.type === 'video' || clip.type === 'audio') items.push({ label: t('tool.reverse'), shortcut: sc('reverse'), onClick: () => void reverseClip(clip.id) });
     if (clip.type === 'video') {
@@ -812,6 +925,7 @@ export function Timeline() {
         {show('montage') && <IconButton icon="wand" title={t('mt.tip')} onClick={() => openDialog('autoMontage')} />}
         <div className="sep" />
         {show('snap') && <IconButton icon="magnet" title={withShortcut(t('tl.snap'), 'snapping')} active={snapping} onClick={() => useEditor.setState({ snapping: !snapping })} />}
+        {show('link') && <IconButton icon="link" title={withShortcut(t('tl.linkingTip'), 'linking')} active={linking} onClick={() => useEditor.setState({ linking: !linking })} />}
         <div className="spacer" />
         {show('tracks') && <IconButton icon="film" title={t('tl.addVideoTrack')} onClick={() => addTrack('video')} />}
         {show('tracks') && <IconButton icon="music" title={t('tl.addAudioTrack')} onClick={() => addTrack('audio')} />}
@@ -903,7 +1017,10 @@ export function Timeline() {
                       rt={clip.mediaId ? runtime[clip.mediaId] : undefined}
                       razor={tool === 'razor'}
                       waveVersion={waveVersion}
+                      linked={!!clip.link && paired.has(clip.link)}
+                      fadeTip={fadeTip?.id === clip.id ? fadeTip : null}
                       onPointerDown={onClipPointerDown}
+                      onFadeDown={onFadeDown}
                       onContextMenu={clipMenu}
                     />
                   ))}

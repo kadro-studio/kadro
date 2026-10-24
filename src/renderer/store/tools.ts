@@ -5,7 +5,8 @@ import { placeSubtitles } from '../ai/tasks';
 import { analyzeBeats } from '../core/beats';
 import { clipEnd, findClip, mediaMap, uid } from '../core/project';
 import { clipHasAudio } from '../core/scene';
-import { rippleDelete, splitClip } from '../core/edit';
+import { rippleDelete } from '../core/edit';
+import { partnersOf, splitLinked } from '../core/links';
 import { snapToFrame } from '../core/time';
 import type { Keyframe } from '../core/types';
 import { getWaveform } from '../engine/waveforms';
@@ -35,14 +36,10 @@ export async function splitAtScenes(clipId: string, sensitivity: number): Promis
   const times = cuts.map((s) => snapToFrame(clip.start + s / clip.speed, fps)).filter((x) => x > clip.start && x < clipEnd(clip));
   if (times.length === 0) return 0;
   const ids: string[] = [clipId];
+  const linked = useEditor.getState().linking;
   edit((d) => {
-    const track = d.tracks.find((tr) => tr.clips.some((c) => c.id === clipId));
-    if (!track) return;
-    // Right to left, so the original clip keeps its id as the first piece.
-    for (const time of [...times].sort((a, b) => b - a)) {
-      const right = splitClip(track, clipId, time, 1 / fps);
-      if (right) ids.push(right);
-    }
+    // Right to left, so the original clip keeps its id as the first piece; its linked sound is cut too.
+    for (const time of [...times].sort((a, b) => b - a)) ids.push(...splitLinked(d, clipId, time, 1 / fps, linked).values());
   });
   select(ids);
   return ids.length - 1;
@@ -107,18 +104,21 @@ export async function removePauses(clipId: string, o: PauseOptions): Promise<num
     })
     .filter(([a, b]) => b - a >= Math.max(0.1, frame * 2));
   if (cuts.length === 0) return 0;
+  // The linked picture of a talking video loses the same moments.
+  const linked = useEditor.getState().linking;
   edit((d) => {
-    const track = d.tracks.find((tr) => tr.clips.some((c) => c.id === clipId));
-    if (!track) return;
     const drop = new Set<string>();
     // Right to left: the part left of each cut keeps the clip's id.
     for (const [a, b] of [...cuts].sort((x, y) => y[0] - x[0])) {
-      const piece = track.clips.find((c) => c.id === clipId);
+      const piece = d.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clipId);
       if (!piece) break;
-      if (b < clipEnd(piece) - frame) splitClip(track, piece.id, b, frame);
+      if (b < clipEnd(piece) - frame) splitLinked(d, piece.id, b, frame, linked);
       let mid: string | null = piece.id;
-      if (a > piece.start + frame) mid = splitClip(track, piece.id, a, frame);
-      if (mid) drop.add(mid);
+      if (a > piece.start + frame) mid = splitLinked(d, piece.id, a, frame, linked).get(piece.id) ?? null;
+      if (!mid) continue;
+      drop.add(mid);
+      const midClip = d.tracks.flatMap((tr) => tr.clips).find((c) => c.id === mid);
+      if (linked && midClip) for (const x of partnersOf(d, midClip)) if (Math.abs(x.clip.start - midClip.start) < frame / 2) drop.add(x.clip.id);
     }
     rippleDelete(d, drop);
   });

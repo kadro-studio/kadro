@@ -41,6 +41,8 @@ export const COMMANDS: CommandDef[] = [
   cmd('edit', 'splitAll', 'cmd.splitAll', 'Ctrl+Shift+KeyK'),
   cmd('edit', 'muteClips', 'cmd.muteClips'),
   cmd('edit', 'detachAudio', 'ctx.detachAudio'),
+  cmd('edit', 'linkClips', 'link.link', 'Ctrl+KeyG'),
+  cmd('edit', 'unlinkClips', 'link.unlink', 'Ctrl+Shift+KeyG'),
   cmd('edit', 'escape', 'cmd.escape', 'Escape'),
 
   cmd('playback', 'playPause', 'sc.playPause', 'Space', 'KeyK'),
@@ -64,6 +66,7 @@ export const COMMANDS: CommandDef[] = [
   cmd('timeline', 'markOut', 'menu.markOut', 'KeyO'),
   cmd('timeline', 'clearMarks', 'menu.clearMarks', 'Alt+KeyX'),
   cmd('timeline', 'snapping', 'sc.snap', 'KeyN'),
+  cmd('timeline', 'linking', 'tl.linking'),
   cmd('timeline', 'zoomIn', 'menu.zoomIn', 'Equal', 'NumpadAdd', 'Ctrl+Equal', 'Ctrl+NumpadAdd'),
   cmd('timeline', 'zoomOut', 'menu.zoomOut', 'Minus', 'NumpadSubtract', 'Ctrl+Minus', 'Ctrl+NumpadSubtract'),
   cmd('timeline', 'zoomFit', 'menu.zoomFit', 'Backslash', 'Ctrl+Digit0'),

@@ -65,6 +65,7 @@ function GeneralPage() {
   const autosave = usePrefs((p) => p.autosaveMinutes);
   const still = usePrefs((p) => p.stillDuration);
   const follow = usePrefs((p) => p.followPlayhead);
+  const splitAudio = usePrefs((p) => p.splitAudio);
   const autoUpdate = usePrefs((p) => p.autoUpdate);
   return (
     <>
@@ -97,6 +98,13 @@ function GeneralPage() {
           ))}
         </select>
       </div>
+      <label className="field toggle-field">
+        <span className="field-label">{t('prefs.splitAudio')}</span>
+        <input type="checkbox" className="switch" checked={splitAudio} onChange={(e) => setPrefs({ splitAudio: e.target.checked })} />
+      </label>
+      <span className="panel-hint" style={{ margin: 0 }}>
+        {t('prefs.splitAudioHint')}
+      </span>
       <label className="field toggle-field">
         <span className="field-label">{t('prefs.followPlayhead')}</span>
         <input type="checkbox" className="switch" checked={follow} onChange={(e) => setPrefs({ followPlayhead: e.target.checked })} />

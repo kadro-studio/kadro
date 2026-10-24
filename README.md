@@ -28,6 +28,8 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 - Shift with the razor cuts every track at once; there is also a single command to split all tracks
 - Cut a clip at scene changes, beat markers from the music's tempo, import .srt / .vtt subtitles
 - Clip speed 0.1×–16× without pitch change, freeze frame, reverse, detach audio
+- Like Vegas: a video's picture and sound land on separate tracks as linked clips that move, trim and cut together (Alt-click picks one; unlink and link with Ctrl+Shift+G / Ctrl+G)
+- Fades on any clip, picture and sound: drag a top corner of the clip; right-click the fade for its curve (fast, linear, slow, smooth, sharp)
 - Cut the pauses: quiet moments are removed from talking clips and the track closes up (a jump cut)
 
 **Picture**
@@ -48,7 +50,7 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 - 14 shapes, emoji stickers, colour mattes
 
 **Sound**
-- Volume up to 400 % with keyframes, fade in and out, three-band EQ, compressor
+- Volume up to 400 % with keyframes, fades with five curve shapes, three-band EQ, compressor
 - Noise reduction and EBU R128 loudness normalisation (−14 / −16 / −23 LUFS), music ducking under speech
 - Voice-over recording from the microphone during playback; L/R level meter
 

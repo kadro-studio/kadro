@@ -65,6 +65,8 @@ export interface EditorState {
   playing: boolean;
   tool: Tool;
   snapping: boolean;
+  /** Linked clips (a video and its sound) are selected and edited together. */
+  linking: boolean;
   pxPerSec: number;
   previewScale: number;
   leftTab: LeftTab;
@@ -93,6 +95,7 @@ function initialState(): EditorState {
     playing: false,
     tool: 'select',
     snapping: true,
+    linking: true,
     pxPerSec: 60,
     previewScale: 1,
     leftTab: 'media',
