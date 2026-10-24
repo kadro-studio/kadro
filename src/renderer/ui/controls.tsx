@@ -195,6 +195,10 @@ export function ColorField({ label, value, onChange }: { label: string; value: s
 export function TextField({ label, value, onChange, multiline }: { label: string; value: string; onChange: OnValue<string>; multiline?: boolean }) {
   const [text, setText] = useState(value);
   const [focused, setFocused] = useState(false);
+  // Typing in the multi-line field shows each change live (uncommitted); leaving the
+  // field must commit it even though the value already matches, or the next edit
+  // elsewhere (a font, a colour) would start from the text as it was before typing.
+  const live = useRef(false);
   useEffect(() => {
     if (!focused) setText(value);
   }, [value, focused]);
@@ -203,7 +207,8 @@ export function TextField({ label, value, onChange, multiline }: { label: string
     onFocus: () => setFocused(true),
     onBlur: () => {
       setFocused(false);
-      if (text !== value) onChange(text, true);
+      if (live.current || text !== value) onChange(text, true);
+      live.current = false;
     },
   };
   return (
@@ -216,6 +221,7 @@ export function TextField({ label, value, onChange, multiline }: { label: string
           {...common}
           onChange={(e) => {
             setText(e.target.value);
+            live.current = true;
             onChange(e.target.value, false);
           }}
         />
@@ -315,6 +321,7 @@ export function ColorWheelField({
         value={Math.round(value.l * 100)}
         onChange={(e) => onChange({ ...value, l: Number(e.target.value) / 100 }, false)}
         onPointerUp={(e) => onChange({ ...value, l: Number((e.target as HTMLInputElement).value) / 100 }, true)}
+        onKeyUp={(e) => onChange({ ...value, l: Number((e.target as HTMLInputElement).value) / 100 }, true)}
         onDoubleClick={() => onChange({ ...value, l: 0 }, true)}
       />
     </div>
