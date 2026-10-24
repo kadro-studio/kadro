@@ -53,7 +53,7 @@ import {
   type DialogKind,
   type LeftTab,
 } from './editor';
-import { forgetRecent, rememberRecent, usePrefs } from './prefs';
+import { forgetRecent, rememberRecent, setPrefs, usePrefs } from './prefs';
 import { applyLookTo, prepareLook, scaledTextStyle, usePresets } from './presets';
 
 /** Length of photos, titles and elements when added (Preferences → General). */
@@ -86,7 +86,7 @@ function freeTrack(p: Project, kind: TrackKind, start: number, end: number, pref
 }
 
 /** Adds a new track and returns its id (inside a recipe). */
-function addTrackDraft(d: Draft<Project>, kind: TrackKind): Track {
+export function addTrackDraft(d: Draft<Project>, kind: TrackKind): Track {
   const track = makeTrack(kind, nextTrackName(d as Project, kind));
   if (kind === 'video') {
     const lastVideo = d.tracks.map((tr) => tr.kind).lastIndexOf('video');
@@ -152,9 +152,37 @@ function clipTypeFor(media: MediaAsset): ClipType {
   return media.kind === 'image' ? 'image' : media.kind === 'audio' ? 'audio' : 'video';
 }
 
+const COMMON_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60];
+const evenPx = (n: number) => Math.max(16, Math.round(n / 2) * 2);
+
+/**
+ * A new project in automatic format takes the size and frame rate of the first
+ * video or photo put on the timeline (a phone's vertical video makes it vertical).
+ * Photos and very large videos are scaled down to a sensible frame.
+ */
+export function adaptToFirstMedia(m: MediaAsset): void {
+  const p = st().project;
+  if (!p.autoFormat || (m.kind !== 'video' && m.kind !== 'image') || !m.width || !m.height) return;
+  if (p.tracks.some((tr) => tr.clips.some((c) => c.mediaId && c.type !== 'audio'))) return;
+  const limit = m.kind === 'image' ? 1920 : 3840;
+  const k = Math.min(1, limit / Math.max(m.width, m.height));
+  const width = evenPx(m.width * k);
+  const height = evenPx(m.height * k);
+  const near = m.kind === 'video' && m.fps > 0 ? COMMON_FPS.reduce((a, b) => (Math.abs(b - m.fps) < Math.abs(a - m.fps) ? b : a)) : 0;
+  const fps = near && Math.abs(near - m.fps) < 0.6 ? near : p.settings.fps;
+  edit((d) => {
+    d.settings.width = width;
+    d.settings.height = height;
+    d.settings.fps = fps;
+    delete d.autoFormat;
+  });
+  toast(t('project.adapted', { w: width, h: height, fps }));
+}
+
 export function addMediaClip(mediaId: string, opts: PlaceOptions = {}): void {
   const media = st().project.media.find((m) => m.id === mediaId);
   if (!media) return;
+  adaptToFirstMedia(media);
   let type = clipTypeFor(media);
   let kind: TrackKind = type === 'audio' ? 'audio' : 'video';
   // A video dropped on an audio track contributes only its sound.
@@ -506,6 +534,9 @@ export function pasteAttributes(groups: AttrGroup[]): void {
     if (c.id === src.id) return;
     if (g.has('transform')) {
       c.transform = clone(src.transform);
+      c.bgFill = src.bgFill;
+      c.bgColor = src.bgColor;
+      c.bgBlur = src.bgBlur;
       for (const p of ['x', 'y', 'scale', 'rotation', 'opacity'] as const) {
         if (src.keyframes[p]) c.keyframes[p] = clone(src.keyframes[p]);
         else delete c.keyframes[p];
@@ -591,9 +622,10 @@ export function applyTransition(clipId: string, type: string): void {
   const f = findClip(st().project, clipId);
   if (!f || f.clip.type === 'audio' || f.track.locked) return;
   updateClip(clipId, (c) => {
+    // A new transition gets the user's default length; replacing one keeps its length.
+    if (c.transition.type === 'none' || c.transition.duration <= 0) c.transition.duration = usePrefs.getState().transitionDuration;
     c.transition.type = type;
     c.transition.params = defaultParams(type);
-    if (c.transition.duration <= 0) c.transition.duration = 0.6;
   });
 }
 
@@ -927,10 +959,27 @@ export async function handleCloseRequest(): Promise<void> {
   if (await confirmDiscard()) api.closeNow();
 }
 
+/** An empty project in the user's default format for new projects. */
+export function freshProject(name = t('top.untitled')): Project {
+  const prefs = usePrefs.getState();
+  const p = createProject(name);
+  const m = /^(\d+)x(\d+)$/.exec(prefs.newProjectFormat);
+  if (m) p.settings = { ...p.settings, width: Number(m[1]), height: Number(m[2]), fps: prefs.newProjectFps };
+  else p.autoFormat = true;
+  return p;
+}
+
+/** File → New: asks for the format first. */
 export async function newProject(): Promise<void> {
   if (!(await confirmDiscard())) return;
+  openDialog('newProject');
+}
+
+/** Creates the project chosen in the New project window ('auto' or 'WxH'). */
+export function createNewProject(name: string, format: string, fps: number): void {
+  setPrefs({ newProjectFormat: format, newProjectFps: fps });
   clearWaveforms();
-  loadProject(createProject(t('top.untitled')), null);
+  loadProject(freshProject(name.trim() || t('top.untitled')), null);
 }
 
 export async function openProjectFile(path?: string): Promise<void> {

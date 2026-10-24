@@ -18,13 +18,16 @@ import { Modal } from './Modal';
 import { BackgroundDialog, SubtitlesDialog } from './AiDialog';
 import { CreditsDialog, EnhanceDialog, PasteAttributesDialog, VoiceoverDialog, type EnhanceKind } from './ToolDialogs';
 
-const ENHANCE_KINDS: EnhanceKind[] = ['stabilize', 'denoise', 'loudness', 'scenes', 'beats', 'duck'];
+const ENHANCE_KINDS: EnhanceKind[] = ['stabilize', 'denoise', 'loudness', 'scenes', 'beats', 'duck', 'silence'];
 import { PrefsDialog } from './PrefsDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { ShadertoyDialog } from './ShadertoyDialog';
 import { PublishDialog } from './PublishDialog';
 import { LinkImportDialog } from './LinkImportDialog';
 import { FillTemplateDialog, TemplatesDialog } from './TemplateDialogs';
+import { NewProjectDialog } from './NewProjectDialog';
+import { WelcomeDialog } from './Onboarding';
+import { AutoMontageDialog } from './AutoMontageDialog';
 
 export function Dialogs() {
   const dialog = useEditor((s) => s.dialog);
@@ -46,6 +49,9 @@ export function Dialogs() {
   if (dialog === 'link') return <LinkImportDialog onClose={close} />;
   if (dialog === 'templates') return <TemplatesDialog onClose={close} />;
   if (dialog === 'fillTemplate') return <FillTemplateDialog onClose={close} />;
+  if (dialog === 'newProject') return <NewProjectDialog onClose={close} />;
+  if (dialog === 'welcome') return <WelcomeDialog onClose={close} />;
+  if (dialog === 'autoMontage') return <AutoMontageDialog onClose={close} />;
   if (dialog && ENHANCE_KINDS.includes(dialog as EnhanceKind)) return <EnhanceDialog kind={dialog as EnhanceKind} onClose={close} />;
   return null;
 }
@@ -556,6 +562,8 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
       d.settings.height = even(Math.min(8192, Math.max(16, h)));
       d.settings.fps = fps;
       d.settings.background = bg;
+      // A format chosen by hand is no longer taken from the first video.
+      delete d.autoFormat;
     });
     onClose();
   };

@@ -300,7 +300,9 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
   const width = Math.max(2, clip.duration * pps);
   const bodyH = p.height - 6 - 17 - 2;
   const hasAudio = clip.type === 'audio' || (clip.type === 'video' && !!p.media?.hasAudio);
-  const showStrip = clip.type === 'video' || clip.type === 'image';
+  const thumbs = usePrefs((s) => s.clipThumbs);
+  const waves = usePrefs((s) => s.clipWaves);
+  const showStrip = thumbs && (clip.type === 'video' || clip.type === 'image');
   const kfs = keyframeTimes(clip).filter((k) => k >= 0 && k <= clip.duration);
   const wheelsUsed = Object.values(clip.wheels).some((w) => w.x !== 0 || w.y !== 0 || w.l !== 0);
   const fxActive =
@@ -336,7 +338,7 @@ export const ClipView = memo(function ClipView(p: ClipViewProps) {
         {showStrip && <Filmstrip clip={clip} rt={p.rt} pps={pps} height={bodyH} />}
         {clip.type === 'color' && <div className="clip-strip" style={{ background: clip.color, opacity: 0.85 }} />}
         {clip.type === 'shape' && clip.shape && <div className="clip-strip" style={{ background: clip.shape.fill, opacity: 0.6 }} />}
-        {hasAudio && <Waveform clip={clip} pps={pps} color={clip.type === 'audio' ? '#a5f3d0' : 'rgba(255,255,255,0.8)'} waveVersion={p.waveVersion} />}
+        {hasAudio && waves && <Waveform clip={clip} pps={pps} color={clip.type === 'audio' ? '#a5f3d0' : 'rgba(255,255,255,0.8)'} waveVersion={p.waveVersion} />}
       </div>
       {clip.transition.type !== 'none' && <div className="clip-transition" style={{ width: Math.min(clip.transition.duration, clip.duration) * pps }} />}
       {clip.fadeIn > 0 && <div className="clip-fade in" style={{ width: clip.fadeIn * pps }} />}

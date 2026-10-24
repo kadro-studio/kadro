@@ -6,16 +6,26 @@ import { api } from '../api';
 import { t } from '../i18n';
 import { confirmDiscard } from './actions';
 import { toast } from './editor';
-import { usePrefs } from './prefs';
+import { setPrefs, usePrefs } from './prefs';
 
 const START_DELAY = 8000;
 
-export const useUpdates = create<{ status: UpdateStatus; dismissed: boolean }>(() => ({ status: { state: 'idle' }, dismissed: false }));
+export const useUpdates = create<{ status: UpdateStatus; dismissed: boolean; updatedTo: string | null }>(() => ({
+  status: { state: 'idle' },
+  dismissed: false,
+  updatedTo: null,
+}));
 
 /** Listens to the main process; returns the unsubscribe function. */
 export function initUpdates(): () => void {
   const off = api.onUpdateStatus((status) => useUpdates.setState({ status }));
   void api.updateStatus().then((status) => useUpdates.setState({ status }));
+  // After an update, say once what changed.
+  void api.appInfo().then((info) => {
+    const seen = usePrefs.getState().seenVersion;
+    if (seen && seen !== info.version && info.firstRun) useUpdates.setState({ updatedTo: info.version });
+    if (seen !== info.version) setPrefs({ seenVersion: info.version });
+  });
   const timer = setTimeout(() => {
     if (usePrefs.getState().autoUpdate) void api.checkForUpdates().catch(() => undefined);
   }, START_DELAY);

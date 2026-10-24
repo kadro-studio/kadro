@@ -12,6 +12,12 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 
 ## Features
 
+**For beginners**
+- A welcome screen asks whether you have edited before; newcomers get a short guided tour of the window (Help → Tour) and Simple mode, which hides the professional tools until you want them (one click on the button at the top)
+- New projects in a ready format — YouTube, TikTok/Reels/Shorts, square, Instagram post, 4K, cinema — or Automatic: the project takes the size and frame rate of the first video you add
+- Ready-made templates (stories slideshow, YouTube intro, beat cut, travel film): put your clips into the numbered slots and the edit is done
+- Auto montage to the beat: pick a song and your clips, and Kadro cuts them on the beat with transitions, a zoom punch on every cut and a slow zoom on photos
+
 **Editing**
 - Multi-track timeline: add, remove and rename tracks; hide, mute, solo and lock them; drag to change track height
 - Tools from professional editors: select, track select forward, ripple, roll, slip and slide edits, razor
@@ -22,6 +28,7 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 - Shift with the razor cuts every track at once; there is also a single command to split all tracks
 - Cut a clip at scene changes, beat markers from the music's tempo, import .srt / .vtt subtitles
 - Clip speed 0.1×–16× without pitch change, freeze frame, reverse, detach audio
+- Cut the pauses: quiet moments are removed from talking clips and the track closes up (a jump cut)
 
 **Picture**
 - Move, crop, rotate and stretch (width and height separately) right in the preview with the mouse; keyframes with smooth easing
@@ -30,6 +37,7 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 - Adjustment layers, 18 blend modes (overlay, soft light, colour dodge/burn, colour, luminosity…), chroma key, masks
 - 20 shader effects and 12 shader transitions plus 22 classic transitions, in and out animations
 - One-click layouts: picture-in-picture, split screen, three columns, 2×2 grid
+- Background fill for a picture that does not cover the frame (a vertical phone video in a 16:9 project): its own blurred copy or a colour, for one clip or all of them
 - Stabilisation of shaky footage (vid.stab, two passes)
 - Video scopes: waveform, RGB histogram, vectorscope
 
@@ -74,7 +82,7 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 - Ready-made presets (YouTube, TikTok/Reels/Shorts, messengers, ProRes, WebM, GIF, MP3) and your own; custom video and audio bitrate, any frame height
 - Preview and export are drawn by the same engine, so the result matches what you see
 
-**Interface** — five themes (graphite, midnight, mocha, OLED, light), any accent colour, interface scale and corner radius, a custom window title bar and dialogs, English, Ukrainian and Russian, resizable panels. Any command can be bound to any key (Help → Keyboard shortcuts). Title, filter and export presets move to another computer in a `.kadropresets` file (Preferences → Mine).
+**Interface** — five themes (graphite, midnight, mocha, OLED, light), any accent colour, interface scale and corner radius, panels on either side, your own choice of timeline buttons and side tabs (right-click them), mouse wheel that scrolls, zooms or moves along the time, clip pictures and waveforms that can be turned off on slow computers, reopening the last project on start, the default transition length, a custom window title bar and dialogs, English, Ukrainian and Russian, resizable panels. Any command can be bound to any key (Help → Keyboard shortcuts). Title, filter and export presets move to another computer in a `.kadropresets` file (Preferences → Mine).
 
 ## Running from source
 

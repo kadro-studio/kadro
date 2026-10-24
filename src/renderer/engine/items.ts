@@ -2,10 +2,11 @@
 // (live media elements for preview, decoded frames for export).
 import { curvesActive, curvesTable, hslActive, hslVector } from '../core/curves';
 import { effectiveAdjust } from '../core/effects';
+import { propValue } from '../core/keyframes';
 import { contentSize } from '../core/geometry';
 import { emptySlot } from '../core/project';
 import type { LayerPlan } from '../core/scene';
-import type { ChromaKey, ClipEffect, ClipLut, ColorWheels, MediaAsset, Project, Wheel } from '../core/types';
+import type { Adjust, ChromaKey, ClipEffect, ClipLut, ColorWheels, MediaAsset, Project, Wheel } from '../core/types';
 import type { FxDef } from './fx/types';
 import { getLut } from './lut';
 import { hexToRgb, type DrawItem, type TexSource } from './gl';
@@ -69,6 +70,8 @@ export function buildItems(
       const m = clip.mediaId ? media.get(clip.mediaId) : undefined;
       source = m && emptySlot(m) ? slotSource(m) : provider.source(plan, m);
       content = contentSize(clip, m, W, H);
+      const bg = source && backgroundItem(plan, source, m, W, H);
+      if (bg) items.push(bg);
     }
     if (!source) continue;
     const { adjust, colorize } = effectiveAdjust(clip);
@@ -96,6 +99,56 @@ export function buildItems(
     });
   }
   return items;
+}
+
+const NO_CHROMA: ChromaKey = { enabled: false, color: '#00ff00', similarity: 0, smoothness: 0, spill: 0 };
+const NEUTRAL: Adjust = { exposure: 0, brightness: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, hue: 0, highlights: 0, shadows: 0, vignette: 0, blur: 0, sharpen: 0 };
+
+/**
+ * The fill behind a picture that does not cover the frame (a vertical phone video
+ * in a 16:9 project): a blurred, enlarged copy of the same picture, or a colour.
+ * Drawn before the clip, fading with it; shader transitions mix layers themselves,
+ * so the fill is left out while one runs.
+ */
+function backgroundItem(plan: LayerPlan, source: TexSource, m: MediaAsset | undefined, W: number, H: number): DrawItem | null {
+  const clip = plan.clip;
+  if (clip.bgFill === 'none' || !clip.bgFill || plan.group || (clip.type !== 'video' && clip.type !== 'image')) return null;
+  const bgClip = { ...clip, crop: { left: 0, top: 0, right: 0, bottom: 0 }, mask: { ...clip.mask, shape: 'none' as const } };
+  // The fill ignores the clip's own position, size and turn, but moves, scales and
+  // reveals with a transition (slide, push, zoom, wipe), so it never hides the
+  // outgoing clip early. The transition's share is what the plan adds to the clip's values.
+  const t = plan.localTime;
+  const ownScale = propValue(clip, 'scale', t) || 1;
+  const motion = plan.scale / ownScale;
+  const base = {
+    ...plan,
+    clip: bgClip,
+    x: plan.x - propValue(clip, 'x', t),
+    y: plan.y - propValue(clip, 'y', t),
+    rotation: plan.rotation - propValue(clip, 'rotation', t),
+    blur: 0,
+  };
+  const common = { wheels: null, colorize: null, chroma: NO_CHROMA, blend: 'normal' as const, effects: [], lut: null, curves: null, hsl: null, time: plan.localTime };
+  if (clip.bgFill === 'color') {
+    return {
+      ...common,
+      plan: { ...base, scale: motion },
+      content: { w: W, h: H },
+      source: { key: 'solid', kind: 'color', width: W, height: H, version: 0, color: [...hexToRgb(clip.bgColor), 1] },
+      adjust: NEUTRAL,
+    };
+  }
+  // The picture at its natural proportions, enlarged until it covers the frame.
+  const fit = m && m.width && m.height ? Math.min(W / m.width, H / m.height) : 1;
+  const content = m && m.width && m.height ? { w: m.width * fit, h: m.height * fit } : { w: W, h: H };
+  const cover = Math.max(W / content.w, H / content.h) * 1.08;
+  return {
+    ...common,
+    plan: { ...base, scale: cover * motion },
+    content,
+    source,
+    adjust: { ...NEUTRAL, blur: clip.bgBlur, brightness: -12, saturation: -8 },
+  };
 }
 
 const CHROMA_PASS: FxDef = {

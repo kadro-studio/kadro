@@ -9,7 +9,8 @@ import { Timeline } from './components/timeline/Timeline';
 import { api } from './api';
 import { APP_NAME } from '../shared/brand';
 import { useT, useLang } from './i18n';
-import { handleCloseRequest, openProjectFile, setLeftTab, syncDirtyFlag } from './store/actions';
+import { handleCloseRequest, openDialog, openProjectFile, setLeftTab, syncDirtyFlag } from './store/actions';
+import { usePrefs } from './store/prefs';
 import { PromptHost } from './components/PromptHost';
 import { TooltipHost } from './ui/Tooltip';
 import { isDirty, toast, useEditor } from './store/editor';
@@ -19,6 +20,7 @@ import { reloadMods } from './store/mods';
 import { handleWorkshopLink, initWorkshop, refreshAccount } from './store/workshop';
 import { initUpdates } from './store/updates';
 import { UpdateBanner } from './components/UpdateBanner';
+import { TourOverlay } from './components/Onboarding';
 import { ContextMenuHost } from './ui/ContextMenu';
 
 interface Layout {
@@ -34,6 +36,10 @@ function loadLayout(): Layout {
   } catch {
     // default layout
   }
+  return defaultLayout();
+}
+
+function defaultLayout(): Layout {
   return { left: 390, right: 330, timeline: Math.round(window.innerHeight * 0.38) };
 }
 
@@ -80,6 +86,13 @@ function Toasts() {
 export function App() {
   const t = useT();
   const [layout, setLayout] = useState<Layout>(loadLayout);
+  const mirror = usePrefs((p) => p.layoutMirror);
+  // Preferences → Interface → Reset puts the panels back to their default sizes.
+  useEffect(() => {
+    const reset = () => setLayout(defaultLayout());
+    window.addEventListener('kadro:resetLayout', reset);
+    return () => window.removeEventListener('kadro:resetLayout', reset);
+  }, []);
   const [fileDrag, setFileDrag] = useState(false);
   const name = useEditor((s) => s.project.name);
   const filePath = useEditor((s) => s.filePath);
@@ -99,10 +112,18 @@ export function App() {
     const stop = startProxyProgressListener();
     const stopAutosave = startAutosave();
     void reloadMods();
-    void pendingRecovery().then((data) => data && useEditor.setState({ recovery: data }));
     // Project files open; workshop files (.kadroitem, .vrmod, .cube) install.
     const openFile = (file: string) => void (/\.vrproj$/i.test(file) ? openProjectFile(file) : importFiles([file]));
-    void api.takeOpenFile().then((file) => file && openFile(file));
+    // A crash recovery comes first, then a file opened from Explorer, then (if the
+    // user asked for it) the last project.
+    void Promise.all([pendingRecovery(), api.takeOpenFile()]).then(([data, file]) => {
+      if (data) useEditor.setState({ recovery: data });
+      if (file) openFile(file);
+      else if (!data && usePrefs.getState().openLastProject) {
+        const last = usePrefs.getState().recent[0];
+        if (last) void openProjectFile(last.path);
+      }
+    });
     const stopOpen = api.onOpenFile(openFile);
     const stopClose = api.onCloseRequest(() => void handleCloseRequest());
     void initWorkshop();
@@ -138,6 +159,14 @@ export function App() {
   }, [name, filePath, dirty, lang]);
 
   useEffect(() => initUpdates(), []);
+
+  // First run: ask how much the user has edited before (not in automated tests).
+  useEffect(() => {
+    void api.appInfo().then((info) => {
+      const s = useEditor.getState();
+      if (info.firstRun && !usePrefs.getState().onboarded && !s.recovery && !s.dialog) openDialog('welcome');
+    });
+  }, []);
 
   // Files dropped anywhere outside the timeline go to the media bin.
   useEffect(() => {
@@ -193,11 +222,12 @@ export function App() {
     <div className="app" onContextMenu={(e) => e.preventDefault()}>
       <TopBar />
       <div
-        className="workspace"
+        className={mirror ? 'workspace mirrored' : 'workspace'}
         style={
           {
-            '--left-w': `${layout.left}px`,
-            '--right-w': `${layout.right}px`,
+            // Mirrored, the media panel sits in the last column and the inspector in the first.
+            '--left-w': `${mirror ? layout.right : layout.left}px`,
+            '--right-w': `${mirror ? layout.left : layout.right}px`,
             '--tl-h': `${layout.timeline}px`,
           } as React.CSSProperties
         }
@@ -205,11 +235,11 @@ export function App() {
         <div className="area-left panel">
           <LeftPanel />
         </div>
-        <Splitter dir="left" onDrag={(dx) => setLayout((l) => ({ ...l, left: clampW(l.left + dx) }))} />
+        <Splitter dir="left" onDrag={(dx) => setLayout((l) => ({ ...l, left: clampW(l.left + (mirror ? -dx : dx)) }))} />
         <div className="area-center panel">
           <Preview />
         </div>
-        <Splitter dir="right" onDrag={(dx) => setLayout((l) => ({ ...l, right: clampW(l.right - dx) }))} />
+        <Splitter dir="right" onDrag={(dx) => setLayout((l) => ({ ...l, right: clampW(l.right + (mirror ? dx : -dx)) }))} />
         <div className="area-right panel">
           <Inspector />
         </div>
@@ -227,6 +257,7 @@ export function App() {
       <TooltipHost />
       <Toasts />
       <UpdateBanner />
+      <TourOverlay />
       {fileDrag && <div className="drop-overlay">{t('media.dropHint')}</div>}
     </div>
   );

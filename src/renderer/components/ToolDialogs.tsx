@@ -9,14 +9,14 @@ import { useT, type I18nKey } from '../i18n';
 import { shortcutLabel } from '../keymap';
 import { addMediaClip, ATTR_GROUPS, pasteAttributes, type AttrGroup } from '../store/actions';
 import { denoiseClip, normalizeLoudness, stabilizeClip } from '../store/enhance';
-import { duckUnderVoice, markBeats, splitAtScenes } from '../store/tools';
+import { duckUnderVoice, markBeats, removePauses, splitAtScenes } from '../store/tools';
 import { toast, useEditor } from '../store/editor';
 import { importFiles } from '../store/media';
 import { Icon } from '../ui/Icon';
 import { SelectField, SliderField, ToggleField } from '../ui/controls';
 import { Modal } from './Modal';
 
-export type EnhanceKind = 'stabilize' | 'denoise' | 'loudness' | 'scenes' | 'beats' | 'duck';
+export type EnhanceKind = 'stabilize' | 'denoise' | 'loudness' | 'scenes' | 'beats' | 'duck' | 'silence';
 
 const LOUDNESS_TARGETS = [
   { value: '-14', label: 'enh.target14' },
@@ -27,7 +27,7 @@ const LOUDNESS_TARGETS = [
 /** Tools that work on the picture; the rest need a clip with sound. */
 const VIDEO_KINDS: EnhanceKind[] = ['stabilize', 'scenes'];
 /** Tools without measurable progress show a running bar instead. */
-const NO_PROGRESS: EnhanceKind[] = ['scenes', 'beats', 'duck'];
+const NO_PROGRESS: EnhanceKind[] = ['scenes', 'beats', 'duck', 'silence'];
 
 /** Clip tools with options: stabilise, denoise, loudness, scene cuts, beat markers, ducking. */
 export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: () => void }) {
@@ -50,6 +50,9 @@ export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: (
   const [sensitivity, setSensitivity] = useState(50);
   const [beatMode, setBeatMode] = useState<'beats' | 'onsets'>('beats');
   const [duckDb, setDuckDb] = useState(-14);
+  const [silenceDb, setSilenceDb] = useState(-40);
+  const [minPause, setMinPause] = useState(0.6);
+  const [keep, setKeep] = useState(0.12);
   const [progress, setProgress] = useState<number | null>(null);
 
   const single = kind !== 'loudness';
@@ -72,6 +75,10 @@ export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: (
       const r = await markBeats(targets[0], beatMode);
       toast(r.count > 0 ? t('tools.beatsDone', { n: r.count, bpm: r.bpm || '—' }) : t('tools.beatsNone'), r.count > 0 ? 'success' : 'info');
       ok = true;
+    } else if (kind === 'silence') {
+      const n = await removePauses(targets[0], { thresholdDb: silenceDb, minPause, keep });
+      toast(n > 0 ? t('tools.silenceDone', { n }) : t('tools.silenceNone'), n > 0 ? 'success' : 'info');
+      ok = n > 0;
     } else {
       const n = duckUnderVoice(targets[0], duckDb, sensitivity);
       toast(n > 0 ? t('tools.duckDone', { n }) : t('tools.duckNone'), n > 0 ? 'success' : 'info');
@@ -129,6 +136,13 @@ export function EnhanceDialog({ kind, onClose }: { kind: EnhanceKind; onClose: (
           ]}
           onChange={setBeatMode}
         />
+      )}
+      {kind === 'silence' && (
+        <>
+          <SliderField label={t('enh.silenceLevel')} value={silenceDb} min={-60} max={-20} unit="dB" defaultValue={-40} onChange={(v) => setSilenceDb(v)} />
+          <SliderField label={t('enh.minPause')} value={minPause} min={0.2} max={3} step={0.1} unit="s" defaultValue={0.6} onChange={(v) => setMinPause(v)} />
+          <SliderField label={t('enh.keep')} value={keep} min={0} max={0.5} step={0.02} unit="s" defaultValue={0.12} onChange={(v) => setKeep(v)} />
+        </>
       )}
       {kind === 'duck' && (
         <SliderField label={t('tools.duckAmount')} value={duckDb} min={-40} max={-3} unit="dB" defaultValue={-14} onChange={(v) => setDuckDb(v)} />

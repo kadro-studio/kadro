@@ -40,6 +40,7 @@ import { DND } from './dnd';
 import { deletePreset, renamePreset, usePresets, type Look, type PresetKind } from '../store/presets';
 import { addLutsViaDialog, removeLutFromLibrary, useLuts } from '../store/luts';
 import { fillSlotViaDialog } from '../store/templates';
+import { setPrefs, usePrefs } from '../store/prefs';
 import type { LutFile } from '../../shared/api';
 
 const TABS: { id: LeftTab; icon: IconName; label: I18nKey }[] = [
@@ -57,11 +58,30 @@ const TABS: { id: LeftTab; icon: IconName; label: I18nKey }[] = [
 export function LeftPanel() {
   const t = useT();
   const tab = useEditor((s) => s.leftTab);
-  const current = TABS.find((x) => x.id === tab) ?? TABS[0];
+  const hidden = usePrefs((p) => p.hiddenTabs);
+  // Media always stays; the rest can be hidden from the rail's context menu.
+  const tabs = TABS.filter((x) => x.id === 'media' || !hidden.includes(x.id));
+  const current = tabs.find((x) => x.id === tab) ?? tabs[0];
+  const railMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    openContextMenu(e.clientX, e.clientY, [
+      ...TABS.filter((x) => x.id !== 'media').map((x) => ({
+        label: t(x.label),
+        checked: !hidden.includes(x.id),
+        onClick: () => {
+          const next = hidden.includes(x.id) ? hidden.filter((h) => h !== x.id) : [...hidden, x.id];
+          setPrefs({ hiddenTabs: next });
+          if (next.includes(tab)) setLeftTab('media');
+        },
+      })),
+      { separator: true },
+      { label: t('tb.showAll'), onClick: () => setPrefs({ hiddenTabs: [] }) },
+    ]);
+  };
   return (
     <div className="left-layout">
-      <nav className="rail">
-        {TABS.map((x) => (
+      <nav className="rail" onContextMenu={railMenu}>
+        {tabs.map((x) => (
           <button key={x.id} className={`rail-btn ${tab === x.id ? 'active' : ''}`} onClick={() => setLeftTab(x.id)} title={t(x.label)}>
             <Icon name={x.icon} size={19} />
             <span className="rail-label">{t(x.label)}</span>
@@ -116,6 +136,10 @@ function MediaPanel() {
         <button className="btn primary" onClick={() => void importViaDialog()}>
           <Icon name="import" size={16} />
           {t('media.import')}
+        </button>
+        <button className="btn" onClick={() => openDialog('autoMontage')} title={t('mt.tip')}>
+          <Icon name="wand" size={16} />
+          {t('mt.short')}
         </button>
         <button className="btn" onClick={() => openDialog('link')} title={t('link.title')}>
           <Icon name="globe" size={16} />

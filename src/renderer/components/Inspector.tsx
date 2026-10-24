@@ -12,7 +12,8 @@ import { useLang, useT, type I18nKey } from '../i18n';
 import { addEffect, applyTransition, deleteSelection, detachAudio, moveEffect, openDialog, removeEffect } from '../store/actions';
 import { fxOfKind, useFx } from '../engine/fx/registry';
 import { fxName } from '../engine/fx/types';
-import { commitPreview, edit, previewEdit, toast, useEditor } from '../store/editor';
+import { edit, previewEdit, toast, useEditor } from '../store/editor';
+import { setPrefs, usePrefs } from '../store/prefs';
 import { api } from '../api';
 import { loadLut } from '../engine/lut';
 import { LayoutPicker } from './LayoutPicker';
@@ -57,7 +58,9 @@ function clipSetter(clipId: string) {
         }
       }
     };
-    if (final) commitPreview(r);
+    // The final value lands on top of any live preview (one undo step from before it),
+    // so a control that previewed without committing never loses its change.
+    if (final) edit(r);
     else previewEdit(r);
   };
 }
@@ -69,6 +72,8 @@ export function Inspector() {
   // While playing, freeze the time used for animated values to avoid 60 fps re-renders.
   const paused = useEditor((s) => (s.playing ? null : s.playhead));
   const playhead = paused ?? useEditor.getState().playhead;
+  // Simple mode shows the everyday settings only.
+  const pro = !usePrefs((p) => p.simpleMode);
 
   if (selection.length === 0) return <ProjectInfo project={project} />;
   if (selection.length > 1) {
@@ -136,15 +141,20 @@ export function Inspector() {
         {(clip.type === 'video' || clip.type === 'audio') && <SpeedSection clip={clip} m={m} />}
         {clipHasAudio(clip, media) && <AudioSection clip={clip} set={set} local={local} fps={project.settings.fps} />}
         {visual && clip.type !== 'color' && <EffectsSection clip={clip} set={set} />}
-        {visual && clip.type !== 'shape' && <WheelsSection clip={clip} set={set} />}
-        {visual && clip.type !== 'shape' && <CurvesSection clip={clip} set={set} />}
-        {visual && clip.type !== 'shape' && <HslSection clip={clip} set={set} />}
+        {pro && visual && clip.type !== 'shape' && <WheelsSection clip={clip} set={set} />}
+        {pro && visual && clip.type !== 'shape' && <CurvesSection clip={clip} set={set} />}
+        {pro && visual && clip.type !== 'shape' && <HslSection clip={clip} set={set} />}
         {visual && <ColorSection clip={clip} set={set} />}
         {visual && <FilterSection clip={clip} set={set} />}
-        {(clip.type === 'video' || clip.type === 'image') && <ChromaSection clip={clip} set={set} />}
+        {pro && (clip.type === 'video' || clip.type === 'image') && <ChromaSection clip={clip} set={set} />}
         {(clip.type === 'video' || clip.type === 'image') && <CropSection clip={clip} set={set} />}
-        {visual && clip.type !== 'color' && <MaskSection clip={clip} set={set} />}
-        {visual && <BlendSection clip={clip} set={set} />}
+        {pro && visual && clip.type !== 'color' && <MaskSection clip={clip} set={set} />}
+        {pro && visual && <BlendSection clip={clip} set={set} />}
+        {!pro && (
+          <button className="link-btn simple-more" onClick={() => setPrefs({ simpleMode: false })}>
+            {t('simple.showAll')}
+          </button>
+        )}
       </div>
     </>
   );
@@ -233,7 +243,9 @@ function ClipSection({ clip, set, fps }: { clip: Clip; set: Setter; fps: number 
   );
 }
 
-function kfControl(clip: Clip, prop: AnimProp, local: number, fps: number): KeyframeControl {
+function kfControl(clip: Clip, prop: AnimProp, local: number, fps: number): KeyframeControl | undefined {
+  // Simple mode hides keyframes, unless the property is already animated.
+  if (usePrefs.getState().simpleMode && !isAnimated(clip, prop)) return undefined;
   const tol = 0.5 / fps;
   const kfs = clip.keyframes[prop] ?? [];
   return {
@@ -331,6 +343,7 @@ function TransformSection({ clip, m, local, project, set }: { clip: Clip; m: Med
         <IconButton icon="flipH" title={t('p.flipH')} active={clip.transform.flipH} onClick={() => set((c) => void (c.transform.flipH = !c.transform.flipH), true)} />
         <IconButton icon="flipV" title={t('p.flipV')} active={clip.transform.flipV} onClick={() => set((c) => void (c.transform.flipV = !c.transform.flipV), true)} />
       </div>
+      {(clip.type === 'video' || clip.type === 'image') && <BackgroundFields clip={clip} set={set} />}
       {clip.type === 'video' && (
         <button className="btn small" onClick={() => openDialog('stabilize')}>
           {t('enh.stabilize')}…
@@ -343,6 +356,49 @@ function TransformSection({ clip, m, local, project, set }: { clip: Clip; m: Med
         </>
       )}
     </Section>
+  );
+}
+
+/** Fill around a picture that does not cover the frame: none, its own blurred copy, or a colour. */
+function BackgroundFields({ clip, set }: { clip: Clip; set: Setter }) {
+  const t = useT();
+  const applyToAll = () => {
+    let n = 0;
+    edit((d) => {
+      for (const tr of d.tracks) {
+        for (const c of tr.clips) {
+          if (c.type !== 'video' && c.type !== 'image') continue;
+          c.bgFill = clip.bgFill;
+          c.bgColor = clip.bgColor;
+          c.bgBlur = clip.bgBlur;
+          n++;
+        }
+      }
+    });
+    toast(t('bg.applied', { n }), 'success');
+  };
+  return (
+    <>
+      <span className="field-label" title={t('bg.hint')}>
+        {t('bg.title')}
+      </span>
+      <div className="seg">
+        {(['none', 'blur', 'color'] as const).map((v) => (
+          <button key={v} className={clip.bgFill === v ? 'active' : ''} onClick={() => set((c) => void (c.bgFill = v), true)}>
+            {t(`bg.${v}`)}
+          </button>
+        ))}
+      </div>
+      {clip.bgFill === 'blur' && (
+        <SliderField label={t('bg.blur')} value={clip.bgBlur} min={0} max={100} step={1} unit="%" defaultValue={60} onChange={(v, f) => set((c) => void (c.bgBlur = v), f)} />
+      )}
+      {clip.bgFill === 'color' && <ColorField label={t('bg.color')} value={clip.bgColor} onChange={(v, f) => set((c) => void (c.bgColor = v), f)} />}
+      {clip.bgFill !== 'none' && (
+        <button className="btn small" onClick={applyToAll}>
+          {t('bg.applyAll')}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -726,7 +782,7 @@ function SpeedSection({ clip, m }: { clip: Clip; m: MediaAsset | undefined }) {
   const t = useT();
   const apply = (v: number, final: boolean) => {
     const r = (d: Draft<Project>) => setClipSpeed(d, clip.id, Math.min(16, Math.max(0.1, v)), m);
-    if (final) commitPreview(r);
+    if (final) edit(r);
     else previewEdit(r);
   };
   return (
@@ -769,10 +825,14 @@ function AudioSection({ clip, set, local, fps }: { clip: Clip; set: Setter; loca
         onChange={(v, f) => set((c) => setPropAt(c, 'volume', local, v / 100, tol), f)}
         keyframe={kfControl(clip, 'volume', local, fps)}
       />
-      {band('low', 'p.eqLow')}
-      {band('mid', 'p.eqMid')}
-      {band('high', 'p.eqHigh')}
-      <ToggleField label={t('p.compressor')} value={clip.audioFx.compressor} onChange={(v) => set((c) => void (c.audioFx.compressor = v), true)} />
+      {!usePrefs.getState().simpleMode && (
+        <>
+          {band('low', 'p.eqLow')}
+          {band('mid', 'p.eqMid')}
+          {band('high', 'p.eqHigh')}
+          <ToggleField label={t('p.compressor')} value={clip.audioFx.compressor} onChange={(v) => set((c) => void (c.audioFx.compressor = v), true)} />
+        </>
+      )}
       <SliderField label={t('p.fadeIn')} value={clip.fadeIn} min={0} max={maxFade} step={0.1} unit="s" defaultValue={0}
         onChange={(v, f) => set((c) => void (c.fadeIn = v), f)} />
       <SliderField label={t('p.fadeOut')} value={clip.fadeOut} min={0} max={maxFade} step={0.1} unit="s" defaultValue={0}
@@ -781,6 +841,9 @@ function AudioSection({ clip, set, local, fps }: { clip: Clip; set: Setter; loca
       <div className="row wrap">
         <button className="btn small" onClick={() => openDialog('denoise')}>
           {t('enh.denoise')}…
+        </button>
+        <button className="btn small" onClick={() => openDialog('silence')}>
+          {t('enh.silence')}…
         </button>
         <button className="btn small" onClick={() => openDialog('loudness')}>
           {t('enh.loudness')}…

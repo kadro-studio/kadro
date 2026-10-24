@@ -303,7 +303,14 @@ export interface Clip {
   shape: ShapeStyle | null;
   overlay: OverlayStyle | null;
   color: string;
+  /** What fills the frame around a picture that does not cover it (video and photos). */
+  bgFill: BackgroundFill;
+  bgColor: string;
+  /** 0..100 */
+  bgBlur: number;
 }
+
+export type BackgroundFill = 'none' | 'blur' | 'color';
 
 export interface Track {
   id: string;
@@ -384,6 +391,8 @@ export interface Project {
   /** In/out marks (I / O keys): export and range playback can use them. */
   markIn?: number | null;
   markOut?: number | null;
+  /** New project that takes the size and frame rate of the first video or photo added. */
+  autoFormat?: boolean;
 }
 
 /** Session-only media state (not saved, not part of undo history). */

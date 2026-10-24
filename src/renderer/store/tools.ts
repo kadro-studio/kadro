@@ -5,7 +5,7 @@ import { placeSubtitles } from '../ai/tasks';
 import { analyzeBeats } from '../core/beats';
 import { clipEnd, findClip, mediaMap, uid } from '../core/project';
 import { clipHasAudio } from '../core/scene';
-import { splitClip } from '../core/edit';
+import { rippleDelete, splitClip } from '../core/edit';
 import { snapToFrame } from '../core/time';
 import type { Keyframe } from '../core/types';
 import { getWaveform } from '../engine/waveforms';
@@ -46,6 +46,83 @@ export async function splitAtScenes(clipId: string, sensitivity: number): Promis
   });
   select(ids);
   return ids.length - 1;
+}
+
+export interface PauseOptions {
+  /** Sound below this level (dBFS) counts as a pause. */
+  thresholdDb: number;
+  /** Shorter quiet moments stay. */
+  minPause: number;
+  /** Breathing room left on each side of a cut, seconds. */
+  keep: number;
+}
+
+/** Quiet stretches of mono PCM as [from, to] in seconds. */
+export function findPauses(pcm: Float32Array, rate: number, o: PauseOptions): [number, number][] {
+  const win = Math.max(1, Math.round(rate * 0.02));
+  const thr = Math.pow(10, o.thresholdDb / 20);
+  const out: [number, number][] = [];
+  let runStart = -1;
+  const n = Math.floor(pcm.length / win);
+  for (let i = 0; i <= n; i++) {
+    let quiet = false;
+    if (i < n) {
+      let sum = 0;
+      for (let j = i * win; j < (i + 1) * win; j++) sum += pcm[j] * pcm[j];
+      quiet = Math.sqrt(sum / win) < thr;
+    }
+    if (quiet && runStart < 0) runStart = i;
+    if (!quiet && runStart >= 0) {
+      const from = (runStart * win) / rate;
+      const to = (i * win) / rate;
+      if (to - from >= o.minPause) out.push([from, to]);
+      runStart = -1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Cuts the pauses out of a clip with speech (a jump cut): quiet stretches are
+ * removed and the rest of the clip's track moves up to close the gaps. Other
+ * tracks (music) keep their timing. One undo step. Returns the number of cuts.
+ */
+export async function removePauses(clipId: string, o: PauseOptions): Promise<number> {
+  const p = st().project;
+  const f = findClip(p, clipId);
+  const media = mediaMap(p);
+  const m = f?.clip.mediaId ? media.get(f.clip.mediaId) : undefined;
+  if (!f || !m || !clipHasAudio(f.clip, media)) return 0;
+  const { clip } = f;
+  const fps = p.settings.fps;
+  const frame = 1 / fps;
+  const pcm = await api.readPcm(m.path, clip.in, clip.duration * clip.speed);
+  const srcLen = pcm.length / 16000;
+  const cuts = findPauses(pcm, 16000, o)
+    .map(([s0, s1]): [number, number] => {
+      // Silence at the very start or end is removed entirely.
+      const a = s0 <= 0.01 ? clip.start : clip.start + s0 / clip.speed + o.keep;
+      const b = s1 >= srcLen - 0.02 ? clipEnd(clip) : clip.start + s1 / clip.speed - o.keep;
+      return [snapToFrame(a, fps), snapToFrame(b, fps)];
+    })
+    .filter(([a, b]) => b - a >= Math.max(0.1, frame * 2));
+  if (cuts.length === 0) return 0;
+  edit((d) => {
+    const track = d.tracks.find((tr) => tr.clips.some((c) => c.id === clipId));
+    if (!track) return;
+    const drop = new Set<string>();
+    // Right to left: the part left of each cut keeps the clip's id.
+    for (const [a, b] of [...cuts].sort((x, y) => y[0] - x[0])) {
+      const piece = track.clips.find((c) => c.id === clipId);
+      if (!piece) break;
+      if (b < clipEnd(piece) - frame) splitClip(track, piece.id, b, frame);
+      let mid: string | null = piece.id;
+      if (a > piece.start + frame) mid = splitClip(track, piece.id, a, frame);
+      if (mid) drop.add(mid);
+    }
+    rippleDelete(d, drop);
+  });
+  return cuts.length;
 }
 
 /** Adds timeline markers on the beat of an audio clip. Returns { bpm, count }. */

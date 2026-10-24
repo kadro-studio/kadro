@@ -30,6 +30,30 @@ export interface Prefs {
   loopPlayback: boolean;
   /** Look for a new release on start (the installed version downloads it in the background). */
   autoUpdate: boolean;
+  /** Frame of new projects: 'auto' (the first video decides) or 'WxH'. */
+  newProjectFormat: string;
+  newProjectFps: number;
+  /** Beginner mode: professional tools (curves, masks, keyframes, trim tools…) are hidden. */
+  simpleMode: boolean;
+  /** The welcome screen has been answered. */
+  onboarded: boolean;
+  /** Media panel on the right, the inspector on the left. */
+  layoutMirror: boolean;
+  /** Timeline toolbar buttons the user has hidden ('tool:razor', 'zoom'…). */
+  hiddenToolbar: string[];
+  /** Side tabs the user has hidden. */
+  hiddenTabs: string[];
+  /** Mouse wheel over the timeline: scroll the tracks, zoom, or move along the time. */
+  timelineWheel: 'scroll' | 'zoom' | 'time';
+  /** Picture strips and sound waves on timeline clips (off is lighter on slow computers). */
+  clipThumbs: boolean;
+  clipWaves: boolean;
+  /** Reopen the last project on start. */
+  openLastProject: boolean;
+  /** Seconds for a newly added transition. */
+  transitionDuration: number;
+  /** Version that last ran, to say once what is new after an update. */
+  seenVersion: string;
   /** User keyboard shortcuts: command id -> combos (see keymap.ts). */
   keymap: Record<string, string[]>;
   /** Saved and installed appearance themes. */
@@ -51,6 +75,19 @@ const DEFAULTS: Prefs = {
   followPlayhead: true,
   loopPlayback: false,
   autoUpdate: true,
+  newProjectFormat: 'auto',
+  newProjectFps: 30,
+  simpleMode: false,
+  onboarded: false,
+  layoutMirror: false,
+  hiddenToolbar: [],
+  hiddenTabs: [],
+  timelineWheel: 'scroll',
+  clipThumbs: true,
+  clipWaves: true,
+  openLastProject: false,
+  transitionDuration: 0.6,
+  seenVersion: '',
   keymap: {},
   myThemes: [],
   recent: [],

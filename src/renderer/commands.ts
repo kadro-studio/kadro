@@ -36,6 +36,7 @@ import { commandFor, comboFromEvent, shortcutLabel } from './keymap';
 import { exportSrt } from './ai/tasks';
 import { importSubtitles } from './store/tools';
 import { checkUpdatesNow } from './store/updates';
+import { startTour } from './components/Onboarding';
 import type { MenuEntry } from './ui/ContextMenu';
 
 export async function saveSnapshot(): Promise<void> {
@@ -268,6 +269,8 @@ export function menus(): MenuDef[] {
       id: 'help',
       label: t('menu.help'),
       items: () => [
+        { label: t('tour.menu'), onClick: () => startTour() },
+        { label: t('simple.label'), checked: usePrefs.getState().simpleMode, onClick: () => setPrefs({ simpleMode: !usePrefs.getState().simpleMode }) },
         { label: t('menu.shortcuts'), onClick: () => openDialog('shortcuts') },
         { separator: true },
         { label: t('menu.website'), onClick: () => window.open(SITE_URL) },

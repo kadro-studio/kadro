@@ -139,6 +139,9 @@ export function makeClip(type: ClipType, partial: Partial<Clip> = {}): Clip {
     shape: null,
     overlay: null,
     color: '#1e88e5',
+    bgFill: 'none',
+    bgColor: '#000000',
+    bgBlur: 60,
     ...partial,
   };
 }
@@ -314,5 +317,6 @@ export function normalizeProject(raw: unknown): Project {
     fx: Array.isArray(src.fx) ? src.fx : [],
     markIn: typeof src.markIn === 'number' ? src.markIn : null,
     markOut: typeof src.markOut === 'number' ? src.markOut : null,
+    ...(src.autoFormat === true ? { autoFormat: true } : {}),
   };
 }

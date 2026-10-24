@@ -4,6 +4,7 @@ import { menus } from '../commands';
 import { useT } from '../i18n';
 import { openDialog } from '../store/actions';
 import { isDirty, useEditor } from '../store/editor';
+import { setPrefs, usePrefs } from '../store/prefs';
 import { MenuItems } from '../ui/ContextMenu';
 import { Icon } from '../ui/Icon';
 import { APP_NAME } from '../../shared/brand';
@@ -15,6 +16,7 @@ export function TopBar() {
   const filePath = useEditor((s) => s.filePath);
   const name = useEditor((s) => s.project.name);
   const dirty = useEditor((s) => isDirty(s));
+  const simple = usePrefs((p) => p.simpleMode);
   // Re-render menus when relevant state changes.
   useEditor(useShallow((s) => [s.selection.length, s.past.length, s.future.length, s.clipboard]));
 
@@ -67,6 +69,10 @@ export function TopBar() {
         </div>
       </div>
       <div className="top-actions">
+        <button className={`simple-toggle ${simple ? 'on' : ''}`} title={t('simple.tip')} onClick={() => setPrefs({ simpleMode: !simple })}>
+          <Icon name="sparkles" size={14} />
+          {t('simple.label')}
+        </button>
         <button className="icon-btn" title={t('menu.projectSettings')} onClick={() => openDialog('settings')}>
           <Icon name="settings" />
         </button>

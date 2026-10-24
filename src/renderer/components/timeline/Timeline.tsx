@@ -54,7 +54,7 @@ import { Icon } from '../../ui/Icon';
 import { defaultAdjust, defaultChroma, defaultWheels } from '../../core/project';
 import { ClipView, HEADER_W, PlayheadLine, RulerCanvas, RulerPlayhead, TrackHeader, trackHeight } from './parts';
 import { DND } from '../dnd';
-import { usePrefs } from '../../store/prefs';
+import { setPrefs, usePrefs } from '../../store/prefs';
 import { shortcutLabel, withShortcut } from '../../keymap';
 
 const sc = (id: string): string | undefined => shortcutLabel(id) || undefined;
@@ -110,6 +110,19 @@ export const TOOLS: { id: Tool; icon: IconName; label: I18nKey; command: string 
   { id: 'razor', icon: 'razor', label: 'tl.razor', command: 'toolRazor' },
 ];
 
+/** Toolbar buttons besides the tools, each of which the user can hide. */
+const TOOLBAR_ITEMS: { id: string; label: I18nKey }[] = [
+  { id: 'undo', label: 'tb.undo' },
+  { id: 'split', label: 'tl.split' },
+  { id: 'delete', label: 'tl.delete' },
+  { id: 'marker', label: 'tl.marker' },
+  { id: 'voice', label: 'vo.title' },
+  { id: 'montage', label: 'mt.short' },
+  { id: 'snap', label: 'tl.snap' },
+  { id: 'tracks', label: 'tb.tracks' },
+  { id: 'zoom', label: 'tb.zoom' },
+];
+
 /** Tooltip with the command's current shortcut after the name (before any ' — ' explanation). */
 function tip(text: string, command: string): string {
   const k = shortcutLabel(command);
@@ -151,6 +164,23 @@ export function Timeline() {
   const canRedo = useEditor((s) => s.future.length > 0);
   // Tooltips show the current shortcuts.
   usePrefs((p) => p.keymap);
+  // Simple mode keeps the select and razor tools only.
+  const simple = usePrefs((p) => p.simpleMode);
+  // Toolbar buttons the user has hidden (right-click the toolbar).
+  const hidden = usePrefs((p) => p.hiddenToolbar);
+  const show = (id: string) => !hidden.includes(id);
+  const toolbarMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const toggle = (id: string) => () => setPrefs({ hiddenToolbar: show(id) ? [...hidden, id] : hidden.filter((x) => x !== id) });
+    const items: MenuEntry[] = [
+      ...TOOLS.map((x) => ({ label: t(x.label).split(' — ')[0], checked: show(`tool:${x.id}`), onClick: toggle(`tool:${x.id}`) })),
+      { separator: true },
+      ...TOOLBAR_ITEMS.map((x) => ({ label: t(x.label), checked: show(x.id), onClick: toggle(x.id) })),
+      { separator: true },
+      { label: t('tb.showAll'), onClick: () => setPrefs({ hiddenToolbar: [] }) },
+    ];
+    openContextMenu(e.clientX, e.clientY, items);
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ w: 800, scrollLeft: 0 });
@@ -188,12 +218,21 @@ export function Timeline() {
     }
   }, [pps]);
 
-  // Ctrl + wheel zooms around the cursor.
+  // The mouse wheel scrolls tracks, zooms or moves through time (Preferences → Interface);
+  // Ctrl swaps scrolling and zooming.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return;
+      const mode = usePrefs.getState().timelineWheel;
+      const zoom = mode === 'zoom' ? !e.ctrlKey && !e.shiftKey : e.ctrlKey;
+      if (!zoom) {
+        if (mode === 'time' && !e.shiftKey) {
+          e.preventDefault();
+          el.scrollLeft += e.deltaY + e.deltaX;
+        }
+        return;
+      }
       e.preventDefault();
       const s = useEditor.getState();
       const rect = el.getBoundingClientRect();
@@ -758,35 +797,40 @@ export function Timeline() {
   const s = useEditor.getState;
   return (
     <div className="timeline">
-      <div className="tl-toolbar">
-        {TOOLS.map((x) => (
+      <div className="tl-toolbar" onContextMenu={toolbarMenu} title={t('tb.customizeHint')}>
+        {TOOLS.filter((x) => (!simple || x.id === 'select' || x.id === 'razor') && show(`tool:${x.id}`)).map((x) => (
           <IconButton key={x.id} icon={x.icon} title={tip(t(x.label), x.command)} active={tool === x.id} onClick={() => useEditor.setState({ tool: x.id })} />
         ))}
         <div className="sep" />
-        <IconButton icon="undo" title={withShortcut(t('menu.undo'), 'undo')} disabled={!canUndo} onClick={undo} />
-        <IconButton icon="redo" title={withShortcut(t('menu.redo'), 'redo')} disabled={!canRedo} onClick={redo} />
+        {show('undo') && <IconButton icon="undo" title={withShortcut(t('menu.undo'), 'undo')} disabled={!canUndo} onClick={undo} />}
+        {show('undo') && <IconButton icon="redo" title={withShortcut(t('menu.redo'), 'redo')} disabled={!canRedo} onClick={redo} />}
         <div className="sep" />
-        <IconButton icon="scissors" title={withShortcut(t('tl.split'), 'split')} onClick={() => splitAt(s().playhead)} />
-        <IconButton icon="trash" title={withShortcut(t('tl.delete'), 'delete')} disabled={selection.length === 0} onClick={() => deleteSelection(false)} />
-        <IconButton icon="marker" title={withShortcut(t('tl.marker'), 'marker')} onClick={() => addMarker()} />
-        <IconButton icon="mic" title={t('vo.title')} onClick={() => openDialog('voiceover')} />
+        {show('split') && <IconButton icon="scissors" title={withShortcut(t('tl.split'), 'split')} onClick={() => splitAt(s().playhead)} />}
+        {show('delete') && <IconButton icon="trash" title={withShortcut(t('tl.delete'), 'delete')} disabled={selection.length === 0} onClick={() => deleteSelection(false)} />}
+        {show('marker') && <IconButton icon="marker" title={withShortcut(t('tl.marker'), 'marker')} onClick={() => addMarker()} />}
+        {show('voice') && <IconButton icon="mic" title={t('vo.title')} onClick={() => openDialog('voiceover')} />}
+        {show('montage') && <IconButton icon="wand" title={t('mt.tip')} onClick={() => openDialog('autoMontage')} />}
         <div className="sep" />
-        <IconButton icon="magnet" title={withShortcut(t('tl.snap'), 'snapping')} active={snapping} onClick={() => useEditor.setState({ snapping: !snapping })} />
+        {show('snap') && <IconButton icon="magnet" title={withShortcut(t('tl.snap'), 'snapping')} active={snapping} onClick={() => useEditor.setState({ snapping: !snapping })} />}
         <div className="spacer" />
-        <IconButton icon="film" title={t('tl.addVideoTrack')} onClick={() => addTrack('video')} />
-        <IconButton icon="music" title={t('tl.addAudioTrack')} onClick={() => addTrack('audio')} />
+        {show('tracks') && <IconButton icon="film" title={t('tl.addVideoTrack')} onClick={() => addTrack('video')} />}
+        {show('tracks') && <IconButton icon="music" title={t('tl.addAudioTrack')} onClick={() => addTrack('audio')} />}
         <div className="sep" />
-        <IconButton icon="minus" title={withShortcut(t('tl.zoomOut'), 'zoomOut')} onClick={() => zoomBy(1 / 1.4)} />
-        <input
-          type="range"
-          className="tl-zoom"
-          min={0}
-          max={100}
-          step={0.5}
-          value={(Math.log(pps / 2) / Math.log(600)) * 100}
-          onChange={(e) => useEditor.setState({ pxPerSec: 2 * Math.pow(600, Number(e.target.value) / 100) })}
-        />
-        <IconButton icon="plus" title={withShortcut(t('tl.zoomIn'), 'zoomIn')} onClick={() => zoomBy(1.4)} />
+        {show('zoom') && (
+          <>
+            <IconButton icon="minus" title={withShortcut(t('tl.zoomOut'), 'zoomOut')} onClick={() => zoomBy(1 / 1.4)} />
+            <input
+              type="range"
+              className="tl-zoom"
+              min={0}
+              max={100}
+              step={0.5}
+              value={(Math.log(pps / 2) / Math.log(600)) * 100}
+              onChange={(e) => useEditor.setState({ pxPerSec: 2 * Math.pow(600, Number(e.target.value) / 100) })}
+            />
+            <IconButton icon="plus" title={withShortcut(t('tl.zoomIn'), 'zoomIn')} onClick={() => zoomBy(1.4)} />
+          </>
+        )}
         <IconButton icon="fit" title={withShortcut(t('tl.fit'), 'zoomFit')} onClick={() => zoomToFit(view.w - HEADER_W)} />
       </div>
       <div

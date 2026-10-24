@@ -247,7 +247,7 @@ export async function packSource(src: LocalSource, title: string): Promise<Packa
       const data =
         src.ref === 'current' ? await makeTemplateData(useEditor.getState().project) : useTemplates.getState().list.find((x) => x.path === src.ref)?.data;
       if (!data) throw new Error('missing template');
-      const preview = projectThumbnail(data.project, Math.min(projectDuration(data.project) * 0.3, 2));
+      const preview = projectThumbnail(data.project, Math.min(projectDuration(data.project) * 0.3, 1.2));
       return { fileName: `${base}.kadroitem`, file: itemFile('template', title, data), preview: dataUrlBytes(preview) };
     }
     default:

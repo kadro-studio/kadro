@@ -238,6 +238,8 @@ export interface AppInfo {
   platform: string;
   ffmpeg: string;
   ffmpegVersion: string;
+  /** Show first-run screens (off for the isolated profiles that automated tests use). */
+  firstRun: boolean;
 }
 
 export interface FileFilter {

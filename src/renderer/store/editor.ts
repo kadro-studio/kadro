@@ -26,12 +26,16 @@ export type DialogKind =
   | 'scenes'
   | 'beats'
   | 'duck'
+  | 'silence'
   | 'credits'
   | 'shadertoy'
   | 'publish'
   | 'link'
   | 'templates'
-  | 'fillTemplate';
+  | 'fillTemplate'
+  | 'newProject'
+  | 'welcome'
+  | 'autoMontage';
 
 export interface Toast {
   id: number;

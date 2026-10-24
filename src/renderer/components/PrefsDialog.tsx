@@ -15,12 +15,14 @@ import { openDialog } from '../store/actions';
 import { exportPresetsFile, importPresetsFile, usePresets } from '../store/presets';
 import { addUserFonts, removeUserFont, useUserFonts } from '../store/userFonts';
 import { checkUpdatesNow } from '../store/updates';
+import { startTour } from './Onboarding';
 import { Icon } from '../ui/Icon';
 
-type Tab = 'general' | 'appearance' | 'mine' | 'performance' | 'library' | 'storage';
+type Tab = 'general' | 'appearance' | 'interface' | 'mine' | 'performance' | 'library' | 'storage';
 const TABS: { id: Tab; label: I18nKey }[] = [
   { id: 'general', label: 'prefs.tab.general' },
   { id: 'appearance', label: 'prefs.tab.appearance' },
+  { id: 'interface', label: 'prefs.tab.interface' },
   { id: 'mine', label: 'prefs.tab.mine' },
   { id: 'performance', label: 'prefs.tab.performance' },
   { id: 'library', label: 'prefs.tab.library' },
@@ -46,6 +48,7 @@ export function PrefsDialog({ onClose }: { onClose: () => void }) {
         <div className="prefs-page">
           {tab === 'general' && <GeneralPage />}
           {tab === 'appearance' && <AppearancePage />}
+          {tab === 'interface' && <InterfacePage />}
           {tab === 'mine' && <MinePage />}
           {tab === 'performance' && <PerformancePage />}
           {tab === 'library' && <LibraryPage />}
@@ -384,6 +387,74 @@ function MyThemes() {
         </button>
       </div>
     </div>
+  );
+}
+
+/** How the window is laid out and behaves: everything the user may want their own way. */
+function InterfacePage() {
+  const t = useT();
+  const prefs = usePrefs();
+  const toggle = (key: keyof typeof prefs, label: I18nKey, hint?: I18nKey) => (
+    <>
+      <label className="field toggle-field">
+        <span className="field-label">{t(label)}</span>
+        <input type="checkbox" className="switch" checked={!!prefs[key]} onChange={(e) => setPrefs({ [key]: e.target.checked })} />
+      </label>
+      {hint && (
+        <span className="panel-hint" style={{ margin: '-4px 0 0' }}>
+          {t(hint)}
+        </span>
+      )}
+    </>
+  );
+  const reset = () => {
+    setPrefs({ simpleMode: false, layoutMirror: false, hiddenToolbar: [], hiddenTabs: [], timelineWheel: 'scroll', clipThumbs: true, clipWaves: true, transitionDuration: 0.6 });
+    window.dispatchEvent(new Event('kadro:resetLayout'));
+    toast(t('ui.resetDone'), 'success');
+  };
+  return (
+    <>
+      {toggle('simpleMode', 'simple.label', 'ui.simpleHint')}
+      {toggle('layoutMirror', 'ui.mirror', 'ui.mirrorHint')}
+      <div className="field">
+        <label className="field-label">{t('ui.wheel')}</label>
+        <select className="select" value={prefs.timelineWheel} onChange={(e) => setPrefs({ timelineWheel: e.target.value as typeof prefs.timelineWheel })}>
+          <option value="scroll">{t('ui.wheel.scroll')}</option>
+          <option value="time">{t('ui.wheel.time')}</option>
+          <option value="zoom">{t('ui.wheel.zoom')}</option>
+        </select>
+      </div>
+      {toggle('clipThumbs', 'ui.thumbs')}
+      {toggle('clipWaves', 'ui.waves', 'ui.lightHint')}
+      {toggle('openLastProject', 'ui.openLast')}
+      <div className="field">
+        <label className="field-label">{t('ui.transition')}</label>
+        <select className="select" value={prefs.transitionDuration} onChange={(e) => setPrefs({ transitionDuration: Number(e.target.value) })}>
+          {[0.2, 0.3, 0.5, 0.6, 0.8, 1, 1.5, 2].map((v) => (
+            <option key={v} value={v}>
+              {t('prefs.seconds', { n: v })}
+            </option>
+          ))}
+        </select>
+      </div>
+      <span className="panel-hint" style={{ margin: 0 }}>
+        {t('ui.customizeHint')}
+      </span>
+      <div className="row wrap">
+        <button className="btn small" onClick={() => setPrefs({ hiddenToolbar: [] })} disabled={prefs.hiddenToolbar.length === 0}>
+          {t('ui.showButtons')}
+        </button>
+        <button className="btn small" onClick={() => setPrefs({ hiddenTabs: [] })} disabled={prefs.hiddenTabs.length === 0}>
+          {t('ui.showTabs')}
+        </button>
+        <button className="btn small" onClick={() => { openDialog(null); setTimeout(startTour, 200); }}>
+          {t('tour.menu')}
+        </button>
+        <button className="btn small" onClick={reset}>
+          {t('ui.reset')}
+        </button>
+      </div>
+    </>
   );
 }
 

@@ -296,6 +296,7 @@ function Transport({ stageRef }: { stageRef: React.RefObject<HTMLDivElement | nu
   const previewScale = useEditor((s) => s.previewScale);
   const useProxies = usePrefs((p) => p.useProxies);
   const showScopes = usePrefs((p) => p.showScopes);
+  const simple = usePrefs((p) => p.simpleMode);
   const loop = usePrefs((p) => p.loopPlayback);
   usePrefs((p) => p.keymap);
 
@@ -328,7 +329,9 @@ function Transport({ stageRef }: { stageRef: React.RefObject<HTMLDivElement | nu
           <option value={0.25}>{t('preview.quarter')}</option>
         </select>
         <IconButton icon="speed" title={t('preview.useProxies')} active={useProxies} onClick={() => setPrefs({ useProxies: !useProxies })} />
-        <IconButton icon="scopes" title={withShortcut(t('preview.scopes'), 'toggleScopes')} active={showScopes} onClick={() => setPrefs({ showScopes: !showScopes })} />
+        {!simple && (
+          <IconButton icon="scopes" title={withShortcut(t('preview.scopes'), 'toggleScopes')} active={showScopes} onClick={() => setPrefs({ showScopes: !showScopes })} />
+        )}
         <IconButton icon="camera" title={withShortcut(t('menu.snapshot'), 'snapshot')} onClick={() => void saveSnapshot()} />
         <IconButton
           icon="fullscreen"

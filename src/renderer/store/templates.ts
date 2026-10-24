@@ -39,6 +39,8 @@ export interface TemplateEntry {
   data: TemplateData;
   slots: number;
   duration: number;
+  /** Comes with the app (cannot be deleted). */
+  builtin?: boolean;
 }
 
 export const useTemplates = create<{ list: TemplateEntry[] }>(() => ({ list: [] }));

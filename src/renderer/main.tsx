@@ -3,7 +3,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { createProject } from './core/project';
 import { setLang, t } from './i18n';
 import * as actions from './store/actions';
 import * as editor from './store/editor';
@@ -30,7 +29,7 @@ import * as templates from './store/templates';
 
 applyTheme(usePrefs.getState().theme);
 void loadUserFonts();
-editor.loadProject(createProject(t('top.untitled')), null);
+editor.loadProject(actions.freshProject(t('top.untitled')), null);
 
 // Automation/debug handle (used by scripts/smoke.mjs and handy in DevTools).
 (window as unknown as { __vr: unknown }).__vr = { ...actions, ...editor, ...media, ...enhance, ...prefsStore, ...tools, ...presets, ...userFonts, ...keymap, player, runExport, setLang, Compositor };

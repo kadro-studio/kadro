@@ -5,7 +5,8 @@ import { mediaUrl } from '../../shared/api';
 import { emptySlot, projectDuration } from '../core/project';
 import { formatDuration } from '../core/time';
 import { projectThumbnail } from '../engine/fx/thumbs';
-import { useT } from '../i18n';
+import { useLang, useT } from '../i18n';
+import { builtinTemplates } from '../store/builtinTemplates';
 import { setLeftTab } from '../store/actions';
 import { useEditor } from '../store/editor';
 import { askText } from '../store/prompt';
@@ -27,7 +28,7 @@ import { Modal } from './Modal';
 
 /** A frame a little into the template, where titles and effects are usually on screen. */
 function previewTime(duration: number): number {
-  return Math.min(duration * 0.3, 2);
+  return Math.min(duration * 0.3, 1.2);
 }
 
 function TemplateCard({ entry }: { entry: TemplateEntry }) {
@@ -51,7 +52,7 @@ function TemplateCard({ entry }: { entry: TemplateEntry }) {
         <button className="btn primary small" onClick={() => void startFromTemplate(entry)}>
           {t('tpl.use')}
         </button>
-        <IconButton icon="trash" title={t('common.delete')} onClick={() => void removeTemplate(entry)} />
+        {!entry.builtin && <IconButton icon="trash" title={t('common.delete')} onClick={() => void removeTemplate(entry)} />}
       </div>
     </div>
   );
@@ -62,6 +63,9 @@ export function TemplatesDialog({ onClose }: { onClose: () => void }) {
   const list = useTemplates((s) => s.list);
   const hasClips = useEditor((s) => s.project.tracks.some((tr) => tr.clips.length > 0));
   const projectName = useEditor((s) => s.project.name);
+  const lang = useLang((s) => s.lang);
+  // Built in, in the current language (their texts are translated when built).
+  const builtins = useMemo(() => builtinTemplates(), [lang]);
 
   useEffect(() => {
     void reloadTemplates();
@@ -102,6 +106,13 @@ export function TemplatesDialog({ onClose }: { onClose: () => void }) {
       <p className="panel-hint" style={{ margin: 0 }}>
         {t('tpl.hint')}
       </p>
+      <span className="field-label">{t('tpl.builtin')}</span>
+      <div className="tpl-grid">
+        {builtins.map((e) => (
+          <TemplateCard key={e.path} entry={e} />
+        ))}
+      </div>
+      <span className="field-label">{t('tpl.mine')}</span>
       {list.length === 0 ? (
         <div className="ws-empty">
           <Icon name="layers" size={28} />
