@@ -5,6 +5,12 @@
   const EN = {
     'nav.features': 'Features',
     'nav.workshop': 'Workshop',
+    'nav.animate': 'Animation',
+    'an.title': 'Kadro Animate — frame-by-frame 2D animation',
+    'an.lead':
+      'New in the family: draw animation with a pressure-sensitive pen, with keys, onion skin, camera and sound. Right in the browser or on Windows — and free as well.',
+    'an.open': 'Open in the browser',
+    'an.more': 'Learn more',
     'ws.title': 'Community workshop',
     'ws.lead': 'Effects, transitions, filters, LUTs, title styles and themes from other users. They install into Kadro in one click, and you can publish your own straight from the app.',
     'ws.open': 'Open the workshop',
@@ -91,6 +97,11 @@
   const UK = {
     "nav.features": "Можливості",
     "nav.workshop": "Майстерня",
+    "nav.animate": "Анімація",
+    "an.title": "Kadro Animate — покадрова 2D-анімація",
+    "an.lead": "Нове в родині: малюйте анімацію пером із натиском, з ключами, калькою, камерою і звуком. Просто в браузері або на Windows — і теж безкоштовно.",
+    "an.open": "Відкрити в браузері",
+    "an.more": "Докладніше",
     "ws.title": "Майстерня спільноти",
     "ws.lead": "Ефекти, переходи, фільтри, LUT, стилі титрів і теми від інших користувачів. Встановлюються в Kadro одним кліком, а свої можна опублікувати просто з програми.",
     "ws.open": "Відкрити майстерню",
@@ -274,8 +285,9 @@
     renderWallets(lang);
   }
 
-  // Download counter: installer and portable downloads of every release on GitHub,
-  // kept for an hour so visitors do not use up the API limit.
+  // Download counter: installer and portable downloads of every Kadro release on GitHub (Kadro Animate
+  // installers live in the same repository and are counted on their own page), kept for an hour so
+  // visitors do not use up the API limit.
   let downloads = null;
   const DL_KEY = 'kadro.downloads';
 
@@ -301,7 +313,8 @@
       const r = await fetch(`https://api.github.com/repos/${site.repo}/releases?per_page=100`);
       if (!r.ok) return;
       const releases = await r.json();
-      downloads = releases.reduce((sum, rel) => sum + rel.assets.filter((a) => a.name.endsWith('.exe')).reduce((s, a) => s + a.download_count, 0), 0);
+      const kadro = (a) => a.name.endsWith('.exe') && !a.name.startsWith('Kadro-Animate');
+      downloads = releases.reduce((sum, rel) => sum + rel.assets.filter(kadro).reduce((s, a) => s + a.download_count, 0), 0);
       try {
         localStorage.setItem(DL_KEY, JSON.stringify({ n: downloads, at: Date.now() }));
       } catch {

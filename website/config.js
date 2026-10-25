@@ -11,6 +11,14 @@ window.KADRO_SITE = {
     releases: '',
     issues: '',
   },
+  // Kadro Animate (animate/): the web version lives in animate/app/, the Windows installer is an
+  // asset of its own release in the same repository. That release is published with
+  // `--latest=false`, so Kadro's update check and the "latest" download link never pick it up.
+  animate: {
+    version: '0.2.0',
+    tag: 'animate-v0.2.0',
+    links: { installer: '', releases: '', issues: '' },
+  },
   // Donation options; set `url` to enable a card. `name` and `note` may be per-language.
   // A card with `wallets` opens the list of crypto addresses instead of a link;
   // wallets without an address are not shown.

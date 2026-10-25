@@ -933,3 +933,33 @@ details p {
 .kind-template {
   background: radial-gradient(120% 120% at 30% 20%, #1d2a22, #121216 70%);
 }
+
+/* ---------- Kadro Animate ---------- */
+.promo-brand {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex: 1 1 520px;
+}
+.promo-brand img {
+  flex: none;
+  border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(255, 40, 60, 0.18);
+}
+.promo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.meta:empty {
+  display: none;
+}
+.two-col .shot {
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .promo-brand {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
