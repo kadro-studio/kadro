@@ -191,6 +191,13 @@
       .st-table td:first-child {
         text-align: left;
       }
+      /* Journal: the version and what was downloaded are words, not numbers. */
+      #journal td:nth-child(2),
+      #journal td:nth-child(3),
+      #journal th:nth-child(2),
+      #journal th:nth-child(3) {
+        text-align: left;
+      }
       .st-table th {
         color: var(--mute);
         font-weight: 500;
@@ -226,7 +233,7 @@
         <div class="wrap">
           <h1>Статистика завантажень</h1>
           <p class="lead">
-            Скільки разів завантажували програму, по днях і версіях. GitHub зберігає лише загальну кількість, тож щодня о 00:07 UTC записується знімок лічильників, а різниця між знімками — це завантаження за день.
+            Скільки разів і коли завантажували програму. GitHub зберігає лише загальну кількість, тож щогодини лічильники перевіряються, і кожна зміна записується. Звідси видно день, годину, версію і що саме завантажили.
           </p>
         </div>
       </section>
@@ -241,9 +248,24 @@
 
         <div class="st-card">
           <h2>Завантаження за день</h2>
-          <p class="sub">Інсталятор і портативна версія. Останній стовпчик — від ранкового знімка до цієї хвилини.</p>
+          <p class="sub">Інсталятор і портативна версія. Останній стовпчик — сьогоднішній день, він ще триває.</p>
           <div class="st-legend" id="dl-legend"></div>
           <div id="dl-chart"></div>
+        </div>
+
+        <div class="st-card">
+          <h2>О котрій годині завантажують</h2>
+          <p class="sub">Усі завантаження від початку запису за годинами доби (ваш місцевий час).</p>
+          <div id="hour-chart"></div>
+        </div>
+
+        <div class="st-card">
+          <h2>Журнал завантажень</h2>
+          <p class="sub">Кожне завантаження: у яку годину, яку версію і що саме. Найновіші зверху.</p>
+          <div class="st-scroll">
+            <table class="st-table" id="journal"></table>
+          </div>
+          <p class="st-note" id="journal-note"></p>
         </div>
 
         <div class="st-card" id="upd-card">

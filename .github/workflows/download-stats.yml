@@ -1,15 +1,18 @@
-# Once a day records how many times each release file has been downloaded. GitHub keeps only the
-# running total, so these daily snapshots are what kadro.studio/stats/ turns into downloads per day.
-# The history lives on the `stats` branch, away from the code (the branch is created on the first run).
+# Every hour records how many times each release file has been downloaded. GitHub keeps only the
+# running total, so these snapshots are what kadro.studio/stats/ turns into downloads per day and the
+# hour they happened in. A snapshot is saved only when a count changed. The history lives on the
+# `stats` branch, away from the code (the branch is created on the first run).
 name: Download stats
 
 on:
   schedule:
-    - cron: '7 0 * * *'
+    - cron: '7 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
+  # To find when the previous run read the counts.
+  actions: read
 
 concurrency:
   group: download-stats
@@ -32,9 +35,10 @@ jobs:
             git init --quiet -b stats data
             git -C data remote add origin "$url"
           fi
-      - name: Record today's counts
+      - name: Record the counts
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          STATS_WORKFLOW: download-stats.yml
         run: node code/scripts/download-stats.mjs data/downloads.json "$GITHUB_REPOSITORY"
       - name: Save
         working-directory: data
@@ -43,5 +47,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add downloads.json
           git diff --cached --quiet && exit 0
-          git commit --quiet -m "Download counts $(date -u +%F)"
+          git commit --quiet -m "Download counts $(date -u '+%F %H:%M')"
           git push --quiet origin stats

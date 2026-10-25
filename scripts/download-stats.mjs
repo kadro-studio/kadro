@@ -1,11 +1,14 @@
-// Records today's download counts of every release file in a JSON history.
-// GitHub only keeps a running total per file, so a daily snapshot is what makes
-// "downloads per day" possible. Run by .github/workflows/download-stats.yml;
-// kadro.studio/stats/ draws the result.
+// Records the download counts of every release file in a JSON history.
+// GitHub only keeps a running total per file, so snapshots are what make
+// "downloads per day" and "when were they downloaded" possible. Run every hour
+// by .github/workflows/download-stats.yml; kadro.studio/stats/ draws the result.
 //
 //   node scripts/download-stats.mjs <history.json> [owner/repo]
 //
-// GITHUB_TOKEN, when set, is used for the API request (higher rate limit).
+// A snapshot is added only when some count changed. Its `since` is the time of
+// the previous check, when the counts were still the old ones, so the new
+// downloads happened between `since` and `at` (within the hour). GITHUB_TOKEN,
+// when set, is used for the API (and to find the previous check in Actions).
 import fs from 'node:fs';
 
 const [file, repo = 'kadro-studio/kadro'] = process.argv.slice(2);
@@ -30,16 +33,33 @@ function productOf(release) {
 
 const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'kadro-download-stats' };
 if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+
+async function api(path) {
+  const r = await fetch(`https://api.github.com/repos/${repo}${path}`, { headers });
+  if (!r.ok) throw new Error(`GitHub API ${path}: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+/** When the previous successful run of this workflow read the counts (Actions only). */
+async function previousCheck() {
+  const workflow = process.env.STATS_WORKFLOW;
+  if (!workflow || !process.env.GITHUB_TOKEN) return null;
+  try {
+    const { workflow_runs: runs } = await api(`/actions/workflows/${workflow}/runs?status=success&per_page=1`);
+    return runs[0]?.updated_at ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const releases = [];
 for (let page = 1; ; page++) {
-  const r = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`, { headers });
-  if (!r.ok) throw new Error(`GitHub API: ${r.status} ${await r.text()}`);
-  const batch = await r.json();
+  const batch = await api(`/releases?per_page=100&page=${page}`);
   releases.push(...batch.filter((rel) => !rel.draft));
   if (batch.length < 100) break;
 }
 
-let history = { repo, releases: {}, days: [] };
+let history = { repo, releases: {}, snapshots: [] };
 if (fs.existsSync(file)) history = JSON.parse(fs.readFileSync(file, 'utf8'));
 
 const counts = {};
@@ -50,17 +70,23 @@ for (const rel of releases) {
   counts[rel.tag_name] = c;
 }
 
-const now = new Date();
-const date = now.toISOString().slice(0, 10);
-const snapshot = { date, at: now.toISOString(), counts };
-// A second run on the same day replaces that day's snapshot.
-history.days = history.days.filter((d) => d.date !== date);
-history.days.push(snapshot);
-history.days.sort((a, b) => a.date.localeCompare(b.date));
+// Compared tag by tag, whatever order the API lists the releases in.
+const canon = (c) => JSON.stringify(Object.keys(c).sort().map((tag) => [tag, c[tag]]));
+const last = history.snapshots.at(-1);
+const changed = !last || canon(last.counts) !== canon(counts);
+const at = new Date().toISOString();
+if (changed) {
+  // The new downloads happened after the previous check (an hour ago, or later if a run was skipped).
+  const prev = last ? await previousCheck() : null;
+  const since = last ? (prev && prev > last.at && prev < at ? prev : last.at) : null;
+  history.snapshots.push({ at, since, counts });
+}
 
-fs.writeFileSync(file, JSON.stringify(history, null, 1) + '\n');
+const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+const after = JSON.stringify(history, null, 1) + '\n';
+if (after !== before) fs.writeFileSync(file, after);
 const total = (product) =>
   Object.entries(counts)
     .filter(([tag]) => history.releases[tag]?.product === product)
     .reduce((s, [, c]) => s + c.setup + c.portable, 0);
-console.log(`${date}: Kadro ${total('kadro')} downloads, Kadro Animate ${total('animate')} (${history.days.length} days recorded)`);
+console.log(`${at}: Kadro ${total('kadro')} downloads, Kadro Animate ${total('animate')}; ${changed ? 'new snapshot' : 'no change'} (${history.snapshots.length} snapshots)`);
