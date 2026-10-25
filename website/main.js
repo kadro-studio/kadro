@@ -213,6 +213,7 @@
     document.documentElement.lang = lang;
     document.getElementById('lang').value = lang;
     for (const img of document.querySelectorAll('[data-shot]')) img.src = `assets/${img.dataset.shot}-${lang}.webp`;
+    for (const a of document.querySelectorAll('[data-app]')) a.href = `animate/app/?lang=${lang}`;
     renderLinks(lang);
     renderDownloads(lang);
     try {

@@ -16,7 +16,6 @@
     'cta.open': 'Open in the browser',
     'cta.installer': 'Download for Windows',
     'cta.meta': 'Chrome, Edge or Firefox — or Windows 10 / 11 · about 2 MB · no sign-up',
-    'cta.uiLang': 'The app’s interface is in Russian for now.',
     'strip.1': 'Free',
     'strip.2': 'No sign-up',
     'strip.3': 'Works offline',
@@ -59,7 +58,7 @@
     q4: 'Windows says “Windows protected your PC”. What do I do?',
     a4: 'That is how SmartScreen treats new programs without a paid code-signing certificate. Click “More info” → “Run anyway”.',
     q5: 'What language is the interface in?',
-    a5: 'Russian only, for now.',
+    a5: 'Ukrainian, Russian and English. The browser version opens in the language of the site, the Windows app in the language of the system, and you can change it in View → Language or File → Settings.',
     q6: 'Is it really free?',
     a6: 'Yes, just like Kadro: no subscriptions, trials, watermarks or account. Everything you draw is yours.',
     'footer.kadro': 'Kadro video editor',
@@ -80,7 +79,6 @@
     'cta.open': 'Відкрити в браузері',
     'cta.installer': 'Завантажити для Windows',
     'cta.meta': 'Chrome, Edge або Firefox — чи Windows 10 / 11 · близько 2 МБ · без реєстрації',
-    'cta.uiLang': 'Інтерфейс програми поки що російською.',
     'strip.1': 'Безкоштовно',
     'strip.2': 'Без реєстрації',
     'strip.3': 'Працює офлайн',
@@ -123,7 +121,7 @@
     q4: 'Windows пише «Систему Windows захищено». Що робити?',
     a4: 'Так SmartScreen реагує на нові програми без платного цифрового підпису. Натисніть «Докладніше» → «Усе одно запустити».',
     q5: 'Якою мовою інтерфейс?',
-    a5: 'Поки що лише російською.',
+    a5: 'Українською, російською та англійською. Версія в браузері відкривається мовою сайту, програма для Windows — мовою системи, а змінити мову можна в меню Вигляд → Мова або Файл → Налаштування.',
     q6: 'Це справді безкоштовно?',
     a6: 'Так, як і Kadro: без підписок, пробних періодів, водяних знаків і облікового запису. Усе, що ви намалювали, належить вам.',
     'footer.kadro': 'Відеоредактор Kadro',
@@ -172,6 +170,9 @@
       if (url) a.removeAttribute('title');
       else a.title = soon;
     }
+    // The web version opens in the language chosen here; screenshots show the interface in it.
+    for (const a of document.querySelectorAll('[data-app]')) a.href = `app/?lang=${lang}`;
+    for (const img of document.querySelectorAll('[data-shot]')) img.src = `../assets/${img.dataset.shot}-${lang}.webp`;
     renderDownloads(lang);
     try {
       localStorage.setItem('kadro.lang', lang);

@@ -10,7 +10,7 @@
     />
     <meta property="og:title" content="Kadro Animate — покадровая 2D-анимация" />
     <meta property="og:description" content="Бесплатно, без регистрации, прямо в браузере или на Windows." />
-    <meta property="og:image" content="https://kadro.studio/assets/animate-screenshot.webp" />
+    <meta property="og:image" content="https://kadro.studio/assets/animate-screenshot-en.webp" />
     <meta property="og:url" content="https://kadro.studio/animate/" />
     <meta property="og:type" content="website" />
     <link rel="canonical" href="https://kadro.studio/animate/" />
@@ -37,7 +37,7 @@
             <option value="ru">RU</option>
             <option value="en">EN</option>
           </select>
-          <a class="btn btn-primary btn-sm" href="app/" data-i18n="nav.open">Открыть</a>
+          <a class="btn btn-primary btn-sm" href="app/" data-app data-i18n="nav.open">Открыть</a>
         </div>
       </div>
     </header>
@@ -53,17 +53,16 @@
             умный ассистент аниматора. Работает в браузере без установки и как программа для Windows.
           </p>
           <div class="cta" id="download">
-            <a class="btn btn-primary btn-lg" href="app/">
+            <a class="btn btn-primary btn-lg" href="app/" data-app>
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
               <span data-i18n="cta.open">Открыть в браузере</span>
             </a>
             <a class="btn btn-ghost btn-lg" data-link="installer" href="#" data-i18n="cta.installer">Скачать для Windows</a>
           </div>
           <p class="meta" data-i18n="cta.meta">Chrome, Edge или Firefox — либо Windows 10 / 11 · около 2 МБ · без регистрации</p>
-          <p class="meta" data-i18n="cta.uiLang"></p>
           <p class="downloads" id="downloads" hidden></p>
           <figure class="shot">
-            <img src="../assets/animate-screenshot.webp" alt="Kadro Animate" width="1920" height="1080" />
+            <img src="../assets/animate-screenshot-ru.webp" data-shot="animate-screenshot" alt="Kadro Animate" width="1920" height="1080" />
           </figure>
         </div>
       </section>
@@ -145,7 +144,7 @@
             </p>
           </div>
           <figure class="shot">
-            <img src="../assets/animate-assistant.webp" alt="Kadro Animate" width="1920" height="1080" loading="lazy" />
+            <img src="../assets/animate-assistant-ru.webp" data-shot="animate-assistant" alt="Kadro Animate" width="1920" height="1080" loading="lazy" />
           </figure>
         </div>
       </section>
@@ -187,7 +186,10 @@
           </details>
           <details>
             <summary data-i18n="q5">На каком языке интерфейс?</summary>
-            <p data-i18n="a5">Пока только на русском.</p>
+            <p data-i18n="a5">
+              На украинском, русском и английском. Браузерная версия открывается на языке сайта, программа для Windows — на языке системы, а сменить
+              его можно в меню Вид → Язык или в Файл → Настройки.
+            </p>
           </details>
           <details>
             <summary data-i18n="q6">Это правда бесплатно?</summary>
