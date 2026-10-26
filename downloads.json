@@ -30,6 +30,11 @@
    "name": "Kadro 0.1.0",
    "published": "2026-10-22T10:33:50Z",
    "product": "kadro"
+  },
+  "v0.4.0": {
+   "name": "Kadro 0.4.0",
+   "published": "2026-10-26T20:26:40Z",
+   "product": "kadro"
   }
  },
  "snapshots": [
@@ -133,6 +138,61 @@
    "at": "2026-10-26T17:17:13.492Z",
    "since": "2026-10-26T10:58:45Z",
    "counts": {
+    "v0.3.0": {
+     "setup": 6,
+     "portable": 2,
+     "updates": 8,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.2.1": {
+     "setup": 1,
+     "portable": 1,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.2.0": {
+     "setup": 0,
+     "portable": 0,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "animate-v0.2.0": {
+     "setup": 1,
+     "portable": 0,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.1.1": {
+     "setup": 3,
+     "portable": 1,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.1.0": {
+     "setup": 5,
+     "portable": 2,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    }
+   }
+  },
+  {
+   "at": "2026-10-26T22:36:02.551Z",
+   "since": "2026-10-26T17:17:20Z",
+   "counts": {
+    "v0.4.0": {
+     "setup": 2,
+     "portable": 1,
+     "updates": 3,
+     "blockmap": 0,
+     "other": 0
+    },
     "v0.3.0": {
      "setup": 6,
      "portable": 2,
