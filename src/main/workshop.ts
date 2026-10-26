@@ -104,14 +104,23 @@ function authHeader(): Record<string, string> {
   return a ? { Authorization: `Basic ${Buffer.from(`${a.user}:${a.password}`).toString('base64')}` } : {};
 }
 
-/** WordPress page that creates an application password and sends it back to kadro://auth. */
-export async function authorizeUrl(): Promise<string> {
+/**
+ * WordPress page that creates an application password and sends it back to
+ * kadro://auth. The workshop plugin (1.2+) turns it into its own sign-in and
+ * one-click "Connect Kadro" pages in the given language.
+ */
+export async function authorizeUrl(lang: string): Promise<string> {
   await ready();
   const u = new URL(`${workshopSite()}/wp-admin/authorize-application.php`);
   u.searchParams.set('app_name', 'Kadro');
   u.searchParams.set('app_id', '6b1d6f0e-3d4c-4f6a-9a5e-4b2f9c1d7e21');
   u.searchParams.set('success_url', 'kadro://auth');
+  u.searchParams.set('lang', pageLang(lang));
   return u.toString();
+}
+
+function pageLang(lang: string): string {
+  return ['uk', 'ru', 'en'].includes(lang) ? lang : 'en';
 }
 
 /** The workshop's sign-up page; after it the browser goes on to approving Kadro. */
@@ -120,7 +129,7 @@ export async function joinUrl(lang: string): Promise<string> {
   const u = new URL(`${workshopSite()}/`);
   u.searchParams.set('kadro', 'join');
   u.searchParams.set('from', 'app');
-  u.searchParams.set('lang', ['uk', 'ru', 'en'].includes(lang) ? lang : 'en');
+  u.searchParams.set('lang', pageLang(lang));
   return u.toString();
 }
 

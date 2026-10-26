@@ -996,6 +996,7 @@ export const en = {
   'luts.removeTitle': 'Remove «{name}» from the LUT library?',
   'ws.signIn': 'Sign in',
   'ws.signUp': 'Create account',
+  'ws.myAccount': 'My account',
   'ws.accountHint': 'An account is needed to publish. Browsing and installing work without one.',
   'ws.unconfirmed': 'Confirm your e-mail to publish: open the link in the letter from the workshop.',
   'ws.resend': 'Send the letter again',

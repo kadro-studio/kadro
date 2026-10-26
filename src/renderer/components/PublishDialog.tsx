@@ -1,13 +1,12 @@
 // Publishing a local effect, look, title style, LUT or theme to the workshop.
 import { useEffect, useMemo, useState } from 'react';
 import type { WorkshopKind } from '../../shared/api';
-import { api } from '../api';
 import { useT, type I18nKey } from '../i18n';
 import { useLuts } from '../store/luts';
 import { useMods } from '../store/mods';
 import { usePrefs } from '../store/prefs';
 import { usePresets } from '../store/presets';
-import { publish, resendConfirmation, signUp, useWorkshop } from '../store/workshop';
+import { publish, resendConfirmation, signIn, signUp, useWorkshop } from '../store/workshop';
 import { localSources, packSource } from '../workshop/items';
 import { Modal } from './Modal';
 
@@ -116,7 +115,7 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
       {!account && (
         <div className="ws-pending-box">
           {t('pub.signInFirst')}{' '}
-          <button className="link-btn" onClick={() => api.workshopSignIn()}>
+          <button className="link-btn" onClick={signIn}>
             {t('ws.signIn')}
           </button>
           {' · '}

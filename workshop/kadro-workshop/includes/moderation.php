@@ -123,17 +123,11 @@ function kw_rest_report(WP_REST_Request $r) {
 }
 
 function kw_rest_resend_confirmation() {
-	$user = get_current_user_id();
-	if (kw_confirmed($user)) {
-		return ['sent' => false, 'confirmed' => true];
-	}
-	$key = 'kw_resend_' . $user;
-	if ((int) get_transient($key) >= 3) {
+	$sent = kw_resend_confirmation(get_current_user_id());
+	if ($sent === 'limit') {
 		return kw_error('kw_resend_limit', 'Too many letters; try again in an hour', 429);
 	}
-	set_transient($key, (int) get_transient($key) + 1, HOUR_IN_SECONDS);
-	kw_send_confirmation($user);
-	return ['sent' => true, 'confirmed' => false];
+	return ['sent' => $sent === 'sent', 'confirmed' => $sent === 'confirmed'];
 }
 
 /** Tells the site admin that something new waits for review. */

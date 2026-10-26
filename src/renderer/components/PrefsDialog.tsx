@@ -4,7 +4,7 @@ import { api } from '../api';
 import { toast, useEditor } from '../store/editor';
 import { analyzeMedia } from '../store/media';
 import { askText, confirmAction } from '../store/prompt';
-import { refreshAccount, signOut, useWorkshop } from '../store/workshop';
+import { openAccount, refreshAccount, signIn, signOut, useWorkshop } from '../store/workshop';
 import { themePreview } from '../workshop/items';
 import { uid } from '../core/project';
 import { setLang, useLang, useT, type I18nKey } from '../i18n';
@@ -149,11 +149,17 @@ function WorkshopAccountSection() {
       </p>
       <div className="row" style={{ gap: 8 }}>
         {account ? (
-          <button className="btn" onClick={signOut}>
-            {t('prefs.ws.signOut')}
-          </button>
+          <>
+            <button className="btn" onClick={openAccount}>
+              <Icon name="globe" size={16} />
+              {t('ws.myAccount')}
+            </button>
+            <button className="btn" onClick={signOut}>
+              {t('prefs.ws.signOut')}
+            </button>
+          </>
         ) : (
-          <button className="btn primary" onClick={() => api.workshopSignIn()}>
+          <button className="btn primary" onClick={signIn}>
             <Icon name="globe" size={16} />
             {t('prefs.ws.signInBrowser')}
           </button>

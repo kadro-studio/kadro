@@ -1,19 +1,11 @@
 <?php
-// Accounts: a short sign-up page (/join/) for Kadro users, e-mail confirmation
-// and the letters the workshop sends. People who sign up here can publish once
-// their e-mail is confirmed; everyone can browse and download without an account.
+// Accounts: sign-up, sign-in, password reset and connecting the Kadro app,
+// e-mail confirmation and the letters the workshop sends. People who sign up
+// can publish once their e-mail is confirmed; everyone can browse and download
+// without an account. The WordPress sign-in stays for the site admin.
 
 if (!defined('ABSPATH')) {
 	exit;
-}
-
-/** Same app as in the Kadro app (src/main/workshop.ts): the page WordPress shows to approve it. */
-function kw_authorize_url(): string {
-	return add_query_arg([
-		'app_name'    => 'Kadro',
-		'app_id'      => '6b1d6f0e-3d4c-4f6a-9a5e-4b2f9c1d7e21',
-		'success_url' => rawurlencode('kadro://auth'),
-	], admin_url('authorize-application.php'));
 }
 
 /** Moderators publish without review and see everything waiting for it. */
@@ -27,6 +19,11 @@ function kw_is_moderator(): bool {
  */
 function kw_confirmed(int $user): bool {
 	return get_user_meta($user, '_kw_email_confirmed', true) !== '0';
+}
+
+/** Accounts made with Google or Discord have no password of their own until they set one. */
+function kw_has_password(int $user): bool {
+	return get_user_meta($user, '_kw_no_password', true) !== '1';
 }
 
 /** Language index (0 en, 1 ru, 2 uk) for a user's letters, from their locale. */
@@ -63,66 +60,86 @@ function kw_send_confirmation(int $user): void {
 	}
 	$token = wp_generate_password(32, false);
 	update_user_meta($user, '_kw_confirm_token', wp_hash_password($token));
-	$link = add_query_arg(['kadro' => 'confirm', 'u' => $user, 't' => $token], home_url('/'));
 	$lang = kw_user_lang($user);
+	$link = kw_url('confirm', ['u' => $user, 't' => $token, 'lang' => KW_LANG_CODES[$lang]]);
 	kw_mail($u->user_email, kw_tl('mail_confirm_subject', $lang), kw_tl('mail_confirm_body', $lang, ['name' => $u->display_name, 'link' => $link]));
 }
 
-// ---------------------------------------------------------------------------
-// Pages: /?kadro=join (sign up) and /?kadro=confirm (the link from the letter)
-
-add_action('template_redirect', function () {
-	$page = isset($_GET['kadro']) ? sanitize_key(wp_unslash($_GET['kadro'])) : '';
-	if ($page === 'join') {
-		kw_join_page();
-	} elseif ($page === 'confirm') {
-		kw_confirm_page();
+/** Sends the confirmation letter again, at most three times an hour: 'sent', 'limit' or 'confirmed'. */
+function kw_resend_confirmation(int $user): string {
+	if (kw_confirmed($user)) {
+		return 'confirmed';
 	}
-});
-
-/** Interface language of the page: ?lang= from the app or the site, else the browser's. */
-function kw_page_lang(): int {
-	$want = isset($_REQUEST['lang']) ? sanitize_key(wp_unslash($_REQUEST['lang'])) : '';
-	if ($want === '') {
-		$accept = strtolower((string) ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
-		$want = substr($accept, 0, 2);
+	$key = 'kw_resend_' . $user;
+	if ((int) get_transient($key) >= 3) {
+		return 'limit';
 	}
-	return $want === 'uk' ? 2 : ($want === 'ru' ? 1 : 0);
+	set_transient($key, (int) get_transient($key) + 1, HOUR_IN_SECONDS);
+	kw_send_confirmation($user);
+	return 'sent';
 }
 
-const KW_LANG_CODES = ['en', 'ru', 'uk'];
-const KW_LOCALES    = ['en_US', 'ru_RU', 'uk'];
+function kw_send_reset(WP_User $user): void {
+	// A few letters an hour per account, whoever asks for them.
+	if (kw_limited('reset' . $user->ID, 3)) {
+		return;
+	}
+	$key = get_password_reset_key($user);
+	if (is_wp_error($key)) {
+		return;
+	}
+	kw_count('reset' . $user->ID, HOUR_IN_SECONDS);
+	$lang = kw_user_lang($user->ID);
+	$link = kw_url('reset', ['login' => $user->user_login, 'key' => $key, 'lang' => KW_LANG_CODES[$lang]]);
+	kw_mail($user->user_email, kw_tl('mail_reset_subject', $lang), kw_tl('mail_reset_body', $lang, ['name' => $user->display_name, 'link' => $link]));
+}
+
+function kw_sign_in(int $user): void {
+	$u = get_userdata($user);
+	wp_set_current_user($user);
+	wp_set_auth_cookie($user, true, is_ssl());
+	do_action('wp_login', $u->user_login, $u);
+}
+
+/** Why a login name cannot be used, or '' when it can. */
+function kw_login_error(string $login, int $lang): string {
+	if (mb_strlen($login) < 3 || mb_strlen($login) > 30 || !validate_username($login)) {
+		return kw_tl('join_bad_login', $lang);
+	}
+	return username_exists($login) ? kw_tl('join_login_taken', $lang) : '';
+}
+
+// ---------------------------------------------------------------------------
+// /join/: sign up with an e-mail, or finish signing up with Google or Discord
 
 function kw_join_page(): void {
-	nocache_headers();
-	$lang  = kw_page_lang();
-	$t     = fn(string $k, array $v = []) => kw_tl($k, $lang, $v);
-	$app   = !empty($_REQUEST['from']) && $_REQUEST['from'] === 'app';
-	$error = '';
-	$done  = false;
-	$login = '';
+	$lang   = kw_page_lang();
+	$t      = fn(string $k, array $v = []) => kw_tl($k, $lang, $v);
+	$ctx    = kw_ctx();
+	$social = !empty($_REQUEST['social']) ? kw_social_pending() : null;
+	if (is_user_logged_in()) {
+		wp_safe_redirect(kw_after_login($ctx));
+		exit;
+	}
+	$error = !empty($_REQUEST['social']) && !$social ? $t('social_expired') : '';
+	$login = $social ? kw_suggest_login($social['name'], $social['email']) : '';
 	$email = '';
 
-	if (is_user_logged_in()) {
-		$done = true;
-	} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+		$error = '';
 		$login = sanitize_user(wp_unslash($_POST['login'] ?? ''), true);
-		$email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
-		$pass  = (string) wp_unslash($_POST['password'] ?? '');
-		$ip    = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
-		$key   = 'kw_join_' . md5($ip);
-		$tries = (int) get_transient($key);
+		$email = $social ? $social['email'] : sanitize_email(wp_unslash($_POST['email'] ?? ''));
+		$pass  = $social ? wp_generate_password(32, true, true) : (string) wp_unslash($_POST['password'] ?? '');
+		$key   = 'join' . kw_ip();
 		if (!get_option('users_can_register')) {
 			$error = $t('join_closed');
 		} elseif (!empty($_POST['website'])) {
 			// The hidden field is filled only by bots.
 			$error = $t('join_failed');
-		} elseif ($tries >= 5) {
+		} elseif (kw_limited($key, 5)) {
 			$error = $t('join_too_many');
-		} elseif (mb_strlen($login) < 3 || mb_strlen($login) > 30 || !validate_username($login)) {
-			$error = $t('join_bad_login');
-		} elseif (username_exists($login)) {
-			$error = $t('join_login_taken');
+		} elseif (($bad = kw_login_error($login, $lang)) !== '') {
+			$error = $bad;
 		} elseif (!is_email($email)) {
 			$error = $t('join_bad_email');
 		} elseif (email_exists($email)) {
@@ -149,101 +166,297 @@ function kw_join_page(): void {
 				if (is_wp_error($id)) {
 					$error = wp_strip_all_tags($id->get_error_message());
 				} else {
-					set_transient($key, $tries + 1, HOUR_IN_SECONDS);
-					update_user_meta($id, '_kw_email_confirmed', '0');
-					kw_send_confirmation($id);
-					wp_set_current_user($id);
-					wp_set_auth_cookie($id, true, is_ssl());
-					// From the app: straight on to approving Kadro, which brings the user back signed in.
-					if ($app) {
-						wp_safe_redirect(kw_authorize_url());
-						exit;
+					kw_count($key, HOUR_IN_SECONDS);
+					if ($social) {
+						kw_social_attach($id, $social);
+					} else {
+						update_user_meta($id, '_kw_email_confirmed', '0');
+						kw_send_confirmation($id);
 					}
-					$done = true;
+					kw_sign_in($id);
+					$next = $ctx['from'] === 'app' || $ctx['redirect_to'] ? kw_after_login($ctx) : kw_url('account', ['lang' => $ctx['lang'], 'welcome' => 1]);
+					wp_safe_redirect($next);
+					exit;
 				}
 			}
 		}
 	}
-	kw_page_start($t('join_title'), $lang);
-	if ($done) {
-		$u = wp_get_current_user();
-		echo '<h1>' . esc_html($t('join_done_title')) . '</h1>';
-		echo '<p>' . esc_html($t('join_signed_in_as', ['name' => $u->display_name])) . '</p>';
-		if (!kw_confirmed($u->ID)) {
-			echo '<p class="kw-note">' . esc_html($t('join_check_mail', ['email' => $u->user_email])) . '</p>';
-		}
-		echo '<p><a class="kw-btn" href="' . esc_url(kw_authorize_url()) . '">' . esc_html($t('join_connect_app')) . '</a></p>';
-		echo '<p class="kw-small">' . esc_html($t('join_connect_hint')) . '</p>';
-	} else {
-		echo '<h1>' . esc_html($t('join_title')) . '</h1>';
-		echo '<p>' . esc_html($t('join_lead')) . '</p>';
-		if ($error) {
-			echo '<p class="kw-error" role="alert">' . esc_html($error) . '</p>';
-		}
-		echo '<form method="post" action="' . esc_url(add_query_arg(['kadro' => 'join', 'lang' => KW_LANG_CODES[$lang]] + ($app ? ['from' => 'app'] : []), home_url('/'))) . '">';
+
+	$action = kw_url('join', $ctx + ['social' => $social ? 1 : '']);
+	$rules  = '<label class="kw-check"><input type="checkbox" name="agree" value="1" required> <span>' . esc_html($t('join_rules')) . '</span></label>';
+	if ($social) {
+		kw_page_start($t('social_title'), $lang);
+		echo '<h1>' . esc_html($t('social_title')) . '</h1>';
+		echo '<p>' . esc_html($t('social_lead', ['email' => $social['email'], 'provider' => kw_providers()[$social['p']]['name']])) . '</p>';
+		kw_notice($error);
+		echo '<form method="post" action="' . esc_url($action) . '">';
 		echo '<label>' . esc_html($t('join_login')) . '<input name="login" required minlength="3" maxlength="30" autocomplete="username" value="' . esc_attr($login) . '"><small>' . esc_html($t('join_login_hint')) . '</small></label>';
-		echo '<label>' . esc_html($t('join_email')) . '<input name="email" type="email" required autocomplete="email" value="' . esc_attr($email) . '"><small>' . esc_html($t('join_email_hint')) . '</small></label>';
-		echo '<label>' . esc_html($t('join_password')) . '<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>';
-		echo '<label class="kw-hp" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>';
-		echo '<label class="kw-check"><input type="checkbox" name="agree" value="1" required> <span>' . esc_html($t('join_rules')) . '</span></label>';
-		echo '<button class="kw-btn" type="submit">' . esc_html($t('join_submit')) . '</button>';
-		echo '</form>';
-		echo '<p class="kw-small">' . esc_html($t('join_have_account')) . ' <a href="' . esc_url($app ? kw_authorize_url() : wp_login_url()) . '">' . esc_html($t('join_sign_in')) . '</a></p>';
+		echo $rules . '<button class="kw-btn" type="submit">' . esc_html($t('join_submit')) . '</button></form>';
+		kw_page_end();
+		return;
 	}
-	kw_page_end();
-	exit;
+	kw_page_start($t('join_title'), $lang);
+	kw_tabs('join', $lang, $ctx);
+	echo '<p>' . esc_html($t('join_lead')) . '</p>';
+	kw_social_buttons($lang, $ctx);
+	kw_notice($error);
+	echo '<form method="post" action="' . esc_url($action) . '">';
+	echo '<label>' . esc_html($t('join_login')) . '<input name="login" required minlength="3" maxlength="30" autocomplete="username" value="' . esc_attr($login) . '"><small>' . esc_html($t('join_login_hint')) . '</small></label>';
+	echo '<label>' . esc_html($t('join_email')) . '<input name="email" type="email" required autocomplete="email" value="' . esc_attr($email) . '"><small>' . esc_html($t('join_email_hint')) . '</small></label>';
+	echo '<label>' . esc_html($t('join_password')) . '<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>';
+	echo '<label class="kw-hp" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>';
+	echo $rules . '<button class="kw-btn" type="submit">' . esc_html($t('join_submit')) . '</button></form>';
+	kw_page_end($lang);
 }
 
+// ---------------------------------------------------------------------------
+// /login/: sign in with a name or e-mail and a password (or Google, Discord)
+
+function kw_login_page(): void {
+	$lang   = kw_page_lang();
+	$t      = fn(string $k, array $v = []) => kw_tl($k, $lang, $v);
+	$ctx    = kw_ctx();
+	$notice = '';
+	if (isset($_GET['logout']) && wp_verify_nonce((string) ($_GET['_wpnonce'] ?? ''), 'kw_logout')) {
+		wp_logout();
+		$notice = $t('logged_out');
+	} elseif (is_user_logged_in()) {
+		wp_safe_redirect(kw_after_login($ctx));
+		exit;
+	}
+	$error = kw_oauth_notice($lang);
+	$log   = '';
+	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+		$log = trim(sanitize_text_field(wp_unslash($_POST['log'] ?? '')));
+		$key = 'login' . kw_ip();
+		if (kw_limited($key, 10)) {
+			$error = $t('login_too_many');
+		} else {
+			$user = wp_signon([
+				'user_login'    => $log,
+				'user_password' => (string) wp_unslash($_POST['pwd'] ?? ''),
+				'remember'      => !empty($_POST['remember']),
+			], is_ssl());
+			if (is_wp_error($user)) {
+				kw_count($key, 15 * MINUTE_IN_SECONDS);
+				$error = $t('login_failed');
+			} else {
+				wp_set_current_user($user->ID);
+				wp_safe_redirect(kw_after_login($ctx));
+				exit;
+			}
+		}
+	}
+	kw_page_start($t('login_title'), $lang);
+	kw_tabs('login', $lang, $ctx);
+	echo '<p>' . esc_html($t($ctx['from'] === 'app' ? 'login_lead_app' : 'login_lead')) . '</p>';
+	kw_social_buttons($lang, $ctx);
+	kw_notice($notice, 'ok');
+	kw_notice($error);
+	echo '<form method="post" action="' . esc_url(kw_url('login', $ctx)) . '">';
+	echo '<label>' . esc_html($t('login_name')) . '<input name="log" required autocomplete="username" value="' . esc_attr($log) . '"></label>';
+	echo '<label>' . esc_html($t('login_password')) . '<input name="pwd" type="password" required autocomplete="current-password"></label>';
+	echo '<div class="kw-row" style="margin:-2px 0 16px"><label class="kw-check" style="margin:0"><input type="checkbox" name="remember" value="1" checked> <span>' . esc_html($t('login_remember')) . '</span></label>';
+	echo '<a href="' . esc_url(kw_url('forgot', ['lang' => $ctx['lang']])) . '" style="font-size:13.5px">' . esc_html($t('login_forgot')) . '</a></div>';
+	echo '<button class="kw-btn" type="submit">' . esc_html($t('login_submit')) . '</button></form>';
+	kw_page_end($lang);
+}
+
+// ---------------------------------------------------------------------------
+// /forgot/ and /reset/: a link by e-mail to set a new password
+
+function kw_forgot_page(): void {
+	$lang  = kw_page_lang();
+	$t     = fn(string $k, array $v = []) => kw_tl($k, $lang, $v);
+	$error = '';
+	$sent  = false;
+	$log   = '';
+	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+		$log = trim(sanitize_text_field(wp_unslash($_POST['log'] ?? '')));
+		$key = 'forgot' . kw_ip();
+		if (kw_limited($key, 5)) {
+			$error = $t('forgot_too_many');
+		} elseif ($log !== '') {
+			kw_count($key, HOUR_IN_SECONDS);
+			$user = is_email($log) ? get_user_by('email', $log) : get_user_by('login', $log);
+			if ($user) {
+				kw_send_reset($user);
+			}
+			// The same answer either way, so the page does not tell who has an account.
+			$sent = true;
+		}
+	}
+	$back = '<p class="kw-small"><a href="' . esc_url(kw_url('login', ['lang' => KW_LANG_CODES[$lang]])) . '">' . esc_html($t('back_to_login')) . '</a></p>';
+	kw_page_start($t('forgot_title'), $lang);
+	echo '<h1>' . esc_html($t('forgot_title')) . '</h1>';
+	if ($sent) {
+		kw_notice($t('forgot_sent'), 'ok');
+		echo $back;
+		kw_page_end();
+		return;
+	}
+	echo '<p>' . esc_html($t('forgot_lead')) . '</p>';
+	kw_notice($error);
+	echo '<form method="post" action="' . esc_url(kw_url('forgot', ['lang' => KW_LANG_CODES[$lang]])) . '">';
+	echo '<label>' . esc_html($t('login_name')) . '<input name="log" required autocomplete="username" value="' . esc_attr($log) . '"></label>';
+	echo '<button class="kw-btn" type="submit">' . esc_html($t('forgot_submit')) . '</button></form>' . $back;
+	kw_page_end($lang);
+}
+
+function kw_reset_page(): void {
+	$lang  = kw_page_lang();
+	$t     = fn(string $k, array $v = []) => kw_tl($k, $lang, $v);
+	$login = sanitize_user(wp_unslash($_REQUEST['login'] ?? ''));
+	$key   = preg_replace('/[^A-Za-z0-9]/', '', (string) wp_unslash($_REQUEST['key'] ?? ''));
+	$user  = $login !== '' && $key !== '' ? check_password_reset_key($key, $login) : new WP_Error('kw_reset');
+	if (is_wp_error($user)) {
+		kw_message_page($t('confirm_failed_title'), $t('reset_bad'), $lang, $t('reset_again'), kw_url('forgot', ['lang' => KW_LANG_CODES[$lang]]));
+	}
+	$error = '';
+	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+		$pass = (string) wp_unslash($_POST['password'] ?? '');
+		if (mb_strlen($pass) < 8) {
+			$error = $t('join_short_password');
+		} elseif ($pass !== (string) wp_unslash($_POST['repeat'] ?? '')) {
+			$error = $t('reset_mismatch');
+		} else {
+			// The admin does not need a letter each time a member resets a password.
+			remove_action('after_password_reset', 'wp_password_change_notification');
+			reset_password($user, $pass);
+			delete_user_meta($user->ID, '_kw_no_password');
+			// The link came by e-mail, so the address works.
+			if (!kw_confirmed($user->ID)) {
+				update_user_meta($user->ID, '_kw_email_confirmed', '1');
+			}
+			kw_sign_in($user->ID);
+			kw_message_page($t('reset_title'), $t('reset_done'), $lang, $t('account_title'), kw_url('account', ['lang' => KW_LANG_CODES[$lang]]));
+		}
+	}
+	kw_page_start($t('reset_title'), $lang);
+	echo '<h1>' . esc_html($t('reset_title')) . '</h1><p>' . esc_html($t('reset_lead', ['name' => $user->display_name])) . '</p>';
+	kw_notice($error);
+	echo '<form method="post" action="' . esc_url(kw_url('reset', ['lang' => KW_LANG_CODES[$lang]])) . '">' . kw_hidden(['login' => $login, 'key' => $key]);
+	// For password managers: whose password this is.
+	echo '<input type="text" name="username" value="' . esc_attr($user->user_login) . '" autocomplete="username" hidden>';
+	echo '<label>' . esc_html($t('reset_password')) . '<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>';
+	echo '<label>' . esc_html($t('reset_repeat')) . '<input name="repeat" type="password" required minlength="8" autocomplete="new-password"></label>';
+	echo '<button class="kw-btn" type="submit">' . esc_html($t('reset_submit')) . '</button></form>';
+	kw_page_end();
+}
+
+// ---------------------------------------------------------------------------
+// /connect/: one click lets the Kadro app use the account. It gets an
+// application password through kadro://auth, as WordPress's own approval
+// page would send it.
+
+function kw_connect_page(): void {
+	$lang = kw_page_lang();
+	$t    = fn(string $k, array $v = []) => kw_tl($k, $lang, $v);
+	$code = KW_LANG_CODES[$lang];
+	if (!is_user_logged_in()) {
+		wp_safe_redirect(kw_url('login', ['from' => 'app', 'lang' => $code]));
+		exit;
+	}
+	$u     = wp_get_current_user();
+	$error = '';
+	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+		if (!wp_verify_nonce((string) ($_POST['_wpnonce'] ?? ''), 'kw_connect')) {
+			$error = $t('session_expired');
+		} elseif (!wp_is_application_passwords_available_for_user($u)) {
+			$error = $t('connect_unavailable');
+		} else {
+			$made = WP_Application_Passwords::create_new_application_password($u->ID, [
+				'name'   => 'Kadro · ' . wp_date('Y-m-d H:i:s'),
+				'app_id' => KW_APP_ID,
+			]);
+			if (is_wp_error($made)) {
+				$error = $t('connect_failed');
+			} else {
+				$back = add_query_arg([
+					'site_url'   => rawurlencode(site_url()),
+					'user_login' => rawurlencode($u->user_login),
+					'password'   => rawurlencode($made[0]),
+				], 'kadro://auth');
+				kw_page_start($t('connect_done_title'), $lang);
+				echo '<h1>' . esc_html($t('connect_done_title')) . '</h1><p>' . esc_html($t('connect_done')) . '</p>';
+				echo '<p><a class="kw-btn" id="kw-open" href="' . esc_attr($back) . '">' . esc_html($t('connect_open')) . '</a></p>';
+				echo '<p class="kw-small"><a href="' . esc_url(kw_url('account', ['lang' => $code])) . '">' . esc_html($t('account_title')) . '</a></p>';
+				echo '<script>setTimeout(function(){location.href=document.getElementById("kw-open").href},300)</script>';
+				kw_page_end();
+				return;
+			}
+		}
+	}
+	kw_page_start($t('connect_title'), $lang);
+	echo '<div class="kw-me"><img src="' . esc_url(get_avatar_url($u->ID, ['size' => 112])) . '" alt=""><div><b>' . esc_html($u->display_name) . '</b><span>' . esc_html($u->user_email) . '</span></div></div>';
+	echo '<h1>' . esc_html($t('connect_title')) . '</h1><p>' . esc_html($t('connect_lead', ['name' => $u->display_name])) . '</p>';
+	kw_notice($error);
+	echo '<form method="post" action="' . esc_url(kw_url('connect', ['lang' => $code])) . '">' . wp_nonce_field('kw_connect', '_wpnonce', false, false);
+	echo '<button class="kw-btn" type="submit">' . esc_html($t('connect_title')) . '</button></form>';
+	$other = kw_url('login', ['from' => 'app', 'lang' => $code, 'logout' => 1, '_wpnonce' => wp_create_nonce('kw_logout')]);
+	echo '<p class="kw-small"><a href="' . esc_url($other) . '">' . esc_html($t('connect_other')) . '</a></p>';
+	kw_page_end($lang);
+}
+
+// ---------------------------------------------------------------------------
+// /confirm/: links from letters (a new account's e-mail, a changed e-mail)
+
 function kw_confirm_page(): void {
-	nocache_headers();
 	$user  = isset($_GET['u']) ? (int) $_GET['u'] : 0;
 	$token = isset($_GET['t']) ? (string) wp_unslash($_GET['t']) : '';
-	$hash  = $user ? (string) get_user_meta($user, '_kw_confirm_token', true) : '';
-	$ok    = $hash !== '' && $token !== '' && wp_check_password($token, $hash);
+	$lang  = $user && get_userdata($user) ? kw_user_lang($user) : kw_page_lang();
+	if (($_GET['kind'] ?? '') === 'email') {
+		kw_confirm_new_email($user, $token, $lang);
+		return;
+	}
+	$hash = $user ? (string) get_user_meta($user, '_kw_confirm_token', true) : '';
+	$ok   = $hash !== '' && $token !== '' && wp_check_password($token, $hash);
 	if ($ok) {
 		update_user_meta($user, '_kw_email_confirmed', '1');
 		delete_user_meta($user, '_kw_confirm_token');
 	}
-	$lang = $user ? kw_user_lang($user) : kw_page_lang();
-	kw_page_start(kw_tl('confirm_title', $lang), $lang);
-	if ($ok || ($user && kw_confirmed($user))) {
-		echo '<h1>' . esc_html(kw_tl('confirm_title', $lang)) . '</h1><p>' . esc_html(kw_tl('confirm_done', $lang)) . '</p>';
-	} else {
-		echo '<h1>' . esc_html(kw_tl('confirm_failed_title', $lang)) . '</h1><p>' . esc_html(kw_tl('confirm_failed', $lang)) . '</p>';
+	$account = kw_url('account', ['lang' => KW_LANG_CODES[$lang]]);
+	if ($ok || ($user && get_userdata($user) && kw_confirmed($user))) {
+		kw_message_page(kw_tl('confirm_title', $lang), kw_tl('confirm_done', $lang), $lang, kw_tl('account_title', $lang), $account);
 	}
-	kw_page_end();
+	kw_message_page(kw_tl('confirm_failed_title', $lang), kw_tl('confirm_failed', $lang), $lang, kw_tl('account_title', $lang), $account);
+}
+
+// ---------------------------------------------------------------------------
+// WordPress's own sign-in and sign-up pages lead to these ones
+
+// Kadro 0.4 and older open WordPress's approval page: send them to /connect/ instead.
+add_filter('login_url', function ($url, $redirect) {
+	if ($redirect && strpos($redirect, 'authorize-application.php') !== false && strpos($redirect, KW_APP_ID) !== false) {
+		parse_str((string) wp_parse_url($redirect, PHP_URL_QUERY), $q);
+		return kw_url('login', ['from' => 'app', 'lang' => sanitize_key($q['lang'] ?? '')]);
+	}
+	// The dashboard (and its "session expired" sign-in) keeps the WordPress page; everything else uses the workshop's.
+	if (is_admin() || ($redirect && strpos($redirect, admin_url()) === 0)) {
+		return $url;
+	}
+	return kw_url('login', ['redirect_to' => $redirect]);
+}, 10, 2);
+
+add_filter('register_url', fn() => kw_url('join'));
+add_filter('lostpassword_url', fn() => kw_url('forgot'));
+
+add_action('login_form_register', function () {
+	wp_safe_redirect(kw_url('join'));
 	exit;
-}
+});
 
-/** A small page of its own, the same in every theme. */
-function kw_page_start(string $title, int $lang): void {
-	status_header(200);
-	header('Content-Type: text/html; charset=utf-8');
-	echo '<!doctype html><html lang="' . esc_attr(KW_LANG_CODES[$lang]) . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">';
-	echo '<title>' . esc_html($title . ' — ' . kw_tl('site_name', $lang)) . '</title>';
-	echo '<style>
-:root{color-scheme:dark}
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08080a;color:#f2f2f5;font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px 16px;box-sizing:border-box}
-main{width:100%;max-width:420px;background:#131316;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:28px 26px}
-.kw-logo{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:18px;color:#f2f2f5;text-decoration:none}
-.kw-logo i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#ff6d7b,#e8263b)}
-h1{font-size:23px;margin:0 0 8px;letter-spacing:-.02em}
-p{color:#c4c4cc;margin:0 0 14px}
-label{display:block;margin:0 0 14px;font-size:13.5px;color:#a6a6b0}
-input:not([type=checkbox]){display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0e0e11;color:#f2f2f5;font:inherit}
-input:focus{outline:2px solid #ff3b4f;outline-offset:1px}
-small{display:block;margin-top:4px;color:#6d6d77;font-size:12px}
-.kw-check{display:flex;gap:9px;align-items:flex-start;color:#c4c4cc}
-.kw-check input{margin-top:4px}
-.kw-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-.kw-btn{display:inline-block;width:100%;box-sizing:border-box;text-align:center;padding:11px 16px;border:0;border-radius:11px;background:linear-gradient(180deg,#ff4f61,#e8263b);color:#fff;font:600 15px system-ui,sans-serif;cursor:pointer;text-decoration:none}
-.kw-error{padding:10px 12px;border-radius:10px;background:rgba(255,59,79,.12);color:#ff9aa5}
-.kw-note{padding:10px 12px;border-radius:10px;background:rgba(255,179,0,.1);color:#ffd27a}
-.kw-small{font-size:13px;color:#8a8a94;margin-top:14px}
-a{color:#ff6d7b}
-</style></head><body><main><a class="kw-logo" href="https://kadro.studio/workshop/"><i></i>' . esc_html(kw_tl('site_name', $lang)) . '</a>';
-}
+add_action('admin_init', function () {
+	global $pagenow;
+	if ($pagenow === 'authorize-application.php' && ($_GET['app_id'] ?? '') === KW_APP_ID) {
+		wp_safe_redirect(kw_url('connect', ['lang' => sanitize_key($_GET['lang'] ?? '')]));
+		exit;
+	}
+	// Workshop members have nothing to do in the dashboard: their page is /account/.
+	if (!current_user_can('edit_posts') && !wp_doing_ajax() && !in_array($pagenow, ['admin-post.php', 'authorize-application.php'], true)) {
+		wp_safe_redirect(kw_url('account'));
+		exit;
+	}
+});
 
-function kw_page_end(): void {
-	echo '</main></body></html>';
-}
+add_filter('show_admin_bar', fn($show) => $show && current_user_can('edit_posts'));

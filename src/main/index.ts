@@ -395,9 +395,9 @@ function registerIpc(): void {
   ipcMain.handle('workshop:publish', (_e, p: WorkshopPublish) => workshop.publishItem(p));
   ipcMain.handle('workshop:account', () => workshop.account());
   ipcMain.handle('workshop:saveLogin', (_e, user: string, password: string) => workshop.saveAuth(user, password));
-  ipcMain.on('workshop:signIn', () => {
+  ipcMain.on('workshop:signIn', (_e, lang: string) => {
     workshop
-      .authorizeUrl()
+      .authorizeUrl(lang)
       .then((url) => shell.openExternal(url))
       .catch(() => win?.webContents.send('workshop:auth', false));
   });

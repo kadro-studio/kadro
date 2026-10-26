@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Kadro Workshop
- * Description: Community workshop for the Kadro video editor: shared effects, transitions, elements, filters, title styles, LUTs, themes and project templates, with sign-up, moderation, reports, likes and download counts. The Kadro app talks to it through the kadro/v1 REST API.
- * Version: 1.1.0
+ * Description: Community workshop for the Kadro video editor: shared effects, transitions, elements, filters, title styles, LUTs, themes and project templates, with accounts (sign-up, sign-in with Google or Discord, password reset, account page), moderation, reports, likes and download counts. The Kadro app talks to it through the kadro/v1 REST API.
+ * Version: 1.2.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: Kadro
@@ -14,9 +14,12 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
+const KW_VERSION   = '1.2.0';
 const KW_POST_TYPE = 'kadro_item';
 const KW_TAXONOMY  = 'kadro_tag';
 const KW_KINDS     = ['effect', 'transition', 'element', 'look', 'textStyle', 'lut', 'theme', 'template'];
+/** The Kadro app, as WordPress knows it in application passwords (also in src/main/workshop.ts). */
+const KW_APP_ID    = '6b1d6f0e-3d4c-4f6a-9a5e-4b2f9c1d7e21';
 /** Largest upload per kind, bytes. */
 const KW_MAX_BYTES = [
 	'effect'     => 262144,
@@ -42,7 +45,10 @@ const KW_EXTENSIONS = [
 require_once __DIR__ . '/includes/strings.php';
 require_once __DIR__ . '/includes/validate.php';
 require_once __DIR__ . '/includes/rest.php';
+require_once __DIR__ . '/includes/pages.php';
 require_once __DIR__ . '/includes/accounts.php';
+require_once __DIR__ . '/includes/account-page.php';
+require_once __DIR__ . '/includes/social.php';
 require_once __DIR__ . '/includes/moderation.php';
 require_once __DIR__ . '/includes/admin.php';
 require_once __DIR__ . '/includes/frontend.php';

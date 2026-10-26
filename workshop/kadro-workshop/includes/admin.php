@@ -72,6 +72,14 @@ add_action('admin_init', function () {
 	register_setting('kw_settings', 'kw_trusted_after', ['type' => 'string', 'sanitize_callback' => function ($v) {
 		return (string) max(0, min(100, (int) $v));
 	}]);
+	foreach (array_keys(kw_providers()) as $p) {
+		register_setting('kw_settings', 'kw_' . $p . '_id', ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field']);
+		// The secret is never shown again: an empty field keeps the saved one.
+		register_setting('kw_settings', 'kw_' . $p . '_secret', ['type' => 'string', 'sanitize_callback' => function ($v) use ($p) {
+			$v = trim(sanitize_text_field((string) $v));
+			return $v === '' ? (string) get_option('kw_' . $p . '_secret', '') : $v;
+		}]);
+	}
 });
 
 function kw_settings_page() {
@@ -80,6 +88,17 @@ function kw_settings_page() {
 	echo '<table class="form-table"><tr><th>' . esc_html(kw_t('auto_publish')) . '</th><td><input type="checkbox" name="kw_auto_publish" value="1" ' . checked(get_option('kw_auto_publish'), '1', false) . '></td></tr>';
 	echo '<tr><th>' . esc_html(kw_t('daily_limit')) . '</th><td><input type="number" min="1" max="500" name="kw_daily_limit" value="' . esc_attr(get_option('kw_daily_limit', '20')) . '"></td></tr>';
 	echo '<tr><th>' . esc_html(kw_t('trusted_after')) . '</th><td><input type="number" min="0" max="100" name="kw_trusted_after" value="' . esc_attr(get_option('kw_trusted_after', '3')) . '"></td></tr></table>';
+	echo '<h2>' . esc_html(kw_t('social_settings')) . '</h2><p>' . esc_html(kw_t('social_settings_hint')) . '</p><table class="form-table">';
+	$consoles = ['google' => 'https://console.cloud.google.com/apis/credentials', 'discord' => 'https://discord.com/developers/applications'];
+	foreach (kw_providers() as $p => $pr) {
+		$saved = get_option('kw_' . $p . '_secret') ? kw_t('secret_saved') : '';
+		echo '<tr><th>' . esc_html($pr['name']) . '</th><td>';
+		echo '<p><label>Client ID<br><input class="regular-text" name="kw_' . esc_attr($p) . '_id" value="' . esc_attr(get_option('kw_' . $p . '_id', '')) . '" autocomplete="off"></label></p>';
+		echo '<p><label>Client secret<br><input class="regular-text" type="password" name="kw_' . esc_attr($p) . '_secret" placeholder="' . esc_attr($saved) . '" autocomplete="new-password"></label></p>';
+		echo '<p class="description">' . esc_html(kw_t('redirect_uri')) . ': <code>' . esc_html(kw_oauth_redirect($p)) . '</code></p>';
+		echo '<p class="description"><a href="' . esc_url($consoles[$p]) . '" target="_blank" rel="noopener">' . esc_html(kw_t('provider_console')) . '</a></p></td></tr>';
+	}
+	echo '</table>';
 	submit_button();
 	echo '</form></div>';
 }

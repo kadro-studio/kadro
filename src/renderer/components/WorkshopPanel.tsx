@@ -12,7 +12,9 @@ import {
   removeOwnItem,
   reportItem,
   resendConfirmation,
+  openAccount,
   setFilter,
+  signIn,
   signUp,
   toggleLike,
   useWorkshop,
@@ -197,12 +199,12 @@ export function WorkshopPanel() {
     <>
       <div className="ws-top">
         {s.account ? (
-          <span className="ws-account" title={t('ws.signedInAs', { name: s.account.name })}>
+          <button className="ws-account" title={`${t('ws.signedInAs', { name: s.account.name })} · ${t('ws.myAccount')}`} onClick={openAccount}>
             <Icon name="check" size={13} /> {s.account.name}
-          </span>
+          </button>
         ) : (
           <span className="ws-sign">
-            <button className="btn small" onClick={() => api.workshopSignIn()}>
+            <button className="btn small" onClick={signIn}>
               {t('ws.signIn')}
             </button>
             <button className="btn small" onClick={signUp}>

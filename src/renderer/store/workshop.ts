@@ -130,9 +130,19 @@ export function signOut(): void {
   useWorkshop.setState({ account: null, mine: false, review: null });
 }
 
+/** Opens the workshop's sign-in page in the browser; Kadro gets the account back through kadro://auth. */
+export function signIn(): void {
+  api.workshopSignIn(useLang.getState().lang);
+}
+
 /** Opens the workshop's sign-up page in the browser. */
 export function signUp(): void {
   api.workshopSignUp(useLang.getState().lang);
+}
+
+/** The account page on the workshop site: name, e-mail, password, connected computers, publications. */
+export function openAccount(): void {
+  api.workshopOpen(`/?kadro=account&lang=${useLang.getState().lang}`);
 }
 
 export async function resendConfirmation(): Promise<void> {

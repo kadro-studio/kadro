@@ -542,8 +542,8 @@ export interface VrApi {
   workshopDownload(id: number): Promise<Uint8Array>;
   workshopPublish(p: WorkshopPublish): Promise<WorkshopItem>;
   workshopAccount(): Promise<WorkshopAccount | null>;
-  /** Opens the workshop site to approve Kadro; the result arrives with onWorkshopAuth. */
-  workshopSignIn(): void;
+  /** Opens the workshop's sign-in page (in the app's language); the result arrives with onWorkshopAuth. */
+  workshopSignIn(lang: string): void;
   /** Opens the workshop's sign-up page (in the app's language); it goes on to approving Kadro. */
   workshopSignUp(lang: string): void;
   /** Sends the e-mail confirmation letter again. */
