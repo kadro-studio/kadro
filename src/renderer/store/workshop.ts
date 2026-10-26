@@ -1,8 +1,9 @@
 // Community workshop: browsing, installing, liking and publishing.
 import { create } from 'zustand';
-import type { WorkshopAccount, WorkshopItem, WorkshopKind, WorkshopQuery } from '../../shared/api';
+import type { WorkshopAccount, WorkshopItem, WorkshopKind, WorkshopQuery, WorkshopReview } from '../../shared/api';
 import { api } from '../api';
-import { t } from '../i18n';
+import { t, useLang } from '../i18n';
+import { askText } from './prompt';
 import { installDownloaded, installLocalItems, localExists, packSource, type LocalSource } from '../workshop/items';
 import { toast } from './editor';
 import { reloadLuts } from './luts';
@@ -23,6 +24,8 @@ interface WorkshopState {
   sort: Sort;
   search: string;
   mine: boolean;
+  /** Moderators: the review queue or reported items instead of the catalogue. */
+  review: WorkshopQuery['review'] | null;
   items: WorkshopItem[];
   page: number;
   pages: number;
@@ -51,6 +54,7 @@ export const useWorkshop = create<WorkshopState>(() => ({
   sort: 'popular',
   search: '',
   mine: false,
+  review: null,
   items: [],
   page: 1,
   pages: 1,
@@ -77,6 +81,8 @@ const rawErr = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error i
 const errText = (e: unknown) => {
   const raw = rawErr(e);
   if (raw === WORKSHOP_CLOSED) return t('ws.closedShort');
+  if (raw === 'WORKSHOP_UNCONFIRMED') return t('ws.unconfirmed');
+  if (raw === 'WORKSHOP_RESEND_LIMIT') return t('ws.resendLimit');
   // No network or the server cannot be found: say so plainly.
   if (/fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|getaddrinfo|aborted due to timeout/i.test(raw)) return t('ws.noConnection');
   return raw;
@@ -91,7 +97,15 @@ export async function loadItems(more = false): Promise<void> {
   const seq = ++requestSeq;
   useWorkshop.setState({ loading: true, error: null, ...(more ? {} : { items: [] }) });
   try {
-    const r = await api.workshopList({ kind: s.kind === 'all' ? undefined : s.kind, sort: s.sort, search: s.search.trim() || undefined, mine: s.mine, page, perPage: 24 });
+    const r = await api.workshopList({
+      kind: s.kind === 'all' ? undefined : s.kind,
+      sort: s.sort,
+      search: s.search.trim() || undefined,
+      mine: s.mine,
+      review: s.review ?? undefined,
+      page,
+      perPage: 24,
+    });
     if (seq !== requestSeq) return;
     useWorkshop.setState((x) => ({ items: more ? [...x.items, ...r.items] : r.items, page, pages: r.pages, loading: false }));
   } catch (e) {
@@ -100,8 +114,10 @@ export async function loadItems(more = false): Promise<void> {
   }
 }
 
-export function setFilter(patch: Partial<Pick<WorkshopState, 'kind' | 'sort' | 'search' | 'mine'>>): void {
-  useWorkshop.setState({ ...patch, open: null });
+export function setFilter(patch: Partial<Pick<WorkshopState, 'kind' | 'sort' | 'search' | 'mine' | 'review'>>): void {
+  // My items and the moderators' queues are separate views.
+  const extra = patch.review ? { mine: false } : patch.mine ? { review: null } : {};
+  useWorkshop.setState({ ...patch, ...extra, open: null });
   void loadItems();
 }
 
@@ -111,7 +127,70 @@ export async function refreshAccount(): Promise<void> {
 
 export function signOut(): void {
   api.workshopSignOut();
-  useWorkshop.setState({ account: null, mine: false });
+  useWorkshop.setState({ account: null, mine: false, review: null });
+}
+
+/** Opens the workshop's sign-up page in the browser. */
+export function signUp(): void {
+  api.workshopSignUp(useLang.getState().lang);
+}
+
+export async function resendConfirmation(): Promise<void> {
+  try {
+    const r = await api.workshopResendConfirm();
+    toast(r.confirmed ? t('ws.alreadyConfirmed') : t('ws.resent'), 'success');
+    if (r.confirmed) void refreshAccount();
+  } catch (e) {
+    toast(errText(e), 'error');
+  }
+}
+
+/** Moderators: approve, reject (asking why) or dismiss the reports of an item. */
+export async function moderate(item: WorkshopItem, action: WorkshopReview): Promise<void> {
+  let reason = '';
+  if (action === 'reject') {
+    const r = await askText({
+      title: t('ws.rejectTitle', { name: item.title }),
+      message: t('ws.rejectHint'),
+      value: '',
+      placeholder: t('ws.rejectPlaceholder'),
+      ok: t('ws.rejectOk'),
+      cancel: t('common.cancel'),
+    });
+    if (r === null || !r.trim()) return;
+    reason = r.trim();
+  }
+  try {
+    await api.workshopReview(item.id, action, reason);
+    // It leaves the queue it was in.
+    useWorkshop.setState((s) => ({ items: s.items.filter((x) => x.id !== item.id), open: null }));
+    toast(t(action === 'approve' ? 'ws.approved' : action === 'reject' ? 'ws.rejectedToast' : 'ws.dismissed', { name: item.title }), 'success');
+    void refreshAccount();
+  } catch (e) {
+    toast(errText(e), 'error');
+  }
+}
+
+export async function reportItem(item: WorkshopItem): Promise<void> {
+  if (!useWorkshop.getState().account) {
+    toast(t('ws.signInToReport'));
+    return;
+  }
+  const reason = await askText({
+    title: t('ws.reportTitle', { name: item.title }),
+    message: t('ws.reportHint'),
+    value: '',
+    placeholder: t('ws.reportPlaceholder'),
+    ok: t('ws.reportOk'),
+    cancel: t('common.cancel'),
+  });
+  if (reason === null || !reason.trim()) return;
+  try {
+    await api.workshopReport(item.id, reason.trim());
+    toast(t('ws.reported'), 'success');
+  } catch (e) {
+    toast(errText(e), 'error');
+  }
 }
 
 export async function openItem(id: number): Promise<void> {

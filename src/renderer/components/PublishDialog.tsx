@@ -7,7 +7,7 @@ import { useLuts } from '../store/luts';
 import { useMods } from '../store/mods';
 import { usePrefs } from '../store/prefs';
 import { usePresets } from '../store/presets';
-import { publish, useWorkshop } from '../store/workshop';
+import { publish, resendConfirmation, signUp, useWorkshop } from '../store/workshop';
 import { localSources, packSource } from '../workshop/items';
 import { Modal } from './Modal';
 
@@ -107,7 +107,7 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
           <button className="btn" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button className="btn primary" disabled={!account || !source || !title.trim() || !agree || busy} onClick={() => void submit()}>
+          <button className="btn primary" disabled={!account || account.confirmed === false || !source || !title.trim() || !agree || busy} onClick={() => void submit()}>
             {busy ? t('pub.sending') : t('pub.send')}
           </button>
         </>
@@ -118,6 +118,18 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
           {t('pub.signInFirst')}{' '}
           <button className="link-btn" onClick={() => api.workshopSignIn()}>
             {t('ws.signIn')}
+          </button>
+          {' · '}
+          <button className="link-btn" onClick={signUp}>
+            {t('ws.signUp')}
+          </button>
+        </div>
+      )}
+      {account?.confirmed === false && (
+        <div className="ws-pending-box">
+          {t('ws.unconfirmed')}{' '}
+          <button className="link-btn" onClick={() => void resendConfirmation()}>
+            {t('ws.resend')}
           </button>
         </div>
       )}

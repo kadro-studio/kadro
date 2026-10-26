@@ -8,8 +8,12 @@ import {
   installedVersion,
   installItem,
   loadItems,
+  moderate,
   removeOwnItem,
+  reportItem,
+  resendConfirmation,
   setFilter,
+  signUp,
   toggleLike,
   useWorkshop,
   WORKSHOP_CLOSED,
@@ -63,7 +67,9 @@ function ItemCard({ item }: { item: WorkshopItem }) {
     <div className="ws-card" role="button" tabIndex={0} onClick={() => useWorkshop.setState({ open: item })}>
       <div className="preset-visual">
         {item.preview ? <img src={item.preview} alt="" className="fx-thumb" loading="lazy" /> : <Icon name="sparkles" size={24} />}
-        {item.status !== 'publish' && <span className="fx-badge">{t('ws.pending')}</span>}
+        {item.status === 'pending' && <span className="fx-badge">{t('ws.pending')}</span>}
+        {item.status === 'draft' && item.rejected && <span className="fx-badge error">{t('ws.rejectedBadge')}</span>}
+        {!!item.reports && <span className="fx-badge error">{t('ws.reportsCount', { n: item.reports })}</span>}
       </div>
       <div className="ws-card-body">
         <div className="ws-card-title" title={item.title}>
@@ -84,7 +90,8 @@ function ItemCard({ item }: { item: WorkshopItem }) {
 function ItemDetails({ item }: { item: WorkshopItem }) {
   const t = useT();
   const account = useWorkshop((s) => s.account);
-  const own = !!account && account.name === item.author;
+  const own = item.own ?? (!!account && account.name === item.author);
+  const mod = !!account?.moderator;
   return (
     <div className="ws-details">
       <button className="btn small ws-back" onClick={() => useWorkshop.setState({ open: null })}>
@@ -96,7 +103,16 @@ function ItemDetails({ item }: { item: WorkshopItem }) {
       <div className="ws-meta-line">
         {t(`ws.kind.${item.kind}` as I18nKey)} · {item.author} · v{item.version}
       </div>
-      {item.status !== 'publish' && <div className="ws-pending-box">{t('ws.pendingHint')}</div>}
+      {item.status === 'pending' && <div className="ws-pending-box">{t(own ? 'ws.pendingHint' : 'ws.pendingMod')}</div>}
+      {item.rejected && item.status !== 'publish' && <div className="ws-pending-box error">{t('ws.rejectedBox', { reason: item.rejected })}</div>}
+      {mod && !!item.reports && (
+        <div className="ws-pending-box error">
+          <strong>{t('ws.reportsCount', { n: item.reports })}</strong>
+          {(item.reportReasons ?? []).map((r, i) => (
+            <div key={i}>— {r}</div>
+          ))}
+        </div>
+      )}
       {item.description && <p className="ws-desc">{item.description}</p>}
       <div className="ws-meta-line">
         {t('st.license')}: {item.license}
@@ -107,16 +123,44 @@ function ItemDetails({ item }: { item: WorkshopItem }) {
       </div>
       <div className="ws-actions">
         <InstallButton item={item} />
-        <button className={`btn ${item.liked ? 'active' : ''}`} title={t('ws.like')} onClick={() => void toggleLike(item)}>
-          <Icon name="heart" size={15} />
-          {item.liked ? t('ws.liked') : t('ws.like')}
-        </button>
+        {item.status === 'publish' && (
+          <button className={`btn ${item.liked ? 'active' : ''}`} title={t('ws.like')} onClick={() => void toggleLike(item)}>
+            <Icon name="heart" size={15} />
+            {item.liked ? t('ws.liked') : t('ws.like')}
+          </button>
+        )}
         {item.page && (
           <button className="btn" title={t('ws.openSite')} onClick={() => api.workshopOpen(item.page)}>
             <Icon name="globe" size={15} />
           </button>
         )}
       </div>
+      {mod && item.status === 'pending' && (
+        <div className="ws-actions">
+          <button className="btn primary" onClick={() => void moderate(item, 'approve')}>
+            <Icon name="check" size={15} />
+            {t('ws.approve')}
+          </button>
+          <button className="btn danger" onClick={() => void moderate(item, 'reject')}>
+            {t('ws.reject')}
+          </button>
+        </div>
+      )}
+      {mod && item.status === 'publish' && !!item.reports && (
+        <div className="ws-actions">
+          <button className="btn" onClick={() => void moderate(item, 'dismiss')}>
+            {t('ws.dismiss')}
+          </button>
+          <button className="btn danger" onClick={() => void moderate(item, 'reject')}>
+            {t('ws.unpublish')}
+          </button>
+        </div>
+      )}
+      {!own && !mod && item.status === 'publish' && account && (
+        <button className="link-btn ws-report" onClick={() => void reportItem(item)}>
+          {t('ws.report')}
+        </button>
+      )}
       {own && (
         <div className="ws-actions">
           <button className="btn small" onClick={() => openDialog('publish')}>
@@ -157,15 +201,41 @@ export function WorkshopPanel() {
             <Icon name="check" size={13} /> {s.account.name}
           </span>
         ) : (
-          <button className="btn small" onClick={() => api.workshopSignIn()}>
-            {t('ws.signIn')}
-          </button>
+          <span className="ws-sign">
+            <button className="btn small" onClick={() => api.workshopSignIn()}>
+              {t('ws.signIn')}
+            </button>
+            <button className="btn small" onClick={signUp}>
+              {t('ws.signUp')}
+            </button>
+          </span>
         )}
         <button className="btn small primary" onClick={() => openDialog('publish')}>
           <Icon name="export" size={14} />
           {t('ws.publish')}
         </button>
       </div>
+      {!s.account && <span className="panel-hint ws-account-hint">{t('ws.accountHint')}</span>}
+      {s.account?.confirmed === false && (
+        <div className="ws-pending-box">
+          {t('ws.unconfirmed')}{' '}
+          <button className="link-btn" onClick={() => void resendConfirmation()}>
+            {t('ws.resend')}
+          </button>
+        </div>
+      )}
+      {s.account?.moderator && (
+        <div className="ws-chips ws-review">
+          <button className={`chip ${s.review === 'pending' ? 'active' : ''}`} onClick={() => setFilter({ review: s.review === 'pending' ? null : 'pending' })}>
+            {t('ws.reviewQueue')}
+            {!!s.account.pending && <b className="ws-count">{s.account.pending}</b>}
+          </button>
+          <button className={`chip ${s.review === 'reported' ? 'active' : ''}`} onClick={() => setFilter({ review: s.review === 'reported' ? null : 'reported' })}>
+            {t('ws.reportsQueue')}
+            {!!s.account.reported && <b className="ws-count">{s.account.reported}</b>}
+          </button>
+        </div>
+      )}
       <input
         className="text-input"
         placeholder={t('ws.search')}
@@ -220,7 +290,7 @@ export function WorkshopPanel() {
       {!s.error && !s.loading && s.items.length === 0 && (
         <div className="ws-empty">
           <Icon name="sparkles" size={22} />
-          <span>{s.mine ? t('ws.noneMine') : t('ws.none')}</span>
+          <span>{s.review === 'pending' ? t('ws.noneReview') : s.review === 'reported' ? t('ws.noneReports') : s.mine ? t('ws.noneMine') : t('ws.none')}</span>
         </div>
       )}
       <div className="ws-grid">

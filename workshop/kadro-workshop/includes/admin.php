@@ -13,6 +13,7 @@ add_filter('manage_' . KW_POST_TYPE . '_posts_columns', function ($cols) {
 			$out['kw_kind']      = kw_t('kind');
 			$out['kw_downloads'] = kw_t('downloads');
 			$out['kw_likes']     = kw_t('likes');
+			$out['kw_reports']   = kw_t('reports');
 		}
 	}
 	return $out;
@@ -25,6 +26,9 @@ add_action('manage_' . KW_POST_TYPE . '_posts_custom_column', function ($col, $i
 		echo (int) kw_meta($id, 'downloads', 0);
 	} elseif ($col === 'kw_likes') {
 		echo (int) kw_meta($id, 'likes', 0);
+	} elseif ($col === 'kw_reports') {
+		$n = count(kw_reports((int) $id));
+		echo $n ? '<strong style="color:#d63638">' . $n . '</strong>' : '0';
 	}
 }, 10, 2);
 
@@ -65,13 +69,17 @@ add_action('admin_init', function () {
 	register_setting('kw_settings', 'kw_daily_limit', ['type' => 'string', 'sanitize_callback' => function ($v) {
 		return (string) max(1, min(500, (int) $v));
 	}]);
+	register_setting('kw_settings', 'kw_trusted_after', ['type' => 'string', 'sanitize_callback' => function ($v) {
+		return (string) max(0, min(100, (int) $v));
+	}]);
 });
 
 function kw_settings_page() {
 	echo '<div class="wrap"><h1>' . esc_html(kw_t('settings')) . '</h1><form method="post" action="options.php">';
 	settings_fields('kw_settings');
 	echo '<table class="form-table"><tr><th>' . esc_html(kw_t('auto_publish')) . '</th><td><input type="checkbox" name="kw_auto_publish" value="1" ' . checked(get_option('kw_auto_publish'), '1', false) . '></td></tr>';
-	echo '<tr><th>' . esc_html(kw_t('daily_limit')) . '</th><td><input type="number" min="1" max="500" name="kw_daily_limit" value="' . esc_attr(get_option('kw_daily_limit', '20')) . '"></td></tr></table>';
+	echo '<tr><th>' . esc_html(kw_t('daily_limit')) . '</th><td><input type="number" min="1" max="500" name="kw_daily_limit" value="' . esc_attr(get_option('kw_daily_limit', '20')) . '"></td></tr>';
+	echo '<tr><th>' . esc_html(kw_t('trusted_after')) . '</th><td><input type="number" min="0" max="100" name="kw_trusted_after" value="' . esc_attr(get_option('kw_trusted_after', '3')) . '"></td></tr></table>';
 	submit_button();
 	echo '</form></div>';
 }

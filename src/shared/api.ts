@@ -355,6 +355,8 @@ export interface WorkshopQuery {
   sort?: 'popular' | 'new' | 'liked';
   /** The signed-in user's own items, including those awaiting review. */
   mine?: boolean;
+  /** Moderators: items waiting for review, or published items people reported. */
+  review?: 'pending' | 'reported';
   page?: number;
   perPage?: number;
 }
@@ -378,6 +380,13 @@ export interface WorkshopItem {
   fileSize: number;
   preview: string | null;
   page: string;
+  /** Published by the signed-in user. */
+  own?: boolean;
+  /** Why a moderator turned it down (for its author and moderators). */
+  rejected?: string | null;
+  /** Moderators: number of reports and the latest reasons. */
+  reports?: number;
+  reportReasons?: string[];
 }
 
 export interface WorkshopPage {
@@ -407,7 +416,15 @@ export interface WorkshopAccount {
   /** False when the stored password was rejected. */
   valid: boolean;
   offline?: boolean;
+  /** False until the e-mail of an account made on the workshop's sign-up page is confirmed. */
+  confirmed?: boolean;
+  /** May approve, reject and see reports; with the numbers waiting. */
+  moderator?: boolean;
+  pending?: number;
+  reported?: number;
 }
+
+export type WorkshopReview = 'approve' | 'reject' | 'dismiss';
 
 /** A font file in the user's fonts folder. */
 export interface FontFile {
@@ -527,6 +544,13 @@ export interface VrApi {
   workshopAccount(): Promise<WorkshopAccount | null>;
   /** Opens the workshop site to approve Kadro; the result arrives with onWorkshopAuth. */
   workshopSignIn(): void;
+  /** Opens the workshop's sign-up page (in the app's language); it goes on to approving Kadro. */
+  workshopSignUp(lang: string): void;
+  /** Sends the e-mail confirmation letter again. */
+  workshopResendConfirm(): Promise<{ sent: boolean; confirmed: boolean }>;
+  /** Moderators: approve, reject (with a reason) or dismiss the reports of an item. */
+  workshopReview(id: number, action: WorkshopReview, reason?: string): Promise<WorkshopItem>;
+  workshopReport(id: number, reason: string): Promise<void>;
   workshopSignOut(): void;
   /** Stores a login and application password typed by the user. */
   workshopSaveLogin(user: string, password: string): Promise<void>;

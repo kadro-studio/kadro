@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Kadro Workshop
- * Description: Community workshop for the Kadro video editor: shared effects, transitions, elements, filters, title styles, LUTs, themes and project templates, with moderation, likes and download counts. The Kadro app talks to it through the kadro/v1 REST API.
- * Version: 1.0.0
+ * Description: Community workshop for the Kadro video editor: shared effects, transitions, elements, filters, title styles, LUTs, themes and project templates, with sign-up, moderation, reports, likes and download counts. The Kadro app talks to it through the kadro/v1 REST API.
+ * Version: 1.1.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: Kadro
@@ -42,6 +42,8 @@ const KW_EXTENSIONS = [
 require_once __DIR__ . '/includes/strings.php';
 require_once __DIR__ . '/includes/validate.php';
 require_once __DIR__ . '/includes/rest.php';
+require_once __DIR__ . '/includes/accounts.php';
+require_once __DIR__ . '/includes/moderation.php';
 require_once __DIR__ . '/includes/admin.php';
 require_once __DIR__ . '/includes/frontend.php';
 
@@ -80,6 +82,7 @@ add_action('init', function () {
 register_activation_hook(__FILE__, function () {
 	add_option('kw_auto_publish', '0');
 	add_option('kw_daily_limit', '20');
+	add_option('kw_trusted_after', '3');
 	kw_storage_dir();
 	flush_rewrite_rules();
 });
@@ -117,7 +120,9 @@ function kw_item(WP_Post $post): array {
 	$tags   = wp_get_post_terms($post->ID, KW_TAXONOMY, ['fields' => 'names']);
 	$thumb  = get_the_post_thumbnail_url($post, 'medium_large');
 	$user   = get_current_user_id();
-	return [
+	$own    = $user && (int) $post->post_author === $user;
+	$mod    = kw_is_moderator();
+	$item   = [
 		'id'          => $post->ID,
 		'kind'        => kw_meta($post->ID, 'kind'),
 		'title'       => html_entity_decode(get_the_title($post), ENT_QUOTES, 'UTF-8'),
@@ -136,7 +141,18 @@ function kw_item(WP_Post $post): array {
 		'fileSize'    => (int) kw_meta($post->ID, 'file_size', 0),
 		'preview'     => $thumb ? $thumb : null,
 		'page'        => get_permalink($post),
+		'own'         => $own,
 	];
+	// Why a moderator turned it down: for its author and the moderators.
+	if ($own || $mod) {
+		$item['rejected'] = kw_meta($post->ID, 'rejected') ?: null;
+	}
+	if ($mod) {
+		$reports              = kw_reports($post->ID);
+		$item['reports']      = count($reports);
+		$item['reportReasons'] = array_values(array_map(fn($x) => (string) $x['reason'], array_slice($reports, -10)));
+	}
+	return $item;
 }
 
 /** Whether the current user may see an item (published, or their own / an editor). */

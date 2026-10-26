@@ -17,6 +17,8 @@ add_action('rest_api_init', function () {
 				'search'   => ['type' => 'string'],
 				'sort'     => ['type' => 'string', 'enum' => ['popular', 'new', 'liked'], 'default' => 'popular'],
 				'mine'     => ['type' => 'boolean', 'default' => false],
+				// Moderators: what waits for review, or published items people reported.
+				'review'   => ['type' => 'string', 'enum' => ['pending', 'reported']],
 				'page'     => ['type' => 'integer', 'minimum' => 1, 'default' => 1],
 				'per_page' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 48, 'default' => 24],
 			],
@@ -67,13 +69,17 @@ function kw_find(int $id): ?WP_Post {
 }
 
 function kw_rest_list(WP_REST_Request $r) {
-	$mine = (bool) $r['mine'];
+	$mine   = (bool) $r['mine'];
+	$review = (string) $r['review'];
 	if ($mine && !is_user_logged_in()) {
 		return kw_error('kw_auth', 'Not signed in', 401);
 	}
+	if ($review && !kw_is_moderator()) {
+		return kw_error('kw_forbidden', 'For moderators only', 403);
+	}
 	$args = [
 		'post_type'      => KW_POST_TYPE,
-		'post_status'    => $mine ? ['publish', 'pending', 'draft'] : 'publish',
+		'post_status'    => $review === 'pending' ? 'pending' : ($mine ? ['publish', 'pending', 'draft'] : 'publish'),
 		'posts_per_page' => (int) $r['per_page'],
 		'paged'          => (int) $r['page'],
 		'no_found_rows'  => false,
@@ -81,13 +87,22 @@ function kw_rest_list(WP_REST_Request $r) {
 	if ($mine) {
 		$args['author'] = get_current_user_id();
 	}
+	if ($review === 'reported') {
+		$args['meta_query'] = [['key' => '_kw_reports', 'compare' => 'EXISTS']];
+	}
 	if (!empty($r['kind'])) {
-		$args['meta_query'] = [['key' => '_kw_kind', 'value' => $r['kind']]];
+		$args['meta_query']   = $args['meta_query'] ?? [];
+		$args['meta_query'][] = ['key' => '_kw_kind', 'value' => $r['kind']];
 	}
 	if (!empty($r['search'])) {
 		$args['s'] = sanitize_text_field($r['search']);
 	}
-	switch ($r['sort']) {
+	// Review lists: oldest first, the order they came in.
+	switch ($review ? 'review' : $r['sort']) {
+		case 'review':
+			$args['orderby'] = 'date';
+			$args['order']   = 'ASC';
+			break;
 		case 'new':
 			$args['orderby'] = 'date';
 			$args['order']   = 'DESC';
@@ -114,8 +129,20 @@ function kw_rest_get(WP_REST_Request $r) {
 }
 
 function kw_rest_me() {
-	$u = wp_get_current_user();
-	return ['name' => $u->display_name, 'login' => $u->user_login, 'valid' => true];
+	$u  = wp_get_current_user();
+	$me = [
+		'name'      => $u->display_name,
+		'login'     => $u->user_login,
+		'valid'     => true,
+		'confirmed' => kw_confirmed($u->ID),
+		'moderator' => kw_is_moderator(),
+	];
+	if ($me['moderator']) {
+		$me['pending']  = (int) wp_count_posts(KW_POST_TYPE)->pending;
+		$reported       = new WP_Query(['post_type' => KW_POST_TYPE, 'post_status' => 'publish', 'meta_query' => [['key' => '_kw_reports', 'compare' => 'EXISTS']], 'fields' => 'ids', 'posts_per_page' => 1]);
+		$me['reported'] = (int) $reported->found_posts;
+	}
+	return $me;
 }
 
 function kw_rest_like(WP_REST_Request $r) {
@@ -173,6 +200,10 @@ function kw_rest_file(WP_REST_Request $r) {
 function kw_rest_publish(WP_REST_Request $r) {
 	$user  = get_current_user_id();
 	$files = $r->get_file_params();
+	// People who signed up on the site confirm their e-mail before publishing.
+	if (!kw_is_moderator() && !kw_confirmed($user)) {
+		return kw_error('kw_unconfirmed', 'Confirm your e-mail first: open the link in the letter from the workshop', 403);
+	}
 	$kind  = (string) $r->get_param('kind');
 	if (!in_array($kind, KW_KINDS, true)) {
 		return kw_error('kw_kind', 'Unknown kind', 400);
@@ -221,7 +252,7 @@ function kw_rest_publish(WP_REST_Request $r) {
 		}
 	}
 
-	$status  = current_user_can('publish_posts') || get_option('kw_auto_publish') === '1' ? 'publish' : 'pending';
+	$status  = current_user_can('publish_posts') || get_option('kw_auto_publish') === '1' || kw_trusted($user) ? 'publish' : 'pending';
 	$postarr = [
 		'post_type'    => KW_POST_TYPE,
 		'post_title'   => $title,
@@ -238,6 +269,8 @@ function kw_rest_publish(WP_REST_Request $r) {
 	if (is_wp_error($id)) {
 		return $id;
 	}
+	// A new version answers the moderator's remarks: it is reviewed afresh.
+	delete_post_meta($id, '_kw_rejected');
 
 	// Store the file under a random name; the old version is removed.
 	$dir  = kw_storage_dir();
@@ -280,6 +313,9 @@ function kw_rest_publish(WP_REST_Request $r) {
 				}
 			}
 		}
+	}
+	if ($status === 'pending') {
+		kw_notify_pending(get_post($id));
 	}
 	return kw_item(get_post($id));
 }

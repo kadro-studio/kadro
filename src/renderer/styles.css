@@ -3128,6 +3128,7 @@ kbd {
 /* ------------------------------------------------------------------ workshop */
 .ws-top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
@@ -3843,4 +3844,37 @@ kbd {
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
   pointer-events: none;
   z-index: 1;
+}
+
+/* Workshop accounts and moderation */
+.ws-account-hint {
+  margin: 0;
+}
+.ws-sign {
+  display: inline-flex;
+  gap: 6px;
+}
+.ws-review .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ws-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  line-height: 17px;
+  text-align: center;
+}
+.ws-pending-box.error {
+  border-color: color-mix(in srgb, var(--danger, #ff5252) 45%, transparent);
+  background: color-mix(in srgb, var(--danger, #ff5252) 12%, transparent);
+}
+.ws-report {
+  align-self: flex-start;
+  font-size: 12px;
+  color: var(--text-mute);
 }

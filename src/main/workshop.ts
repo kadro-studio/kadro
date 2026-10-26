@@ -5,7 +5,7 @@
 import { app, safeStorage } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { WorkshopAccount, WorkshopPublish, WorkshopQuery } from '../shared/api';
+import type { WorkshopAccount, WorkshopPublish, WorkshopQuery, WorkshopReview } from '../shared/api';
 import { SITE_URL, WORKSHOP_URL } from '../shared/brand';
 
 const MAX_DOWNLOAD = 64 * 1024 * 1024;
@@ -114,6 +114,16 @@ export async function authorizeUrl(): Promise<string> {
   return u.toString();
 }
 
+/** The workshop's sign-up page; after it the browser goes on to approving Kadro. */
+export async function joinUrl(lang: string): Promise<string> {
+  await ready();
+  const u = new URL(`${workshopSite()}/`);
+  u.searchParams.set('kadro', 'join');
+  u.searchParams.set('from', 'app');
+  u.searchParams.set('lang', ['uk', 'ru', 'en'].includes(lang) ? lang : 'en');
+  return u.toString();
+}
+
 /** Handles kadro://auth?site_url=…&user_login=…&password=… from the browser. */
 export function acceptAuthRedirect(url: string): boolean {
   const u = new URL(url);
@@ -148,6 +158,10 @@ async function call<T>(method: string, route: string, body?: FormData, auth = fa
   }
   if (!r.ok) {
     const msg = (data as { message?: string } | null)?.message;
+    // The renderer explains these in the user's language (and offers to resend the letter).
+    const code = (data as { code?: string } | null)?.code;
+    if (code === 'kw_unconfirmed') throw new Error('WORKSHOP_UNCONFIRMED');
+    if (code === 'kw_resend_limit') throw new Error('WORKSHOP_RESEND_LIMIT');
     if (r.status === 401 || r.status === 403) throw new Error(msg || 'Not signed in');
     if (r.status === 404 && !msg) throw new Error('Workshop is not available');
     throw new Error(msg ? msg.replace(/<[^>]+>/g, '') : `HTTP ${r.status}`);
@@ -161,6 +175,7 @@ export function listItems(q: WorkshopQuery): Promise<unknown> {
   if (q.search) p.set('search', q.search);
   if (q.sort) p.set('sort', q.sort);
   if (q.mine) p.set('mine', '1');
+  if (q.review) p.set('review', q.review);
   p.set('page', String(q.page ?? 1));
   p.set('per_page', String(q.perPage ?? 24));
   // Signed in, the list says which items the user already liked.
@@ -173,6 +188,24 @@ export function getItem(id: number): Promise<unknown> {
 
 export function likeItem(id: number): Promise<unknown> {
   return call('POST', `/items/${Number(id)}/like`, undefined, true);
+}
+
+/** Moderators: approve, reject with a reason, or dismiss reports. */
+export function reviewItem(id: number, action: WorkshopReview, reason = ''): Promise<unknown> {
+  const form = new FormData();
+  form.set('action', action);
+  form.set('reason', reason);
+  return call('POST', `/items/${Number(id)}/review`, form, true);
+}
+
+export function reportItem(id: number, reason: string): Promise<unknown> {
+  const form = new FormData();
+  form.set('reason', reason);
+  return call('POST', `/items/${Number(id)}/report`, form, true);
+}
+
+export function resendConfirm(): Promise<unknown> {
+  return call('POST', '/me/confirm', undefined, true);
 }
 
 export function deleteItem(id: number): Promise<unknown> {

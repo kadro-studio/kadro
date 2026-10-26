@@ -33,6 +33,7 @@ import type {
   StorageKind,
   WorkshopPublish,
   WorkshopQuery,
+  WorkshopReview,
 } from '../shared/api';
 
 // Tests and automation can run against a throwaway profile.
@@ -401,6 +402,15 @@ function registerIpc(): void {
       .catch(() => win?.webContents.send('workshop:auth', false));
   });
   ipcMain.on('workshop:signOut', () => workshop.clearAuth());
+  ipcMain.on('workshop:signUp', (_e, lang: string) => {
+    workshop
+      .joinUrl(lang)
+      .then((url) => shell.openExternal(url))
+      .catch(() => undefined);
+  });
+  ipcMain.handle('workshop:resend', () => workshop.resendConfirm());
+  ipcMain.handle('workshop:review', (_e, id: number, action: WorkshopReview, reason?: string) => workshop.reviewItem(id, action, reason));
+  ipcMain.handle('workshop:report', (_e, id: number, reason: string) => workshop.reportItem(id, reason));
   ipcMain.on('workshop:open', (_e, route: string) => {
     // Pages of our own workshop site only.
     const url = new URL(route, workshop.workshopSite() + '/');

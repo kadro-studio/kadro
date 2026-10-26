@@ -69,7 +69,8 @@
       close: 'Закрити',
       'share.title': 'Поділіться своїм',
       'share.lead': 'Публікувати можна прямо з програми — без файлів і ручного завантаження.',
-      'share.1': 'Відкрийте вкладку «Майстерня» в Kadro й увійдіть через сайт майстерні.',
+      'share.1': 'Створіть акаунт майстерні (кнопка нижче або «Створити акаунт» у програмі) й увійдіть у вкладці «Майстерня» в Kadro.',
+      'share.join': 'Створити акаунт',
       'share.2': 'Натисніть «Опублікувати», виберіть ефект, фільтр, LUT, стиль титрів чи тему та додайте опис.',
       'share.3': 'Після перевірки модератором елемент з’явиться тут і в програмі в усіх користувачів.',
       'share.rules':
@@ -131,7 +132,8 @@
       close: 'Закрыть',
       'share.title': 'Поделитесь своим',
       'share.lead': 'Публиковать можно прямо из программы — без файлов и ручной загрузки.',
-      'share.1': 'Откройте вкладку «Мастерская» в Kadro и войдите через сайт мастерской.',
+      'share.1': 'Создайте аккаунт мастерской (кнопка ниже или «Создать аккаунт» в программе) и войдите во вкладке «Мастерская» в Kadro.',
+      'share.join': 'Создать аккаунт',
       'share.2': 'Нажмите «Опубликовать», выберите эффект, фильтр, LUT, стиль титров или тему и добавьте описание.',
       'share.3': 'После проверки модератором элемент появится здесь и в программе у всех пользователей.',
       'share.rules':
@@ -193,7 +195,8 @@
       close: 'Close',
       'share.title': 'Share your own',
       'share.lead': 'You publish straight from the app — no files to upload by hand.',
-      'share.1': 'Open the Workshop tab in Kadro and sign in through the workshop site.',
+      'share.1': 'Create a workshop account (the button below, or Create account in the app) and sign in on the Workshop tab in Kadro.',
+      'share.join': 'Create an account',
       'share.2': 'Press Publish, pick an effect, filter, LUT, title style or theme and add a description.',
       'share.3': 'Once a moderator has checked it, the item appears here and in the app for everyone.',
       'share.rules':
@@ -437,6 +440,7 @@
     for (const n of document.querySelectorAll('[data-i18n-aria]')) n.setAttribute('aria-label', t(n.dataset.i18nAria));
     renderKinds();
     render();
+    if (BASE) footerLinks();
     if (dialog.open) detail(shown);
     try {
       localStorage.setItem('kadro.lang', lang);
@@ -447,7 +451,9 @@
 
   function footerLinks() {
     const gh = site.repo ? `https://github.com/${site.repo}` : '';
-    const links = { workshopSite: BASE, source: site.links.source || gh, issues: site.links.issues || (gh && `${gh}/issues`) };
+    // The sign-up page opens in the language of this page.
+    const join = BASE ? `${BASE}/?kadro=join&lang=${state.lang}` : '';
+    const links = { workshopSite: BASE, join, source: site.links.source || gh, issues: site.links.issues || (gh && `${gh}/issues`) };
     for (const a of document.querySelectorAll('[data-link]')) {
       const url = links[a.dataset.link];
       if (url) a.href = url;
@@ -504,6 +510,7 @@
     state.status = 'closed';
     document.querySelector('.ws-bar').hidden = true;
     document.querySelector('[data-link=workshopSite]').hidden = true;
+    document.querySelector('[data-link=join]').hidden = true;
     render();
   });
 })();
