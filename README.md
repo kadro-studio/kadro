@@ -66,7 +66,7 @@ Electron + React + TypeScript, its own WebGL2 compositor, FFmpeg for decoding an
 **Mods and the workshop**
 - Your own effects, transitions and animated elements in GLSL, in `.vrmod` files — see [MODS.md](MODS.md) (in Russian); a built-in catalogue of examples, including a pack of trending effects and transitions (beat zoom, strobe, RGB shake, shine, whip pan, spin blur…)
 - Import a shader from Shadertoy by link or code as an effect or an element, keeping the original author and licence
-- Community workshop (opening soon; the Workshop tab and [kadro.studio/workshop](https://kadro.studio/workshop/)): effects, transitions, elements, filters, title styles, LUTs, themes and project templates install in one click and are published straight from the app — the server is in [workshop/](workshop/README.md)
+- Community workshop (the Workshop tab and [kadro.studio/workshop](https://kadro.studio/workshop/)): effects, transitions, elements, filters, title styles, LUTs, themes and project templates install in one click and are published straight from the app with a free account (Create account in the Workshop tab); moderators review new items and reports right in the app — the server is in [workshop/](workshop/README.md)
 - Your own LUT library and appearance themes
 
 **Project templates**
