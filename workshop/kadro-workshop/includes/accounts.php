@@ -94,6 +94,35 @@ function kw_send_reset(WP_User $user): void {
 	kw_mail($user->user_email, kw_tl('mail_reset_subject', $lang), kw_tl('mail_reset_body', $lang, ['name' => $user->display_name, 'link' => $link]));
 }
 
+/**
+ * Someone has just proved they own the e-mail of an account that nobody had
+ * confirmed (a reset link, Google or Discord). Whoever made the account may not
+ * own that address, so every way they had in goes: the password, sessions,
+ * Kadro connections and other services. $keep is the service being used now.
+ */
+function kw_claim_account(int $user, string $keep = ''): void {
+	if (kw_confirmed($user)) {
+		return;
+	}
+	wp_set_password(wp_generate_password(32, true, true), $user);
+	update_user_meta($user, '_kw_no_password', '1');
+	WP_Session_Tokens::get_instance($user)->destroy_all();
+	if (class_exists('WP_Application_Passwords')) {
+		WP_Application_Passwords::delete_all_application_passwords($user);
+	}
+	foreach (array_keys(kw_providers()) as $p) {
+		if ($p !== $keep) {
+			delete_user_meta($user, '_kw_' . $p);
+			delete_user_meta($user, '_kw_' . $p . '_email');
+		}
+	}
+	if (get_user_meta($user, '_kw_avatar_from', true) !== $keep) {
+		delete_user_meta($user, '_kw_avatar');
+		delete_user_meta($user, '_kw_avatar_from');
+	}
+	update_user_meta($user, '_kw_email_confirmed', '1');
+}
+
 function kw_sign_in(int $user): void {
 	$u = get_userdata($user);
 	wp_set_current_user($user);
@@ -228,8 +257,10 @@ function kw_login_page(): void {
 	$log   = '';
 	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		$log = trim(sanitize_text_field(wp_unslash($_POST['log'] ?? '')));
+		// Failures count per name from an address, and all together from it (a network may share one address).
 		$key = 'login' . kw_ip();
-		if (kw_limited($key, 10)) {
+		$one = $key . '|' . strtolower($log);
+		if (kw_limited($one, 10) || kw_limited($key, 50)) {
 			$error = $t('login_too_many');
 		} else {
 			$user = wp_signon([
@@ -238,6 +269,7 @@ function kw_login_page(): void {
 				'remember'      => !empty($_POST['remember']),
 			], is_ssl());
 			if (is_wp_error($user)) {
+				kw_count($one, 15 * MINUTE_IN_SECONDS);
 				kw_count($key, 15 * MINUTE_IN_SECONDS);
 				$error = $t('login_failed');
 			} else {
@@ -273,8 +305,9 @@ function kw_forgot_page(): void {
 	$log   = '';
 	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		$log = trim(sanitize_text_field(wp_unslash($_POST['log'] ?? '')));
+		// Each account also gets at most three letters an hour (kw_send_reset).
 		$key = 'forgot' . kw_ip();
-		if (kw_limited($key, 5)) {
+		if (kw_limited($key, 20)) {
 			$error = $t('forgot_too_many');
 		} elseif ($log !== '') {
 			kw_count($key, HOUR_IN_SECONDS);
@@ -320,14 +353,12 @@ function kw_reset_page(): void {
 		} elseif ($pass !== (string) wp_unslash($_POST['repeat'] ?? '')) {
 			$error = $t('reset_mismatch');
 		} else {
+			// The link came by e-mail, so the address is theirs.
+			kw_claim_account($user->ID);
 			// The admin does not need a letter each time a member resets a password.
 			remove_action('after_password_reset', 'wp_password_change_notification');
 			reset_password($user, $pass);
 			delete_user_meta($user->ID, '_kw_no_password');
-			// The link came by e-mail, so the address works.
-			if (!kw_confirmed($user->ID)) {
-				update_user_meta($user->ID, '_kw_email_confirmed', '1');
-			}
 			kw_sign_in($user->ID);
 			kw_message_page($t('reset_title'), $t('reset_done'), $lang, $t('account_title'), kw_url('account', ['lang' => KW_LANG_CODES[$lang]]));
 		}

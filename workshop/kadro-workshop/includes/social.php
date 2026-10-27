@@ -221,8 +221,8 @@ function kw_oauth_return(string $p, int $lang): void {
 			if (user_can($same, 'edit_others_posts')) {
 				$fail('link_first');
 			}
+			kw_claim_account($same->ID, $p);
 			kw_link_provider($same->ID, $p, $profile);
-			update_user_meta($same->ID, '_kw_email_confirmed', '1');
 			$owner = $same->ID;
 		}
 	}

@@ -43,6 +43,14 @@ add_action('template_redirect', function () {
 		'oauth'   => 'kw_oauth_page',
 	];
 	if (isset($pages[$page])) {
+		// Page caches (Batcache on WordPress.com and others) ignore no-cache headers and cookies other than
+		// WordPress's own, and some of these pages show one person's details: keep them out.
+		if (function_exists('batcache_cancel')) {
+			batcache_cancel();
+		}
+		if (!defined('DONOTCACHEPAGE')) {
+			define('DONOTCACHEPAGE', true);
+		}
 		nocache_headers();
 		$pages[$page]();
 		exit;
@@ -160,6 +168,10 @@ function kw_page_start(string $title, int $lang, bool $wide = false): void {
 	status_header(200);
 	header('Content-Type: text/html; charset=utf-8');
 	header('Referrer-Policy: same-origin');
+	// No other site may show these pages inside its own.
+	header('X-Frame-Options: DENY');
+	header("Content-Security-Policy: frame-ancestors 'none'");
+	header('X-Content-Type-Options: nosniff');
 	echo '<!doctype html><html lang="' . esc_attr(KW_LANG_CODES[$lang]) . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">';
 	echo '<title>' . esc_html($title . ' — ' . kw_tl('site_name', $lang)) . '</title>';
 	echo '<style>
