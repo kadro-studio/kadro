@@ -1915,6 +1915,68 @@
      "other": 0
     }
    }
+  },
+  {
+   "at": "2026-11-09T07:52:11.192Z",
+   "since": "2026-11-09T00:47:55Z",
+   "counts": {
+    "v0.4.1": {
+     "setup": 74,
+     "portable": 14,
+     "updates": 123,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.4.0": {
+     "setup": 2,
+     "portable": 2,
+     "updates": 3,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.3.0": {
+     "setup": 6,
+     "portable": 2,
+     "updates": 8,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.2.1": {
+     "setup": 1,
+     "portable": 1,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.2.0": {
+     "setup": 0,
+     "portable": 0,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "animate-v0.2.0": {
+     "setup": 5,
+     "portable": 0,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.1.1": {
+     "setup": 5,
+     "portable": 3,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.1.0": {
+     "setup": 5,
+     "portable": 2,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    }
+   }
   }
  ]
 }
