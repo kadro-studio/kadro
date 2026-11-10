@@ -2163,6 +2163,68 @@
      "other": 0
     }
    }
+  },
+  {
+   "at": "2026-11-10T17:40:33.583Z",
+   "since": "2026-11-10T09:39:06Z",
+   "counts": {
+    "v0.4.1": {
+     "setup": 94,
+     "portable": 20,
+     "updates": 150,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.4.0": {
+     "setup": 2,
+     "portable": 2,
+     "updates": 3,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.3.0": {
+     "setup": 6,
+     "portable": 2,
+     "updates": 8,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.2.1": {
+     "setup": 1,
+     "portable": 1,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.2.0": {
+     "setup": 0,
+     "portable": 0,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "animate-v0.2.0": {
+     "setup": 5,
+     "portable": 0,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.1.1": {
+     "setup": 5,
+     "portable": 3,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    },
+    "v0.1.0": {
+     "setup": 5,
+     "portable": 2,
+     "updates": 0,
+     "blockmap": 0,
+     "other": 0
+    }
+   }
   }
  ]
 }
