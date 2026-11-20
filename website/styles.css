@@ -1020,3 +1020,93 @@ details p {
   font-size: 14px;
   color: var(--mute);
 }
+
+/* workshop account in the header (account.js) */
+.acct {
+  position: relative;
+}
+.acct:empty {
+  display: none;
+}
+.acct-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.acct-btn:hover,
+.acct-btn[aria-expanded='true'] {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.acct-pic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent-2));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.acct-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+.acct-menu a {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--dim);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.acct-menu a:hover,
+.acct-menu a:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.acct-menu a:last-child {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+}
+@media (max-width: 640px) {
+  .acct-name {
+    display: none;
+  }
+  .acct-btn {
+    padding: 4px;
+  }
+  /* The menu opens under the whole header (the sticky .nav holds it). */
+  .acct {
+    position: static;
+  }
+  .acct-menu {
+    top: calc(100% + 6px);
+    left: 16px;
+    right: 16px;
+  }
+}
