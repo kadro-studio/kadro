@@ -60,14 +60,22 @@ export async function makeTemplateData(source: Project): Promise<TemplateData> {
   const { width: W, height: H } = p.settings;
   // Slots are numbered by first use: pictures first, then sound.
   const firstUse = new Map<string, number>();
-  const need = new Map<string, number>();
+  const earliest = new Map<string, number>();
   for (const tr of p.tracks) {
     for (const c of tr.clips) {
       if (!c.mediaId) continue;
       firstUse.set(c.mediaId, Math.min(firstUse.get(c.mediaId) ?? Infinity, c.start));
-      need.set(c.mediaId, Math.max(need.get(c.mediaId) ?? 0, c.duration * c.speed));
-      // The author's offsets point into their own footage.
-      c.in = 0;
+      earliest.set(c.mediaId, Math.min(earliest.get(c.mediaId) ?? Infinity, c.in));
+    }
+  }
+  // The author's offsets point into their own footage: the slot starts where they first used it,
+  // and pieces of one clip (a speed ramp, a cut) keep their places relative to each other.
+  const need = new Map<string, number>();
+  for (const tr of p.tracks) {
+    for (const c of tr.clips) {
+      if (!c.mediaId) continue;
+      c.in = Math.max(0, c.in - earliest.get(c.mediaId)!);
+      need.set(c.mediaId, Math.max(need.get(c.mediaId) ?? 0, c.in + c.duration * c.speed));
     }
   }
   const used = p.media.filter((m) => firstUse.has(m.id));
