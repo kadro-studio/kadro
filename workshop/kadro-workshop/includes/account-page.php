@@ -82,7 +82,12 @@ function kw_account_page(): void {
 	if (!kw_confirmed($u->ID)) {
 		echo '<section id="resend">';
 		$msg('resend');
-		echo '<p class="kw-note">' . esc_html($t('join_check_mail', ['email' => $u->user_email])) . '</p>';
+		// The last letter did not leave the site: no "check your mail" then.
+		if (!get_transient('kw_mail_failed_' . $u->ID)) {
+			echo '<p class="kw-note">' . esc_html($t('join_check_mail', ['email' => $u->user_email])) . '</p>';
+		} elseif (!isset($errors['resend'])) {
+			kw_notice($t('mail_failed'));
+		}
 		echo $form('resend') . '<button class="kw-btn ghost small" type="submit">' . esc_html($t('resend')) . '</button></form></section>';
 	}
 
@@ -238,7 +243,10 @@ function kw_account_action(string $action, WP_User $u, int $lang): string {
 		$token = wp_generate_password(32, false);
 		update_user_meta($u->ID, '_kw_new_email', ['email' => $email, 'hash' => wp_hash_password($token), 'time' => time()]);
 		$link = kw_url('confirm', ['u' => $u->ID, 't' => $token, 'kind' => 'email', 'lang' => KW_LANG_CODES[$lang]]);
-		kw_mail($email, $t('mail_email_subject'), $t('mail_email_body', ['name' => $u->display_name, 'link' => $link]));
+		if (!kw_mail($email, $t('mail_email_subject'), $t('mail_email_body', ['name' => $u->display_name, 'link' => $link]))) {
+			delete_user_meta($u->ID, '_kw_new_email');
+			return $t('mail_failed');
+		}
 		return '';
 	}
 
@@ -261,7 +269,8 @@ function kw_account_action(string $action, WP_User $u, int $lang): string {
 	}
 
 	if ($action === 'resend') {
-		return kw_resend_confirmation($u->ID) === 'limit' ? $t('forgot_too_many') : '';
+		$sent = kw_resend_confirmation($u->ID);
+		return $sent === 'limit' ? $t('forgot_too_many') : ($sent === 'failed' ? $t('mail_failed') : '');
 	}
 
 	if ($action === 'unlink') {

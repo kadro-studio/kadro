@@ -124,6 +124,7 @@ function kw_strings(): array {
 		'sign_out'       => ['Sign out', 'Выйти', 'Вийти'],
 		'resend'         => ['Send the letter again', 'Отправить письмо ещё раз', 'Надіслати лист ще раз'],
 		'resent'         => ['The letter is on its way.', 'Письмо отправлено.', 'Лист надіслано.'],
+		'mail_failed'    => ['The letter could not be sent right now. Please try again a bit later.', 'Письмо сейчас не удалось отправить. Попробуйте чуть позже.', 'Лист зараз не вдалося надіслати. Спробуйте трохи пізніше.'],
 		'profile_title'  => ['Profile', 'Профиль', 'Профіль'],
 		'display_name'   => ['Name others see', 'Имя, которое видят другие', 'Ім’я, яке бачать інші'],
 		'display_name_hint' => ['Shown as the author of your items. Your login, {login}, stays the same.', 'Показывается автором ваших публикаций. Логин {login} не меняется.', 'Показується як автор ваших публікацій. Логін {login} не змінюється.'],

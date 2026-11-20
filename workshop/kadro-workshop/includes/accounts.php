@@ -45,27 +45,38 @@ function kw_tl(string $key, int $lang, array $vars = []): string {
 	return $text;
 }
 
-/** Plain-text letter; a failure to send never stops the action that caused it. */
-function kw_mail(string $to, string $subject, string $body): void {
+/**
+ * Plain-text letter; false when it did not leave the site (no working mail on
+ * the host, for one). A failure never stops the action that caused it.
+ */
+function kw_mail(string $to, string $subject, string $body): bool {
 	if (!is_email($to)) {
-		return;
+		return false;
 	}
-	wp_mail($to, '[' . kw_tl('site_name', 0) . '] ' . $subject, $body);
+	return (bool) wp_mail($to, '[' . kw_tl('site_name', 0) . '] ' . $subject, $body);
 }
 
-function kw_send_confirmation(int $user): void {
+/** Sends the link that confirms a member's e-mail; false when the letter did not leave the site. */
+function kw_send_confirmation(int $user): bool {
 	$u = get_userdata($user);
 	if (!$u) {
-		return;
+		return false;
 	}
 	$token = wp_generate_password(32, false);
 	update_user_meta($user, '_kw_confirm_token', wp_hash_password($token));
 	$lang = kw_user_lang($user);
 	$link = kw_url('confirm', ['u' => $user, 't' => $token, 'lang' => KW_LANG_CODES[$lang]]);
-	kw_mail($u->user_email, kw_tl('mail_confirm_subject', $lang), kw_tl('mail_confirm_body', $lang, ['name' => $u->display_name, 'link' => $link]));
+	$sent = kw_mail($u->user_email, kw_tl('mail_confirm_subject', $lang), kw_tl('mail_confirm_body', $lang, ['name' => $u->display_name, 'link' => $link]));
+	// The account page says so instead of "check your mail".
+	if ($sent) {
+		delete_transient('kw_mail_failed_' . $user);
+	} else {
+		set_transient('kw_mail_failed_' . $user, 1, DAY_IN_SECONDS);
+	}
+	return $sent;
 }
 
-/** Sends the confirmation letter again, at most three times an hour: 'sent', 'limit' or 'confirmed'. */
+/** Sends the confirmation letter again, at most three times an hour: 'sent', 'failed', 'limit' or 'confirmed'. */
 function kw_resend_confirmation(int $user): string {
 	if (kw_confirmed($user)) {
 		return 'confirmed';
@@ -74,8 +85,11 @@ function kw_resend_confirmation(int $user): string {
 	if ((int) get_transient($key) >= 3) {
 		return 'limit';
 	}
+	// A letter that did not leave the site does not count.
+	if (!kw_send_confirmation($user)) {
+		return 'failed';
+	}
 	set_transient($key, (int) get_transient($key) + 1, HOUR_IN_SECONDS);
-	kw_send_confirmation($user);
 	return 'sent';
 }
 

@@ -1002,6 +1002,7 @@ export const en = {
   'ws.resend': 'Send the letter again',
   'ws.resent': 'The letter has been sent again',
   'ws.resendLimit': 'The letter has been sent several times already. Try again in an hour.',
+  'ws.mailFailed': 'The letter could not be sent right now. Please try again a bit later.',
   'ws.alreadyConfirmed': 'Your e-mail is already confirmed',
   'ws.reviewQueue': 'To review',
   'ws.reportsQueue': 'Reports',

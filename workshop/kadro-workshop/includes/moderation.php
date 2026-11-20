@@ -127,6 +127,9 @@ function kw_rest_resend_confirmation() {
 	if ($sent === 'limit') {
 		return kw_error('kw_resend_limit', 'Too many letters; try again in an hour', 429);
 	}
+	if ($sent === 'failed') {
+		return kw_error('kw_mail_failed', 'The letter could not be sent right now. Please try again later.', 503);
+	}
 	return ['sent' => $sent === 'sent', 'confirmed' => $sent === 'confirmed'];
 }
 

@@ -83,6 +83,7 @@ const errText = (e: unknown) => {
   if (raw === WORKSHOP_CLOSED) return t('ws.closedShort');
   if (raw === 'WORKSHOP_UNCONFIRMED') return t('ws.unconfirmed');
   if (raw === 'WORKSHOP_RESEND_LIMIT') return t('ws.resendLimit');
+  if (raw === 'WORKSHOP_MAIL_FAILED') return t('ws.mailFailed');
   // No network or the server cannot be found: say so plainly.
   if (/fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|getaddrinfo|aborted due to timeout/i.test(raw)) return t('ws.noConnection');
   return raw;

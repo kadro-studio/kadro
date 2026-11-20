@@ -45,16 +45,25 @@
 
 ### Письма
 
-Письма (подтверждение адреса, сброс пароля, решения модераторов) отправляет хостинг. На WordPress.com и WP Cloud они подписываются только для домена сайта, а Gmail и Yahoo отклоняют неподписанные письма целиком, даже не в «Спам». Если DNS домена не у Automattic (у нас — Porkbun), записи добавляются вручную; для сайта на поддомене — на сам поддомен:
+Хостинг workshop.kadro.studio (Porkbun на WP Cloud) почту не отправляет: PHP `mail()` там всегда падает («Could not instantiate mail function»). Поэтому письма (подтверждение адреса, сброс пароля, решения модераторов, уведомления администратору) идут через [Brevo](https://www.brevo.com) (бесплатно до 300 писем в день) плагином **WP Mail SMTP**. Плагин мастерской отправляет обычным `wp_mail()`, так что ничего больше не нужно; если письмо не ушло, сайт и программа так и говорят, а не «отправлено».
 
-| Тип | Имя | Значение |
-|---|---|---|
-| TXT | `workshop` | `v=spf1 include:_spf.wpcloud.com ~all` |
-| CNAME | `wpcloud1._domainkey.workshop` | `wpcloud1._domainkey.wpcloud.com` |
-| CNAME | `wpcloud2._domainkey.workshop` | `wpcloud2._domainkey.wpcloud.com` |
-| TXT | `_dmarc` | `v=DMARC1; p=none;` |
+Настройка (сделана 20.11.2026):
 
-Проверка: письмо «Забыли пароль?» себе на Gmail → «Показать оригинал»: SPF, DKIM и DMARC — PASS. Подробнее — [WordPress.com: Set Up Email Authentication](https://wordpress.com/support/domains/set-up-email-authentication-for-your-domain/).
+1. Brevo: подтверждённый телефон; **Settings → Senders, Domains, IPs → Domains → Add domain** `kadro.studio`, без брендированного поддомена, способ **Manual**. Записи в DNS kadro.studio (Porkbun; в поле Host — только часть до `.kadro.studio`):
+
+   | Тип | Имя | Значение |
+   |---|---|---|
+   | TXT | (пусто) | `brevo-code:…` — код из Brevo |
+   | CNAME | `brevo1._domainkey` | `b1.kadro-studio.dkim.brevo.com` |
+   | CNAME | `brevo2._domainkey` | `b2.kadro-studio.dkim.brevo.com` |
+   | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com` (одна запись DMARC на домен) |
+
+2. Brevo: **Settings → SMTP & API → API Keys → Generate API key**, доступ **Restricted**: только **Transactional email: All**. Ключ показывается один раз. Он отключается после 90 дней без писем — еженедельные отчёты WP Mail SMTP (Settings → Misc, не выключать) этого не дают.
+3. WP Mail SMTP → **Settings → General**: From Email `noreply@kadro.studio` (Force From Email), From Name `Kadro Workshop` (Force From Name), Mailer **Brevo**, API Key, Sending Domain `kadro.studio`.
+
+Проверка: WP Mail SMTP → **Tools → Email Test**, затем в Gmail «Показать оригинал»: SPF, DKIM и DMARC — PASS. У `kadro.studio` нет почтового ящика (MX), так что ответы на письма не доходят.
+
+Записи `wpcloud` на `workshop` (TXT `v=spf1 include:_spf.wpcloud.com ~all`, CNAME `wpcloud1/2._domainkey.workshop`) остались от попытки подписывать письма самого хостинга по [инструкции WordPress.com](https://wordpress.com/support/domains/set-up-email-authentication-for-your-domain/); они ничему не мешают.
 
 Программа ищет мастерскую по адресу `https://workshop.kadro.studio` (`WORKSHOP_URL` в `src/shared/brand.ts`; для проверки на своём сервере — переменная окружения `KADRO_WORKSHOP_URL`). Сайт и программа берут адрес мастерской и признак `open` из `website/workshop.json` (программа — с kadro.studio, кэш на 30 минут). Чтобы открыть мастерскую или перенести сервер, достаточно поменять этот файл.
 

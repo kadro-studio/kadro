@@ -1004,6 +1004,7 @@ export const ru: Record<I18nKey, string> = {
   'ws.resend': 'Отправить письмо ещё раз',
   'ws.resent': 'Письмо отправлено ещё раз',
   'ws.resendLimit': 'Письмо уже отправляли несколько раз. Попробуйте через час.',
+  'ws.mailFailed': 'Письмо сейчас не удалось отправить. Попробуйте чуть позже.',
   'ws.alreadyConfirmed': 'E-mail уже подтверждён',
   'ws.reviewQueue': 'На проверке',
   'ws.reportsQueue': 'Жалобы',

@@ -171,6 +171,7 @@ async function call<T>(method: string, route: string, body?: FormData, auth = fa
     const code = (data as { code?: string } | null)?.code;
     if (code === 'kw_unconfirmed') throw new Error('WORKSHOP_UNCONFIRMED');
     if (code === 'kw_resend_limit') throw new Error('WORKSHOP_RESEND_LIMIT');
+    if (code === 'kw_mail_failed') throw new Error('WORKSHOP_MAIL_FAILED');
     if (r.status === 401 || r.status === 403) throw new Error(msg || 'Not signed in');
     if (r.status === 404 && !msg) throw new Error('Workshop is not available');
     throw new Error(msg ? msg.replace(/<[^>]+>/g, '') : `HTTP ${r.status}`);

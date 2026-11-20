@@ -982,6 +982,7 @@ export const uk: Record<I18nKey, string> = {
   'ws.resend': 'Надіслати лист ще раз',
   'ws.resent': 'Лист надіслано ще раз',
   'ws.resendLimit': 'Лист уже надсилали кілька разів. Спробуйте за годину.',
+  'ws.mailFailed': 'Лист зараз не вдалося надіслати. Спробуйте трохи пізніше.',
   'ws.alreadyConfirmed': 'E-mail уже підтверджено',
   'ws.reviewQueue': 'На перевірці',
   'ws.reportsQueue': 'Скарги',
