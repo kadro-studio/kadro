@@ -92,6 +92,7 @@
     'footer.source': 'Source code',
     'footer.releases': 'All releases',
     'footer.issues': 'Report a bug',
+    'footer.privacy': 'Privacy',
     'footer.note': 'MIT. FFmpeg is used as a separate program under its own licence.',
   };
   const UK = {
@@ -179,6 +180,7 @@
     "footer.source": "Вихідний код",
     "footer.releases": "Усі версії",
     "footer.issues": "Повідомити про помилку",
+    "footer.privacy": "Приватність",
     "footer.note": "MIT. FFmpeg використовується як окрема програма під власною ліцензією.",
   };
   const SOON = { ru: 'скоро', uk: 'незабаром', en: EN['support.soon'] };

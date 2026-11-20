@@ -56,7 +56,6 @@
       by: 'Автор:',
       open: 'Відкрити в Kadro',
       download: 'Завантажити файл',
-      page: 'Сторінка на сайті майстерні',
       openHint: 'Кнопка відкриє елемент у Kadro, де його можна встановити. Файл також можна завантажити й перетягнути у вікно програми.',
       noKadro: 'Ще немає Kadro?',
       getKadro: 'Завантажити безкоштовно',
@@ -76,7 +75,7 @@
       'share.3': 'Після перевірки модератором елемент з’явиться тут і в програмі в усіх користувачів.',
       'share.rules':
         'Публікуйте лише власні роботи або те, що дозволяє ліцензія автора. Ефекти з CapCut і TikTok переносити не можна — але схожий ефект завжди можна зробити самому.',
-      'footer.site': 'Сайт майстерні',
+      'footer.privacy': 'Приватність',
       'footer.source': 'Вихідний код',
       'footer.issues': 'Повідомити про помилку',
       'footer.note': 'Кожен елемент належить своєму автору й поширюється під указаною ліцензією.',
@@ -120,7 +119,6 @@
       by: 'Автор:',
       open: 'Открыть в Kadro',
       download: 'Скачать файл',
-      page: 'Страница на сайте мастерской',
       openHint: 'Кнопка откроет элемент в Kadro, где его можно установить. Файл также можно скачать и перетащить в окно программы.',
       noKadro: 'Ещё нет Kadro?',
       getKadro: 'Скачать бесплатно',
@@ -140,7 +138,7 @@
       'share.3': 'После проверки модератором элемент появится здесь и в программе у всех пользователей.',
       'share.rules':
         'Публикуйте только свои работы или то, что разрешает лицензия автора. Эффекты из CapCut и TikTok переносить нельзя — но похожий эффект всегда можно сделать самому.',
-      'footer.site': 'Сайт мастерской',
+      'footer.privacy': 'Конфиденциальность',
       'footer.source': 'Исходный код',
       'footer.issues': 'Сообщить об ошибке',
       'footer.note': 'Каждый элемент принадлежит своему автору и распространяется под указанной лицензией.',
@@ -184,7 +182,6 @@
       by: 'By',
       open: 'Open in Kadro',
       download: 'Download file',
-      page: 'Page on the workshop site',
       openHint: 'The button opens the item in Kadro, where you can install it. You can also download the file and drop it onto the app window.',
       noKadro: 'No Kadro yet?',
       getKadro: 'Download for free',
@@ -204,7 +201,7 @@
       'share.3': 'Once a moderator has checked it, the item appears here and in the app for everyone.',
       'share.rules':
         'Only publish your own work or what the author’s licence allows. Effects from CapCut and TikTok cannot be brought over — but you can always make a similar one yourself.',
-      'footer.site': 'Workshop site',
+      'footer.privacy': 'Privacy',
       'footer.source': 'Source code',
       'footer.issues': 'Report a bug',
       'footer.note': 'Every item belongs to its author and is shared under the licence shown.',
@@ -387,15 +384,8 @@
     box.append(actions);
     box.append(el('p', 'hint', t('openHint')));
 
+    // The item's page on the workshop site leads back here, so there is no link to it.
     const foot = el('p', 'ws-detail-foot');
-    const page = item.page && fromWorkshop(item.page);
-    if (page) {
-      const a = el('a', '', t('page'));
-      a.href = page;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      foot.append(a, ' · ');
-    }
     const get = el('a', '', t('getKadro'));
     get.href = '../#download';
     foot.append(`${t('noKadro')} `, get);
@@ -457,7 +447,7 @@
     // The sign-up and account pages open in the language of this page.
     const join = BASE ? `${BASE}/?kadro=join&lang=${state.lang}` : '';
     const account = BASE ? `${BASE}/?kadro=account&lang=${state.lang}` : '';
-    const links = { workshopSite: BASE, join, account, source: site.links.source || gh, issues: site.links.issues || (gh && `${gh}/issues`) };
+    const links = { join, account, source: site.links.source || gh, issues: site.links.issues || (gh && `${gh}/issues`) };
     for (const a of document.querySelectorAll('[data-link]')) {
       const url = links[a.dataset.link];
       if (url) a.href = url;
@@ -493,7 +483,10 @@
     // private mode
   }
   const nav = navigator.language?.toLowerCase() ?? '';
-  applyLang(['uk', 'ru', 'en'].includes(saved) ? saved : nav.startsWith('uk') ? 'uk' : nav.startsWith('ru') ? 'ru' : 'en');
+  // Links from the workshop's own pages say which language they came from.
+  const asked = new URLSearchParams(location.search).get('lang');
+  const known = (v) => ['uk', 'ru', 'en'].includes(v);
+  applyLang(known(asked) ? asked : known(saved) ? saved : nav.startsWith('uk') ? 'uk' : nav.startsWith('ru') ? 'ru' : 'en');
 
   async function loadConfig() {
     if (override) return setBase(override);
@@ -513,7 +506,6 @@
     // Not open yet: say so instead of showing an empty gallery.
     state.status = 'closed';
     document.querySelector('.ws-bar').hidden = true;
-    document.querySelector('[data-link=workshopSite]').hidden = true;
     document.querySelector('[data-link=join]').hidden = true;
     document.querySelector('[data-link=account]').hidden = true;
     render();

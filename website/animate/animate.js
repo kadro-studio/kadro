@@ -64,6 +64,7 @@
     'footer.kadro': 'Kadro video editor',
     'footer.releases': 'All versions',
     'footer.issues': 'Report a bug',
+    'footer.privacy': 'Privacy',
     'footer.note': 'Free. In the browser and on Windows 10 / 11.',
   };
   const UK = {
@@ -127,6 +128,7 @@
     'footer.kadro': 'Відеоредактор Kadro',
     'footer.releases': 'Усі версії',
     'footer.issues': 'Повідомити про помилку',
+    'footer.privacy': 'Приватність',
     'footer.note': 'Безкоштовно. У браузері та на Windows 10 / 11.',
   };
   const SOON = { ru: 'скоро', uk: 'незабаром', en: 'coming soon' };

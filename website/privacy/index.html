@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Політика приватності — Kadro</title>
+    <meta name="description" content="Що програма Kadro, сайт kadro.studio і Майстерня Kadro роблять із даними про вас." />
+    <link rel="canonical" href="https://kadro.studio/privacy/" />
+    <meta name="theme-color" content="#08080a" />
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="../styles.css?v=dev" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="../">
+          <img src="../assets/logo.png" alt="" width="30" height="30" />
+          <span>Kadro</span>
+        </a>
+        <nav class="nav-links">
+          <a href="../#features" data-i18n="nav.features">Можливості</a>
+          <a href="../workshop/" data-i18n="nav.workshop">Майстерня</a>
+          <a href="../#support" data-i18n="nav.support">Підтримати</a>
+          <a href="../#faq" data-i18n="nav.faq">Питання</a>
+        </nav>
+        <div class="nav-actions">
+          <select class="lang" id="lang" aria-label="Language">
+            <option value="uk">UA</option>
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+          <a class="btn btn-primary btn-sm" href="../#download" data-i18n="nav.download">Завантажити</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="doc">
+      <!-- The same policy in three languages; privacy.js shows one. -->
+      <article class="wrap doc-wrap" data-lang="uk" lang="uk">
+        <h1>Політика приватності</h1>
+        <p class="doc-date">Оновлено 20 листопада 2026</p>
+        <p class="doc-lead">
+          Kadro — безкоштовний відеоредактор з відкритим кодом. Тут пояснено, що програма Kadro, цей сайт і Майстерня Kadro роблять із даними про вас.
+          Коротко: програма нічого не збирає, сайт не стежить за вами, а майстерня зберігає лише те, без чого не працює акаунт.
+        </p>
+
+        <h2>Програма Kadro</h2>
+        <p>
+          Ваші проєкти, медіафайли й налаштування залишаються на вашому комп’ютері. У Kadro немає телеметрії, аналітики чи звітів про збої.
+          Автоматичні субтитри й видалення фону теж працюють на вашому комп’ютері: відео та звук нікуди не надсилаються.
+        </p>
+        <p>В інтернет програма звертається лише для такого:</p>
+        <ul>
+          <li>перевірка й завантаження оновлень — з GitHub (це можна вимкнути в налаштуваннях);</li>
+          <li>одноразове завантаження моделі ШІ, коли ви вперше користуєтеся функцією, — з Hugging Face;</li>
+          <li>пошук в онлайн-бібліотеці: запит іде в Openverse і Wikimedia Commons, а також у Pexels чи Pixabay, якщо ви додали для них власний ключ;</li>
+          <li>шейдер із Shadertoy чи відео з TikTok, коли ви вставляєте посилання (для TikTok програма спершу завантажує з GitHub інструмент yt-dlp);</li>
+          <li>майстерня (про неї нижче) і файл kadro.studio/workshop.json, з якого програма дізнається її адресу.</li>
+        </ul>
+        <p>Як і під час будь-якого запиту в інтернеті, кожен із цих сервісів бачить вашу IP-адресу й обробляє її за власною політикою приватності.</p>
+
+        <h2>Цей сайт</h2>
+        <ul>
+          <li>
+            kadro.studio розміщено на GitHub Pages. Сервери GitHub бачать вашу IP-адресу й ведуть технічні журнали за
+            <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">заявою GitHub про конфіденційність</a>.
+          </li>
+          <li>Жодних cookie, аналітики, реклами чи трекерів. Шрифти й зображення завантажуються із самого kadro.studio.</li>
+          <li>Браузер запам’ятовує лише вибрану мову.</li>
+          <li>Сторінка майстерні завантажує елементи разом із їхніми зображеннями з workshop.kadro.studio.</li>
+          <li>Кількість завантажень — це підсумки GitHub для кожного файлу, за ними нікого не можна впізнати.</li>
+          <li>Донати йдуть напряму на Ko-fi, Patreon чи в криптомережу; ми бачимо лише те, що показують ці сервіси.</li>
+        </ul>
+
+        <h2>Майстерня</h2>
+        <p>
+          Переглядати й встановлювати елементи можна без акаунта. Щоб рахувати завантаження, майстерня 24 години зберігає хеш вашої IP-адреси разом із
+          номером елемента: так один відвідувач додає одне завантаження на добу.
+        </p>
+        <h3>Що зберігає акаунт</h3>
+        <ul>
+          <li>Ім’я для входу, ім’я для показу, e-mail і те, чи підтверджено адресу.</li>
+          <li>Пароль — лише у вигляді хешу. В акаунта, створеного через Google чи Discord, його може не бути.</li>
+          <li>
+            Якщо ви входите через Google чи Discord: номер вашого акаунта там, e-mail, який той повідомляє, і посилання на картинку профілю. У Google ми
+            просимо лише ім’я, e-mail і картинку, у Discord — ім’я користувача й e-mail. Вашого пароля там ми не бачимо й нічого від вашого імені не публікуємо.
+          </li>
+          <li>
+            Для кожного комп’ютера, де ви підключили Kadro: пароль застосунку (лише у вигляді хешу), дата створення, а також коли й з якої IP-адреси
+            його використано востаннє. Їх видно на сторінці акаунта, там само їх можна відключити.
+          </li>
+          <li>Те, що ви публікуєте: елемент, опис, мітки, ліцензія й зображення, з вашим ім’ям для показу як автора. Опубліковані елементи бачать усі.</li>
+          <li>Елементи, які ви вподобали, і ваші скарги з причинами. Скарги бачать лише модератори.</li>
+        </ul>
+        <p>Ваш e-mail ніде не показується публічно. Адміністратор сайту й модератори бачать акаунти в панелі керування сайтом.</p>
+
+        <h3>Листи</h3>
+        <p>Майстерня пише лише про ваш акаунт: підтвердження адреси, скидання пароля, зміна e-mail і рішення модераторів щодо ваших елементів. Жодних розсилок.</p>
+
+        <h3>Cookie</h3>
+        <p>
+          Поки ви в акаунті, WordPress зберігає свої cookie входу. Під час входу через Google чи Discord майстерня ставить два власні короткі cookie, які
+          живуть щонайбільше 20 хвилин. Рекламних чи аналітичних cookie немає.
+        </p>
+
+        <h3>Захист від зловживань</h3>
+        <p>
+          Невдалі спроби входу, реєстрації й запити на скидання пароля рахуються за IP-адресою (вхід — ще й за іменем) у вигляді хешу протягом від 15 хвилин
+          до години, а потім видаляються.
+        </p>
+
+        <h3>Де зберігаються дані</h3>
+        <p>
+          Майстерня працює на хостингу WordPress від WP Cloud (Automattic), придбаному через Porkbun. Дані зберігаються на їхніх серверах і можуть
+          оброблятися за межами вашої країни, зокрема в США; хостинг веде технічні журнали й резервні копії. Якщо в акаунта немає картинки з Google чи
+          Discord, сторінка акаунта показує вашу картинку з Gravatar: браузер запитує її в Gravatar (теж Automattic) за хешем вашого e-mail.
+        </p>
+
+        <h3>Як довго</h3>
+        <p>
+          Акаунт і опубліковане зберігаються, доки ви їх не видалите. «Видалити акаунт» на сторінці акаунта одразу видаляє акаунт, ваші елементи й
+          підключення Kadro; копії можуть ще якийсь час лишатися в резервних копіях хостингу. Ваші вподобання лишаються в лічильниках елементів, але без
+          вашого імені.
+        </p>
+
+        <h2>Підстави</h2>
+        <p>
+          Дані акаунта ми обробляємо, щоб надавати майстерню, у якій ви зареєструвалися, а лічильники захисту й журнали — через законний інтерес захищати
+          сервіс (GDPR, ст. 6(1)(b) і (f)). Ми не продаємо дані й не використовуємо їх для реклами.
+        </p>
+
+        <h2>Ваші права</h2>
+        <p>
+          Змінити ім’я, e-mail і пароль, відключити Kadro чи сервіс і видалити акаунт можна самостійно на
+          <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=uk">сторінці акаунта</a>. Також можна попросити копію своїх даних,
+          виправлення або припинення обробки й подати скаргу до органу із захисту даних у вашій країні.
+        </p>
+
+        <h2>Контакт</h2>
+        <p>Питання й запити щодо ваших даних: <span data-contact></span>.</p>
+        <p class="doc-note" data-contact-hint>Не пишіть особисті дані в публічному issue: напишіть, що вам потрібно, і ми домовимося про приватний спосіб зв’язку.</p>
+
+        <h2>Зміни</h2>
+        <p>Якщо політика зміниться, ми оновимо цю сторінку й дату вгорі; про важливі зміни повідомимо на сайті.</p>
+      </article>
+
+      <article class="wrap doc-wrap" data-lang="ru" lang="ru" hidden>
+        <h1>Политика конфиденциальности</h1>
+        <p class="doc-date">Обновлено 20 ноября 2026</p>
+        <p class="doc-lead">
+          Kadro — бесплатный видеоредактор с открытым кодом. Здесь объясняется, что программа Kadro, этот сайт и Мастерская Kadro делают с данными о вас.
+          Коротко: программа ничего не собирает, сайт не следит за вами, а мастерская хранит только то, без чего не работает аккаунт.
+        </p>
+
+        <h2>Программа Kadro</h2>
+        <p>
+          Ваши проекты, медиафайлы и настройки остаются на вашем компьютере. В Kadro нет телеметрии, аналитики и отчётов о сбоях. Автоматические субтитры и
+          удаление фона тоже работают на вашем компьютере: видео и звук никуда не отправляются.
+        </p>
+        <p>В интернет программа обращается только для этого:</p>
+        <ul>
+          <li>проверка и загрузка обновлений — с GitHub (это можно выключить в настройках);</li>
+          <li>однократная загрузка модели ИИ, когда вы впервые пользуетесь функцией, — с Hugging Face;</li>
+          <li>поиск в онлайн-библиотеке: запрос уходит в Openverse и Wikimedia Commons, а также в Pexels или Pixabay, если вы добавили для них свой ключ;</li>
+          <li>шейдер с Shadertoy или видео с TikTok, когда вы вставляете ссылку (для TikTok программа сначала скачивает с GitHub инструмент yt-dlp);</li>
+          <li>мастерская (о ней ниже) и файл kadro.studio/workshop.json, из которого программа узнаёт её адрес.</li>
+        </ul>
+        <p>Как и при любом запросе в интернете, каждый из этих сервисов видит ваш IP-адрес и обрабатывает его по своей политике конфиденциальности.</p>
+
+        <h2>Этот сайт</h2>
+        <ul>
+          <li>
+            kadro.studio размещён на GitHub Pages. Серверы GitHub видят ваш IP-адрес и ведут технические журналы по
+            <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">заявлению GitHub о конфиденциальности</a>.
+          </li>
+          <li>Никаких cookie, аналитики, рекламы и трекеров. Шрифты и изображения загружаются с самого kadro.studio.</li>
+          <li>Браузер запоминает только выбранный язык.</li>
+          <li>Страница мастерской загружает элементы вместе с их изображениями с workshop.kadro.studio.</li>
+          <li>Число скачиваний — это итоги GitHub по каждому файлу, по ним никого нельзя узнать.</li>
+          <li>Донаты идут напрямую на Ko-fi, Patreon или в криптосеть; мы видим только то, что показывают эти сервисы.</li>
+        </ul>
+
+        <h2>Мастерская</h2>
+        <p>
+          Смотреть и устанавливать элементы можно без аккаунта. Чтобы считать скачивания, мастерская 24 часа хранит хеш вашего IP-адреса вместе с номером
+          элемента: так один посетитель добавляет одно скачивание в сутки.
+        </p>
+        <h3>Что хранит аккаунт</h3>
+        <ul>
+          <li>Имя для входа, имя для показа, e-mail и то, подтверждён ли адрес.</li>
+          <li>Пароль — только в виде хеша. У аккаунта, созданного через Google или Discord, его может не быть.</li>
+          <li>
+            Если вы входите через Google или Discord: номер вашего аккаунта там, e-mail, который тот сообщает, и ссылка на картинку профиля. У Google мы
+            просим только имя, e-mail и картинку, у Discord — имя пользователя и e-mail. Вашего пароля там мы не видим и ничего от вашего имени не публикуем.
+          </li>
+          <li>
+            Для каждого компьютера, где вы подключили Kadro: пароль приложения (только в виде хеша), дата создания, а также когда и с какого IP-адреса им
+            пользовались в последний раз. Они видны на странице аккаунта, там же их можно отключить.
+          </li>
+          <li>То, что вы публикуете: элемент, описание, метки, лицензия и изображение, с вашим именем для показа как автора. Опубликованное видят все.</li>
+          <li>Элементы, которые вы отметили «нравится», и ваши жалобы с причинами. Жалобы видят только модераторы.</li>
+        </ul>
+        <p>Ваш e-mail нигде не показывается публично. Администратор сайта и модераторы видят аккаунты в панели управления сайтом.</p>
+
+        <h3>Письма</h3>
+        <p>Мастерская пишет только о вашем аккаунте: подтверждение адреса, сброс пароля, смена e-mail и решения модераторов о ваших элементах. Никаких рассылок.</p>
+
+        <h3>Cookie</h3>
+        <p>
+          Пока вы в аккаунте, WordPress хранит свои cookie входа. Во время входа через Google или Discord мастерская ставит два собственных коротких cookie,
+          которые живут не больше 20 минут. Рекламных и аналитических cookie нет.
+        </p>
+
+        <h3>Защита от злоупотреблений</h3>
+        <p>
+          Неудачные попытки входа, регистрации и запросы на сброс пароля считаются по IP-адресу (вход — ещё и по имени) в виде хеша от 15 минут до часа, а
+          затем удаляются.
+        </p>
+
+        <h3>Где хранятся данные</h3>
+        <p>
+          Мастерская работает на хостинге WordPress от WP Cloud (Automattic), купленном через Porkbun. Данные хранятся на их серверах и могут
+          обрабатываться за пределами вашей страны, в том числе в США; хостинг ведёт технические журналы и резервные копии. Если у аккаунта нет картинки из
+          Google или Discord, страница аккаунта показывает вашу картинку из Gravatar: браузер запрашивает её у Gravatar (тоже Automattic) по хешу вашего e-mail.
+        </p>
+
+        <h3>Как долго</h3>
+        <p>
+          Аккаунт и опубликованное хранятся, пока вы их не удалите. «Удалить аккаунт» на странице аккаунта сразу удаляет аккаунт, ваши элементы и
+          подключения Kadro; копии могут ещё какое-то время оставаться в резервных копиях хостинга. Ваши отметки «нравится» остаются в счётчиках элементов,
+          но без вашего имени.
+        </p>
+
+        <h2>Основания</h2>
+        <p>
+          Данные аккаунта мы обрабатываем, чтобы предоставлять мастерскую, в которой вы зарегистрировались, а счётчики защиты и журналы — в силу законного
+          интереса защищать сервис (GDPR, ст. 6(1)(b) и (f)). Мы не продаём данные и не используем их для рекламы.
+        </p>
+
+        <h2>Ваши права</h2>
+        <p>
+          Изменить имя, e-mail и пароль, отключить Kadro или сервис и удалить аккаунт можно самостоятельно на
+          <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=ru">странице аккаунта</a>. Также можно попросить копию своих данных,
+          исправление или прекращение обработки и подать жалобу в орган по защите данных в вашей стране.
+        </p>
+
+        <h2>Контакт</h2>
+        <p>Вопросы и запросы о ваших данных: <span data-contact></span>.</p>
+        <p class="doc-note" data-contact-hint>Не пишите личные данные в публичном issue: напишите, что вам нужно, и мы договоримся о личном способе связи.</p>
+
+        <h2>Изменения</h2>
+        <p>Если политика изменится, мы обновим эту страницу и дату вверху; о важных изменениях сообщим на сайте.</p>
+      </article>
+
+      <article class="wrap doc-wrap" data-lang="en" lang="en" hidden>
+        <h1>Privacy policy</h1>
+        <p class="doc-date">Updated 20 November 2026</p>
+        <p class="doc-lead">
+          Kadro is a free, open-source video editor. This page explains what the Kadro app, this website and the Kadro Workshop do with data about you. In
+          short: the app collects nothing, the website doesn’t track you, and the workshop keeps only what an account needs.
+        </p>
+
+        <h2>The Kadro app</h2>
+        <p>
+          Your projects, media and settings stay on your computer. Kadro has no telemetry, analytics or crash reports. Auto subtitles and background removal
+          run on your computer too: your video and sound are not sent anywhere.
+        </p>
+        <p>The app goes online only for these things:</p>
+        <ul>
+          <li>checking for updates and downloading them, from GitHub (you can turn this off in Preferences);</li>
+          <li>downloading an AI model once, the first time you use the feature, from Hugging Face;</li>
+          <li>searching the online library: your search goes to Openverse and Wikimedia Commons, and to Pexels or Pixabay if you added your own key for them;</li>
+          <li>a shader from Shadertoy or a video from TikTok, when you paste a link (for TikTok the app first downloads the yt-dlp tool from GitHub);</li>
+          <li>the workshop (below), and the file kadro.studio/workshop.json that tells the app where it is.</li>
+        </ul>
+        <p>As with any request on the internet, each of these services sees your IP address and handles it under its own privacy policy.</p>
+
+        <h2>This website</h2>
+        <ul>
+          <li>
+            kadro.studio is hosted on GitHub Pages. GitHub’s servers see your IP address and keep technical logs under the
+            <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub privacy statement</a>.
+          </li>
+          <li>No cookies, analytics, ads or trackers. Fonts and pictures come from kadro.studio itself.</li>
+          <li>Your browser remembers only the language you picked.</li>
+          <li>The workshop page loads items, with their pictures, from workshop.kadro.studio.</li>
+          <li>Download counts are GitHub’s totals for each file and don’t identify anyone.</li>
+          <li>Donations go straight to Ko-fi, Patreon or the crypto network; we see only what those services show us.</li>
+        </ul>
+
+        <h2>The workshop</h2>
+        <p>
+          You can browse and install items without an account. To count downloads, the workshop keeps a hash of your IP address with the item’s number for
+          24 hours, so that one visitor adds one download a day.
+        </p>
+        <h3>What your account keeps</h3>
+        <ul>
+          <li>Your login name, display name and e-mail address, and whether the address is confirmed.</li>
+          <li>Your password, only as a hash. An account made with Google or Discord may have none.</li>
+          <li>
+            If you sign in with Google or Discord: your account number there, the e-mail address it reports and a link to your profile picture. We ask Google
+            only for your name, e-mail address and picture, and Discord for your username and e-mail address. We never see your password there and never post
+            anything for you.
+          </li>
+          <li>
+            For each computer where you connected Kadro: its app password (only as a hash), the date it was created, and when and from which IP address it was
+            last used. You see them on your account page and can disconnect them there.
+          </li>
+          <li>What you publish: the item, its description, tags, licence and picture, with your display name as the author. Published items are public.</li>
+          <li>The items you liked, and your reports with their reasons. Only moderators see reports.</li>
+        </ul>
+        <p>Your e-mail address is never shown publicly. The site administrator and moderators can see accounts in the site’s admin panel.</p>
+
+        <h3>Letters</h3>
+        <p>
+          The workshop writes only about your account: confirming your address, resetting your password, changing your e-mail address, and moderators’
+          decisions about your items. No newsletters.
+        </p>
+
+        <h3>Cookies</h3>
+        <p>
+          While you’re signed in, WordPress keeps its sign-in cookies. While you sign in with Google or Discord, the workshop sets two short cookies of its own
+          that last 20 minutes at most. No advertising or analytics cookies.
+        </p>
+
+        <h3>Protection from abuse</h3>
+        <p>
+          Failed sign-ins, sign-ups and password reset requests are counted per IP address (sign-ins also per name), as a hash, for 15 minutes to an hour, and
+          then deleted.
+        </p>
+
+        <h3>Where it is stored</h3>
+        <p>
+          The workshop runs on WordPress hosting from WP Cloud (Automattic), bought through Porkbun. Data is stored on their servers and may be processed
+          outside your country, including in the US; the host keeps technical logs and backups. If your account has no picture from Google or Discord, your
+          account page shows your Gravatar picture: your browser asks Gravatar (also Automattic) for it using a hash of your e-mail address.
+        </p>
+
+        <h3>How long</h3>
+        <p>
+          Your account and what you published stay until you delete them. “Delete account” on your account page removes the account, your items and your
+          Kadro connections at once; copies may remain in the host’s backups for a while. Likes you gave stay in the items’ counts, without your name.
+        </p>
+
+        <h2>Legal basis</h2>
+        <p>
+          We handle account data to provide the workshop you signed up for, and abuse counters and logs because of our legitimate interest in keeping the
+          service safe (GDPR Art. 6(1)(b) and (f)). We don’t sell data or use it for advertising.
+        </p>
+
+        <h2>Your rights</h2>
+        <p>
+          You can change your name, e-mail address and password, disconnect Kadro or a service, and delete your account yourself on your
+          <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=en">account page</a>. You can also ask for a copy of your data, for a
+          correction or for us to stop handling it, and complain to the data protection authority in your country.
+        </p>
+
+        <h2>Contact</h2>
+        <p>Questions and requests about your data: <span data-contact></span>.</p>
+        <p class="doc-note" data-contact-hint>Please don’t put personal details in a public issue: say what you need, and we’ll agree on a private way to reach you.</p>
+
+        <h2>Changes</h2>
+        <p>If this policy changes, we’ll update this page and the date at the top; we’ll announce important changes on the site.</p>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div class="brand small">
+          <img src="../assets/logo.png" alt="" width="22" height="22" />
+          <span>Kadro</span>
+        </div>
+        <nav>
+          <a href="../workshop/" data-i18n="nav.workshop">Майстерня</a>
+          <a data-link="source" href="#" data-i18n="footer.source">Вихідний код</a>
+          <a data-link="issues" href="#" data-i18n="footer.issues">Повідомити про помилку</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="../config.js?v=dev"></script>
+    <script src="privacy.js?v=dev"></script>
+  </body>
+</html>

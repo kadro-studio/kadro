@@ -11,6 +11,8 @@ window.KADRO_SITE = {
     releases: '',
     issues: '',
   },
+  // E-mail for questions about personal data (privacy/). Empty: GitHub issues.
+  contact: '',
   // Kadro Animate (animate/): the web version lives in animate/app/, the Windows installer is an
   // asset of its own release in the same repository. That release is published with
   // `--latest=false`, so Kadro's update check and the "latest" download link never pick it up.
