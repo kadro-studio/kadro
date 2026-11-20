@@ -1,5 +1,5 @@
 <?php
-// WordPress admin: list columns, item details box, moderation count, settings.
+// WordPress admin: list columns, item details box, moderation count, settings, confirming e-mails by hand.
 
 if (!defined('ABSPATH')) {
 	exit;
@@ -102,6 +102,49 @@ function kw_settings_page() {
 	submit_button();
 	echo '</form></div>';
 }
+
+// Users list: whether each member confirmed their e-mail, and a way to confirm it by hand
+// for someone whose letters do not arrive.
+add_filter('manage_users_columns', function ($cols) {
+	$cols['kw_email'] = kw_t('email_col');
+	return $cols;
+});
+
+add_filter('manage_users_custom_column', function ($out, $col, $user) {
+	if ($col !== 'kw_email') {
+		return $out;
+	}
+	return kw_confirmed((int) $user) ? '✓' : '<span style="color:#b26200">' . esc_html(kw_t('email_not_yet')) . '</span>';
+}, 10, 3);
+
+add_filter('user_row_actions', function ($actions, WP_User $user) {
+	if (!kw_confirmed($user->ID) && current_user_can('edit_user', $user->ID)) {
+		$url = wp_nonce_url(admin_url('admin-post.php?action=kw_confirm_email&user=' . $user->ID), 'kw_confirm_email_' . $user->ID);
+		$ask = kw_tl('confirm_email_ask', kw_lang(), ['email' => $user->user_email]);
+		$actions['kw_confirm_email'] = '<a href="' . esc_url($url) . '" onclick="return confirm(' . esc_attr(wp_json_encode($ask)) . ')">' . esc_html(kw_t('confirm_email')) . '</a>';
+	}
+	return $actions;
+}, 10, 2);
+
+add_action('admin_post_kw_confirm_email', function () {
+	$user = (int) ($_GET['user'] ?? 0);
+	check_admin_referer('kw_confirm_email_' . $user);
+	if (!get_userdata($user) || !current_user_can('edit_user', $user)) {
+		wp_die(esc_html__('Sorry, you are not allowed to edit this user.'), 403);
+	}
+	update_user_meta($user, '_kw_email_confirmed', '1');
+	delete_user_meta($user, '_kw_confirm_token');
+	wp_safe_redirect(add_query_arg('kw_confirmed', $user, admin_url('users.php')));
+	exit;
+});
+
+add_action('admin_notices', function () {
+	$screen = get_current_screen();
+	$user   = isset($_GET['kw_confirmed']) ? get_userdata((int) $_GET['kw_confirmed']) : false;
+	if ($user && $screen && $screen->id === 'users') {
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html(kw_tl('email_confirmed_by_hand', kw_lang(), ['name' => $user->display_name])) . '</p></div>';
+	}
+});
 
 // Removing an item also removes its stored file.
 add_action('before_delete_post', function ($id) {

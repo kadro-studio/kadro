@@ -190,6 +190,12 @@ function kw_strings(): array {
 		'provider_console' => ['Create the app here', 'Создать приложение здесь', 'Створити застосунок тут'],
 		'trusted_after'  => ['Publish without review after this many approved items (0 — always review)', 'Публиковать без проверки после стольких одобренных (0 — проверять всегда)', 'Публікувати без перевірки після стількох схвалених (0 — перевіряти завжди)'],
 		'reports'        => ['Reports', 'Жалобы', 'Скарги'],
+		// Users list (WordPress admin)
+		'email_col'      => ['E-mail confirmed', 'E-mail подтверждён', 'E-mail підтверджено'],
+		'email_not_yet'  => ['Not yet', 'Ещё нет', 'Ще ні'],
+		'confirm_email'  => ['Confirm e-mail', 'Подтвердить e-mail', 'Підтвердити e-mail'],
+		'confirm_email_ask' => ['Confirm {email} by hand? Do it only if the person wrote to you from this very address: otherwise anyone could sign up with someone else’s e-mail.', 'Подтвердить {email} вручную? Делайте это, только если человек написал вам именно с этого адреса: иначе кто угодно сможет зарегистрироваться с чужим e-mail.', 'Підтвердити {email} вручну? Робіть це, лише якщо людина написала вам саме з цієї адреси: інакше будь-хто зможе зареєструватися з чужим e-mail.'],
+		'email_confirmed_by_hand' => ['The e-mail of {name} is confirmed: publishing is open now.', 'E-mail пользователя {name} подтверждён: публикация открыта.', 'E-mail користувача {name} підтверджено: публікація відкрита.'],
 	];
 }
 
