@@ -67,6 +67,11 @@ function GeneralPage() {
   const follow = usePrefs((p) => p.followPlayhead);
   const splitAudio = usePrefs((p) => p.splitAudio);
   const autoUpdate = usePrefs((p) => p.autoUpdate);
+  // A copy from Steam is updated by Steam: no switch or check of its own.
+  const [store, setStore] = useState<string | null>(null);
+  useEffect(() => {
+    void api.appInfo().then((i) => setStore(i.store));
+  }, []);
   return (
     <>
       <div className="field">
@@ -109,16 +114,24 @@ function GeneralPage() {
         <span className="field-label">{t('prefs.followPlayhead')}</span>
         <input type="checkbox" className="switch" checked={follow} onChange={(e) => setPrefs({ followPlayhead: e.target.checked })} />
       </label>
-      <label className="field toggle-field">
-        <span className="field-label">{t('prefs.autoUpdate')}</span>
-        <input type="checkbox" className="switch" checked={autoUpdate} onChange={(e) => setPrefs({ autoUpdate: e.target.checked })} />
-      </label>
-      <span className="panel-hint" style={{ margin: 0 }}>
-        {t('prefs.autoUpdateHint')}{' '}
-        <button className="link-btn" onClick={() => void checkUpdatesNow()}>
-          {t('upd.checkNow')}
-        </button>
-      </span>
+      {store ? (
+        <span className="panel-hint" style={{ margin: 0 }}>
+          {t('prefs.updatesStore')}
+        </span>
+      ) : (
+        <>
+          <label className="field toggle-field">
+            <span className="field-label">{t('prefs.autoUpdate')}</span>
+            <input type="checkbox" className="switch" checked={autoUpdate} onChange={(e) => setPrefs({ autoUpdate: e.target.checked })} />
+          </label>
+          <span className="panel-hint" style={{ margin: 0 }}>
+            {t('prefs.autoUpdateHint')}{' '}
+            <button className="link-btn" onClick={() => void checkUpdatesNow()}>
+              {t('upd.checkNow')}
+            </button>
+          </span>
+        </>
+      )}
     </>
   );
 }

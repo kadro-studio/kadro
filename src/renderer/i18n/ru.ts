@@ -1198,6 +1198,8 @@ export const ru: Record<I18nKey, string> = {
   'upd.checkNow': 'Проверить сейчас',
   'upd.latest': 'У вас последняя версия',
   'upd.dev': 'Обновления проверяются только в установленной программе',
+  'upd.store': 'Kadro обновляется через Steam',
+  'prefs.updatesStore': 'Эта копия Kadro установлена из Steam: новые версии скачивает и ставит Steam.',
   'upd.downloading': 'Загружается версия {v}…',
   'upd.failed': 'Не удалось проверить обновления: {err}',
   'upd.title': 'Вышла Kadro {v}',

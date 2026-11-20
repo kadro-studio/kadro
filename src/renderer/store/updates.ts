@@ -41,6 +41,7 @@ export async function checkUpdatesNow(): Promise<void> {
   const s = await api.checkForUpdates().catch((e: unknown) => ({ state: 'error', message: String(e) }) as UpdateStatus);
   if (s.state === 'latest') toast(t('upd.latest'), 'success');
   else if (s.state === 'dev') toast(t('upd.dev'));
+  else if (s.state === 'store') toast(t('upd.store'));
   else if (s.state === 'downloading') toast(t('upd.downloading', { v: s.version }));
   else if (s.state === 'error') toast(t('upd.failed', { err: s.message }), 'error');
 }

@@ -269,6 +269,8 @@ export interface AppInfo {
   ffmpegVersion: string;
   /** Show first-run screens (off for the isolated profiles that automated tests use). */
   firstRun: boolean;
+  /** The store that installed this copy and updates it, or null for the GitHub releases. */
+  store: 'steam' | null;
 }
 
 export interface FileFilter {
@@ -301,7 +303,8 @@ export interface ShadertoyShader {
 
 /** Where an update of the installed app stands. */
 export type UpdateStatus =
-  | { state: 'idle' | 'checking' | 'latest' | 'dev' }
+  /** store: a copy from Steam, which Steam itself updates. */
+  | { state: 'idle' | 'checking' | 'latest' | 'dev' | 'store' }
   | { state: 'downloading'; version: string; progress: number }
   /** Downloaded: installed on restart (or on the next quit). */
   | { state: 'ready'; version: string }

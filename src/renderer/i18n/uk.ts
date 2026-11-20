@@ -1176,6 +1176,8 @@ export const uk: Record<I18nKey, string> = {
   'upd.checkNow': 'Перевірити зараз',
   'upd.latest': 'У вас остання версія',
   'upd.dev': 'Оновлення перевіряються лише у встановленій програмі',
+  'upd.store': 'Kadro оновлюється через Steam',
+  'prefs.updatesStore': 'Цю копію Kadro встановлено зі Steam: нові версії завантажує й ставить Steam.',
   'upd.downloading': 'Завантажується версія {v}…',
   'upd.failed': 'Не вдалося перевірити оновлення: {err}',
   'upd.title': 'Вийшла Kadro {v}',

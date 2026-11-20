@@ -1196,6 +1196,8 @@ export const en = {
   'upd.checkNow': 'Check now',
   'upd.latest': 'You have the latest version',
   'upd.dev': 'Updates are checked only in the installed app',
+  'upd.store': 'Kadro is kept up to date by Steam',
+  'prefs.updatesStore': 'This copy of Kadro comes from Steam: Steam downloads and installs new versions.',
   'upd.downloading': 'Downloading version {v}…',
   'upd.failed': 'Could not check for updates: {err}',
   'upd.title': 'Kadro {v} is out',

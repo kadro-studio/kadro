@@ -429,6 +429,7 @@ function registerIpc(): void {
     ffmpeg: ffmpegPath(),
     ffmpegVersion: await ffmpegVersion(),
     firstRun: !process.env.KADRO_USER_DATA || !!process.env.KADRO_FIRST_RUN,
+    store: updates.store,
   }));
 }
 

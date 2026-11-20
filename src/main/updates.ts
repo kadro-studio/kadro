@@ -2,13 +2,26 @@
 // downloads a new release in the background (electron-updater checks it against
 // the SHA-512 in the release's latest.yml) and installs it on restart; the
 // portable version cannot replace itself, so it only reports the new release.
+// A copy from a store (Steam) is updated by the store and checks nothing itself.
 import { app } from 'electron';
 import { autoUpdater } from 'electron-updater';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { UpdateStatus } from '../shared/api';
 import { SOURCE_URL } from '../shared/brand';
 
 const LATEST_API = 'https://api.github.com/repos/kadro-studio/kadro/releases/latest';
 const portable = !!process.env.PORTABLE_EXECUTABLE_DIR;
+
+/** The store that installed this copy and keeps it up to date: the store build sets it in package.json. */
+export const store: 'steam' | null = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8')) as { kadroStore?: string };
+    return pkg.kadroStore === 'steam' ? 'steam' : null;
+  } catch {
+    return null;
+  }
+})();
 
 let status: UpdateStatus = { state: 'idle' };
 let sink: (s: UpdateStatus) => void = () => undefined;
@@ -73,6 +86,10 @@ async function checkPortable(): Promise<void> {
 }
 
 export async function checkForUpdates(): Promise<UpdateStatus> {
+  if (store) {
+    set({ state: 'store' });
+    return status;
+  }
   if (!app.isPackaged) {
     set({ state: 'dev' });
     return status;
