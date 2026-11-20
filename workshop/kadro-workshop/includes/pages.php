@@ -18,7 +18,7 @@ add_filter('query_vars', function ($vars) {
 });
 
 add_action('init', function () {
-	add_rewrite_rule('^(join|login|forgot|reset|connect|account|confirm)/?$', 'index.php?kadro=$matches[1]', 'top');
+	add_rewrite_rule('^(join|login|forgot|reset|connect|account|my|confirm)/?$', 'index.php?kadro=$matches[1]', 'top');
 	add_rewrite_rule('^oauth/(google|discord)/?$', 'index.php?kadro=oauth&kw_provider=$matches[1]', 'top');
 	// Updating the plugin by upload does not run the activation hook, so new rules are applied here once.
 	if (get_option('kw_rewrite_version') !== KW_VERSION) {
@@ -39,6 +39,8 @@ add_action('template_redirect', function () {
 		'reset'   => 'kw_reset_page',
 		'connect' => 'kw_connect_page',
 		'account' => 'kw_account_page',
+		'my'      => 'kw_my_page',
+		'whoami'  => 'kw_whoami',
 		'confirm' => 'kw_confirm_page',
 		'oauth'   => 'kw_oauth_page',
 	];
@@ -57,9 +59,11 @@ add_action('template_redirect', function () {
 	}
 }, 5);
 
-// After signing in people may be sent back to the Kadro website.
+// After signing in or out people may be sent back to the Kadro website.
 add_filter('allowed_redirect_hosts', function ($hosts) {
-	$hosts[] = 'kadro.studio';
+	foreach (kw_site_origins() as $origin) {
+		$hosts[] = (string) wp_parse_url($origin, PHP_URL_HOST);
+	}
 	return $hosts;
 });
 
@@ -192,7 +196,8 @@ h1{font-size:23px;margin:0 0 8px;letter-spacing:-.02em}
 h2{font-size:16px;margin:0 0 10px}
 p{color:#c4c4cc;margin:0 0 14px}
 label{display:block;margin:0 0 14px;font-size:13.5px;color:#a6a6b0}
-input:not([type=checkbox]){display:block;width:100%;margin-top:5px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0e0e11;color:#f2f2f5;font:inherit}
+input:not([type=checkbox]),textarea{display:block;width:100%;margin-top:5px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0e0e11;color:#f2f2f5;font:inherit}
+textarea{resize:vertical}
 input[readonly]{color:#8a8a94}
 input:focus,button:focus-visible,a:focus-visible{outline:2px solid #ff3b4f;outline-offset:1px}
 small{display:block;margin-top:4px;color:#6d6d77;font-size:12px}
@@ -236,6 +241,19 @@ section{border-top:1px solid rgba(255,255,255,.07);padding-top:18px;margin-top:1
 details summary{cursor:pointer;color:#ff9aa5;font-weight:600;margin-bottom:12px}
 form.inline{display:inline;margin:0}
 footer{margin-top:22px;font-size:12.5px;color:#6d6d77;text-align:center}
+.kw-work{margin:14px 0 0;padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#0e0e11}
+.kw-work-head{display:flex;align-items:center;gap:12px}
+.kw-work-head img,.kw-ph{flex:none;width:72px;height:44px;border-radius:8px;object-fit:cover;background:#1f1f25}
+.kw-ph{display:grid;place-items:center;font-style:normal;font-size:11px;color:#8a8a94;text-align:center}
+.kw-work-head div{flex:1;min-width:0}
+.kw-work-head b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kw-work-head small{margin-top:2px}
+.kw-work .kw-note,.kw-work .kw-error,.kw-work .kw-ok{margin:12px 0 0}
+.kw-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.kw-work details{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
+.kw-work details summary{color:#c4c4cc;margin:0}
+.kw-work details[open] summary{margin-bottom:12px}
+.kw-work details.kw-danger summary{color:#ff9aa5}
 footer a{color:#8a8a94;margin:0 6px}
 a{color:#ff6d7b}
 </style></head><body><main' . ($wide ? ' class="wide"' : '') . '><a class="kw-logo" href="' . esc_url(KW_GALLERY) . '"><i></i>' . esc_html(kw_tl('site_name', $lang)) . '</a>';

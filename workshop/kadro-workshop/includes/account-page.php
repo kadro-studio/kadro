@@ -68,6 +68,7 @@ function kw_account_page(): void {
 	}
 	echo '</b><span>@' . esc_html($u->user_login) . ' · ' . esc_html($u->user_email) . '</span></div></div>';
 	echo '<div class="kw-row"><a class="kw-btn ghost small" href="' . esc_url(KW_GALLERY) . '">' . esc_html($t('open_workshop')) . '</a>';
+	echo '<a class="kw-btn ghost small" href="' . esc_url(kw_url('my', ['lang' => $code])) . '">' . esc_html($t('my_title')) . '</a>';
 	echo '<a class="kw-btn ghost small" href="' . esc_url(kw_url('login', ['lang' => $code, 'logout' => 1, '_wpnonce' => wp_create_nonce('kw_logout')])) . '">' . esc_html($t('sign_out')) . '</a></div>';
 
 	if (!empty($_GET['welcome'])) {
@@ -159,29 +160,24 @@ function kw_account_page(): void {
 	}
 	echo '</section>';
 
-	// Publications
+	// Publications: how many in each state; they are managed on /my/.
 	echo '<section id="items"><h2>' . esc_html($t('items_title')) . '</h2>';
 	$q = new WP_Query([
 		'post_type'      => KW_POST_TYPE,
 		'author'         => $u->ID,
-		'post_status'    => ['publish', 'pending', 'draft', 'private', 'future'],
-		'posts_per_page' => 100,
-		'orderby'        => 'modified',
+		'post_status'    => ['publish', 'pending', 'draft'],
+		'posts_per_page' => -1,
 		'no_found_rows'  => true,
 	]);
 	if (!$q->posts) {
 		echo '<p>' . esc_html($t('items_none')) . '</p>';
 	} else {
-		echo '<ul class="kw-list">';
+		$n = ['publish' => 0, 'pending' => 0, 'rejected' => 0, 'draft' => 0];
 		foreach ($q->posts as $post) {
-			$rejected = kw_meta($post->ID, 'rejected');
-			$status   = $post->post_status === 'publish' ? 'publish' : ($post->post_status === 'pending' ? 'pending' : ($rejected ? 'rejected' : 'draft'));
-			$title    = esc_html(get_the_title($post));
-			echo '<li><div>' . ($status === 'publish' ? '<a href="' . esc_url(get_permalink($post)) . '">' . $title . '</a>' : '<b>' . $title . '</b>');
-			echo '<small>' . esc_html(kw_tl('kind_' . kw_meta($post->ID, 'kind'), $lang)) . ' · ↓ ' . (int) kw_meta($post->ID, 'downloads', 0) . ' · ♥ ' . (int) kw_meta($post->ID, 'likes', 0) . '</small></div>';
-			echo '<span class="kw-tag ' . esc_attr($status) . '">' . esc_html($t('status_' . $status, ['reason' => $rejected])) . '</span></li>';
+			$n[kw_work_status($post)]++;
 		}
-		echo '</ul>';
+		echo '<p>' . esc_html($t('items_counts', ['p' => $n['publish'], 'w' => $n['pending'], 'r' => $n['rejected'] + $n['draft']])) . '</p>';
+		echo '<a class="kw-btn small" href="' . esc_url(kw_url('my', ['lang' => $code])) . '">' . esc_html($t('items_manage')) . '</a>';
 	}
 	echo '</section>';
 

@@ -264,6 +264,12 @@ function kw_login_page(): void {
 	$notice = '';
 	if (isset($_GET['logout']) && wp_verify_nonce((string) ($_GET['_wpnonce'] ?? ''), 'kw_logout')) {
 		wp_logout();
+		// Signing out from the Kadro website's menu goes back to the page it was on.
+		$back = $ctx['redirect_to'] ? wp_validate_redirect($ctx['redirect_to'], '') : '';
+		if ($back) {
+			wp_safe_redirect($back);
+			exit;
+		}
 		$notice = $t('logged_out');
 	} elseif (is_user_logged_in()) {
 		wp_safe_redirect(kw_after_login($ctx));

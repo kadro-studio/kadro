@@ -62,6 +62,13 @@ function kw_error(string $code, string $message, int $status): WP_Error {
 	return new WP_Error($code, $message, ['status' => $status]);
 }
 
+/** Tags from a comma-separated list: at most 8, each up to 24 characters. */
+function kw_parse_tags(string $list): array {
+	return array_values(array_slice(array_filter(array_map(function ($t) {
+		return mb_substr(sanitize_text_field(trim($t)), 0, 24);
+	}, explode(',', $list))), 0, 8));
+}
+
 /** Item by id that the current user may see, or null. */
 function kw_find(int $id): ?WP_Post {
 	$post = get_post($id);
@@ -215,9 +222,7 @@ function kw_rest_publish(WP_REST_Request $r) {
 	$description = mb_substr(sanitize_textarea_field((string) $r->get_param('description')), 0, 1500);
 	$version     = preg_replace('/[^0-9A-Za-z.\-]/', '', (string) $r->get_param('version')) ?: '1.0.0';
 	$license     = mb_substr(sanitize_text_field((string) $r->get_param('license')), 0, 60) ?: 'CC BY 4.0';
-	$tags        = array_slice(array_filter(array_map(function ($t) {
-		return mb_substr(sanitize_text_field(trim($t)), 0, 24);
-	}, explode(',', (string) $r->get_param('tags')))), 0, 8);
+	$tags        = kw_parse_tags((string) $r->get_param('tags'));
 
 	// Daily upload limit per user (moderators are exempt).
 	$limit = (int) get_option('kw_daily_limit', 20);

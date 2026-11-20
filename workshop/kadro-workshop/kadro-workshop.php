@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Kadro Workshop
- * Description: Community workshop for the Kadro video editor: shared effects, transitions, elements, filters, title styles, LUTs, themes and project templates, with accounts (sign-up, sign-in with Google or Discord, password reset, account page), moderation, reports, likes and download counts. The Kadro app talks to it through the kadro/v1 REST API.
- * Version: 1.2.4
+ * Description: Community workshop for the Kadro video editor: shared effects, transitions, elements, filters, title styles, LUTs, themes and project templates, with accounts (sign-up, sign-in with Google or Discord, password reset, account page, my works), moderation, reports, likes and download counts. The Kadro app talks to it through the kadro/v1 REST API.
+ * Version: 1.3.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: Kadro
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
-const KW_VERSION   = '1.2.4';
+const KW_VERSION   = '1.3.0';
 const KW_POST_TYPE = 'kadro_item';
 const KW_TAXONOMY  = 'kadro_tag';
 const KW_KINDS     = ['effect', 'transition', 'element', 'look', 'textStyle', 'lut', 'theme', 'template'];
@@ -51,6 +51,7 @@ require_once __DIR__ . '/includes/rest.php';
 require_once __DIR__ . '/includes/pages.php';
 require_once __DIR__ . '/includes/accounts.php';
 require_once __DIR__ . '/includes/account-page.php';
+require_once __DIR__ . '/includes/my-page.php';
 require_once __DIR__ . '/includes/social.php';
 require_once __DIR__ . '/includes/moderation.php';
 require_once __DIR__ . '/includes/admin.php';
