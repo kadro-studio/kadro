@@ -67,7 +67,7 @@ function kw_account_page(): void {
 		echo '<span class="kw-badge">' . esc_html($t('account_moderator')) . '</span>';
 	}
 	echo '</b><span>@' . esc_html($u->user_login) . ' · ' . esc_html($u->user_email) . '</span></div></div>';
-	echo '<div class="kw-row"><a class="kw-btn ghost small" href="https://kadro.studio/workshop/">' . esc_html($t('open_workshop')) . '</a>';
+	echo '<div class="kw-row"><a class="kw-btn ghost small" href="' . esc_url(KW_GALLERY) . '">' . esc_html($t('open_workshop')) . '</a>';
 	echo '<a class="kw-btn ghost small" href="' . esc_url(kw_url('login', ['lang' => $code, 'logout' => 1, '_wpnonce' => wp_create_nonce('kw_logout')])) . '">' . esc_html($t('sign_out')) . '</a></div>';
 
 	if (!empty($_GET['welcome'])) {
@@ -301,7 +301,7 @@ function kw_account_action(string $action, WP_User $u, int $lang): string {
 		wp_logout();
 		// Their items (and the files) go with them; so do the Kadro connections.
 		wp_delete_user($u->ID);
-		kw_message_page(kw_tl('deleted_title', $lang), kw_tl('deleted', $lang), $lang, kw_tl('open_workshop', $lang), 'https://kadro.studio/workshop/?lang=' . $lang_code);
+		kw_message_page(kw_tl('deleted_title', $lang), kw_tl('deleted', $lang), $lang, kw_tl('open_workshop', $lang), KW_GALLERY . '?lang=' . $lang_code);
 	}
 	return kw_tl('session_expired', $lang);
 }

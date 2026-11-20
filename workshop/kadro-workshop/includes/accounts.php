@@ -213,6 +213,8 @@ function kw_join_page(): void {
 
 	$action = kw_url('join', $ctx + ['social' => $social ? 1 : '']);
 	$rules  = '<label class="kw-check"><input type="checkbox" name="agree" value="1" required> <span>' . esc_html($t('join_rules')) . '</span></label>';
+	$link   = '<a href="' . esc_url(kw_privacy_url($lang)) . '" target="_blank" rel="noopener">' . esc_html($t('privacy')) . '</a>';
+	$rules .= '<p class="kw-fine">' . str_replace('{link}', $link, esc_html($t('join_privacy'))) . '</p>';
 	if ($social) {
 		kw_page_start($t('social_title'), $lang);
 		echo '<h1>' . esc_html($t('social_title')) . '</h1>';

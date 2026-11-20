@@ -57,6 +57,8 @@ function kw_strings(): array {
 		'join_bad_email' => ['This e-mail does not look right.', 'Этот e-mail выглядит неправильно.', 'Цей e-mail виглядає неправильно.'],
 		'join_email_taken' => ['An account with this e-mail already exists. Sign in instead (the sign-in page can also reset the password).', 'Аккаунт с этим e-mail уже есть. Войдите (на странице входа можно и сбросить пароль).', 'Акаунт із цим e-mail уже є. Увійдіть (на сторінці входу можна й скинути пароль).'],
 		'join_short_password' => ['The password needs at least 8 characters.', 'В пароле должно быть не меньше 8 символов.', 'У паролі має бути щонайменше 8 символів.'],
+		'join_privacy'   => ['What your account keeps and why: {link}.', 'Что хранит аккаунт и зачем: {link}.', 'Що зберігає акаунт і навіщо: {link}.'],
+		'privacy'        => ['Privacy policy', 'Политика конфиденциальности', 'Політика приватності'],
 		'join_agree_needed' => ['Please agree to the workshop rules.', 'Пожалуйста, согласитесь с правилами мастерской.', 'Будь ласка, погодьтеся з правилами майстерні.'],
 		'join_check_mail' => ['We sent a letter to {email}: open the link in it to be able to publish. Browsing and installing work right away.', 'Мы отправили письмо на {email}: откройте ссылку в нём, чтобы публиковать. Смотреть и устанавливать можно сразу.', 'Ми надіслали лист на {email}: відкрийте посилання в ньому, щоб публікувати. Переглядати й встановлювати можна вже зараз.'],
 		'confirm_title'  => ['E-mail confirmed', 'E-mail подтверждён', 'E-mail підтверджено'],

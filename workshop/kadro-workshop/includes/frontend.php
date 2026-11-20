@@ -1,9 +1,30 @@
 <?php
-// Item pages on the workshop site: details, "Open in Kadro", download and like.
+// The workshop site's own front end. People browse the workshop on kadro.studio, so
+// the home page, posts, pages, archives and item pages send them there. What stays:
+// previews, and item pages still waiting for review for those allowed to see them
+// (details, "Open in Kadro", download).
 
 if (!defined('ABSPATH')) {
 	exit;
 }
+
+// After the plugin's own pages (priority 5), before the theme.
+add_action('template_redirect', function () {
+	if (is_robots() || is_favicon() || is_preview() || is_customize_preview()) {
+		return;
+	}
+	$to = KW_GALLERY;
+	if (is_singular(KW_POST_TYPE)) {
+		$post = get_queried_object();
+		// WordPress shows an item that is not published only to people who may edit it.
+		if ($post->post_status !== 'publish') {
+			return;
+		}
+		$to .= '#item-' . $post->ID;
+	}
+	wp_redirect($to, 302, 'Kadro Workshop');
+	exit;
+}, 6);
 
 add_filter('the_content', function ($content) {
 	if (!is_singular(KW_POST_TYPE) || !in_the_loop() || !is_main_query()) {

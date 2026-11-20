@@ -148,6 +148,11 @@ function kw_count(string $key, int $window): void {
 	set_transient($k, (int) get_transient($k) + 1, $window);
 }
 
+/** The privacy policy on the Kadro website, in the page's language. */
+function kw_privacy_url(int $lang): string {
+	return KW_PRIVACY . '?lang=' . KW_LANG_CODES[$lang];
+}
+
 function kw_ip(): string {
 	return (string) ($_SERVER['REMOTE_ADDR'] ?? '');
 }
@@ -193,6 +198,7 @@ input:focus,button:focus-visible,a:focus-visible{outline:2px solid #ff3b4f;outli
 small{display:block;margin-top:4px;color:#6d6d77;font-size:12px}
 .kw-check{display:flex;gap:9px;align-items:flex-start;color:#c4c4cc}
 .kw-check input{margin-top:4px}
+.kw-fine{margin:-6px 0 16px;font-size:12.5px;color:#8a8a94}
 .kw-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .kw-btn{display:inline-block;width:100%;text-align:center;padding:11px 16px;border:0;border-radius:11px;background:linear-gradient(180deg,#ff4f61,#e8263b);color:#fff;font:600 15px system-ui,sans-serif;cursor:pointer;text-decoration:none}
 .kw-btn.ghost{background:#1c1c21;border:1px solid rgba(255,255,255,.1);color:#f2f2f5}
@@ -232,10 +238,10 @@ form.inline{display:inline;margin:0}
 footer{margin-top:22px;font-size:12.5px;color:#6d6d77;text-align:center}
 footer a{color:#8a8a94;margin:0 6px}
 a{color:#ff6d7b}
-</style></head><body><main' . ($wide ? ' class="wide"' : '') . '><a class="kw-logo" href="https://kadro.studio/workshop/"><i></i>' . esc_html(kw_tl('site_name', $lang)) . '</a>';
+</style></head><body><main' . ($wide ? ' class="wide"' : '') . '><a class="kw-logo" href="' . esc_url(KW_GALLERY) . '"><i></i>' . esc_html(kw_tl('site_name', $lang)) . '</a>';
 }
 
-/** Closes the page; with a language, GET pages get links to the other two languages. */
+/** Closes the page; with a language, GET pages get links to the other two languages and the privacy policy. */
 function kw_page_end(int $lang = -1): void {
 	if ($lang >= 0 && $_SERVER['REQUEST_METHOD'] === 'GET') {
 		echo '<footer>';
@@ -244,6 +250,7 @@ function kw_page_end(int $lang = -1): void {
 				echo '<a href="' . esc_url(add_query_arg('lang', $code)) . '">' . esc_html($name) . '</a>';
 			}
 		}
+		echo '<a href="' . esc_url(kw_privacy_url($lang)) . '">' . esc_html(kw_tl('privacy', $lang)) . '</a>';
 		echo '</footer>';
 	}
 	echo '</main></body></html>';
