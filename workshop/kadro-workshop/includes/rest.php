@@ -265,11 +265,12 @@ function kw_rest_publish(WP_REST_Request $r) {
 		'post_status'  => $status,
 		'post_author'  => $user,
 	];
+	// REST parameters come unslashed and WordPress unslashes what it saves: slash them, or backslashes are lost.
 	if ($update) {
 		$postarr['ID'] = $update;
-		$id            = wp_update_post($postarr, true);
+		$id            = wp_update_post(wp_slash($postarr), true);
 	} else {
-		$id = wp_insert_post($postarr, true);
+		$id = wp_insert_post(wp_slash($postarr), true);
 	}
 	if (is_wp_error($id)) {
 		return $id;
@@ -291,7 +292,7 @@ function kw_rest_publish(WP_REST_Request $r) {
 	$clean = preg_replace('/\.[^.]*$/', '', $clean) . '.' . KW_EXTENSIONS[$kind];
 	update_post_meta($id, '_kw_kind', $kind);
 	update_post_meta($id, '_kw_version', $version);
-	update_post_meta($id, '_kw_license', $license);
+	update_post_meta($id, '_kw_license', wp_slash($license));
 	update_post_meta($id, '_kw_file', $name);
 	update_post_meta($id, '_kw_file_name', $clean);
 	update_post_meta($id, '_kw_file_size', strlen($data));

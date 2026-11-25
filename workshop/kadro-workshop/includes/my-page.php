@@ -20,7 +20,10 @@ function kw_site_origins(): array {
 
 /**
  * Who is signed in, for the Kadro website (same site, so the browser sends the
- * sign-in cookie along): the display name and a sign-out link, nothing else.
+ * sign-in cookie along): the display name, a sign-out link, whether the e-mail
+ * is confirmed and the member moderates, links to their pages, and the REST
+ * nonce the website sends with comments and forum posts. Only the website's
+ * own pages can read it (CORS), so no other site gets the nonce.
  */
 function kw_whoami(): void {
 	$origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
@@ -37,9 +40,15 @@ function kw_whoami(): void {
 		return;
 	}
 	echo wp_json_encode([
-		'signedIn' => true,
-		'name'     => $u->display_name,
-		'logout'   => kw_url('login', ['logout' => 1, '_wpnonce' => wp_create_nonce('kw_logout')]),
+		'signedIn'  => true,
+		// WordPress stores display names HTML-escaped ("&amp;"); the website shows plain text.
+		'name'      => kw_decode($u->display_name),
+		'logout'    => kw_url('login', ['logout' => 1, '_wpnonce' => wp_create_nonce('kw_logout')]),
+		'nonce'     => wp_create_nonce('wp_rest'),
+		'confirmed' => kw_confirmed($u->ID),
+		'moderator' => kw_is_moderator(),
+		'account'   => kw_url('account'),
+		'my'        => kw_url('my'),
 	]);
 }
 
@@ -199,7 +208,7 @@ function kw_my_action(string $action, int $id, WP_User $u, int $lang): array {
 	// A published work stays out only if the author's works go out without review;
 	// one sent back goes to review again with its new text.
 	$status = $post->post_status === 'publish' && kw_publishes_directly($u->ID) ? 'publish' : 'pending';
-	$saved  = wp_update_post(['ID' => $post->ID, 'post_title' => $title, 'post_content' => $description, 'post_status' => $status], true);
+	$saved  = wp_update_post(wp_slash(['ID' => $post->ID, 'post_title' => $title, 'post_content' => $description, 'post_status' => $status]), true);
 	if (is_wp_error($saved)) {
 		return [$t('session_expired'), ''];
 	}

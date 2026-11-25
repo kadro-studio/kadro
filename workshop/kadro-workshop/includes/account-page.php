@@ -1,5 +1,5 @@
 <?php
-// /account/: the member's own page — name, e-mail, password, sign-in with
+// /account/: the member's own page — name, e-mail, letters about comments and replies, password, sign-in with
 // Google or Discord, the Kadro apps using the account, their publications,
 // signing out and deleting the account.
 
@@ -43,6 +43,7 @@ function kw_account_page(): void {
 		'unlink'   => $t('account_saved'),
 		'linked'   => isset($all[$via]) ? $t('method_linked_done', ['name' => $all[$via]['name']]) : '',
 		'revoke'   => $t('apps_revoked'),
+		'notify'   => $t('notify_saved'),
 	];
 	// What the last form in a section did: its error, or what changed.
 	$msg = function (string $section) use ($errors, $done, $ok) {
@@ -108,6 +109,13 @@ function kw_account_page(): void {
 		echo '<label>' . esc_html($t('current_password')) . '<input name="current" type="password" required autocomplete="current-password"></label>';
 	}
 	echo '<button class="kw-btn small" type="submit">' . esc_html($t('email_change')) . '</button></form></section>';
+
+	// Letters about comments on their works and replies in their forum topics
+	echo '<section id="notify"><h2>' . esc_html($t('notify_title')) . '</h2>';
+	$msg('notify');
+	echo $form('notify') . '<label class="kw-check"><input type="checkbox" name="notify" value="1"' . checked(get_user_meta($u->ID, '_kw_notify', true) !== '0', true, false) . '> <span>' . esc_html($t('notify_label')) . '</span></label>';
+	echo '<p class="kw-fine">' . esc_html($t('notify_hint')) . '</p>';
+	echo '<button class="kw-btn small" type="submit">' . esc_html($t('save')) . '</button></form></section>';
 
 	// Password
 	echo '<section id="password"><h2>' . esc_html($t('password_title')) . '</h2>';
@@ -288,6 +296,11 @@ function kw_account_action(string $action, WP_User $u, int $lang): string {
 		return '';
 	}
 
+	if ($action === 'notify') {
+		update_user_meta($u->ID, '_kw_notify', empty($_POST['notify']) ? '0' : '1');
+		return '';
+	}
+
 	if ($action === 'revoke') {
 		$uuid = sanitize_text_field(wp_unslash($_POST['uuid'] ?? ''));
 		WP_Application_Passwords::delete_application_password($u->ID, $uuid);
@@ -304,7 +317,8 @@ function kw_account_action(string $action, WP_User $u, int $lang): string {
 		require_once ABSPATH . 'wp-admin/includes/user.php';
 		$lang_code = KW_LANG_CODES[$lang];
 		wp_logout();
-		// Their items (and the files) go with them; so do the Kadro connections.
+		// Their items (and the files) go with them; so do the Kadro connections, comments and
+		// forum posts (a topic others replied to stays without their text and name: community.php).
 		wp_delete_user($u->ID);
 		kw_message_page(kw_tl('deleted_title', $lang), kw_tl('deleted', $lang), $lang, kw_tl('open_workshop', $lang), KW_GALLERY . '?lang=' . $lang_code);
 	}

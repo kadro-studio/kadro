@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Kadro Workshop
- * Description: Community workshop for the Kadro video editor: shared effects, transitions, elements, filters, title styles, LUTs, themes and project templates, with accounts (sign-up, sign-in with Google or Discord, password reset, account page, my works), moderation, reports, likes and download counts. The Kadro app talks to it through the kadro/v1 REST API.
- * Version: 1.3.0
+ * Description: Community workshop for the Kadro video editor: shared effects, transitions, elements, filters, title styles, LUTs, themes and project templates, with accounts (sign-up, sign-in with Google or Discord, password reset, account page, my works), moderation, reports, likes and download counts, comments on works, a forum and a feedback form for kadro.studio. The Kadro app and the website talk to it through the kadro/v1 REST API.
+ * Version: 1.4.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: Kadro
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
-const KW_VERSION   = '1.3.0';
+const KW_VERSION   = '1.4.0';
 const KW_POST_TYPE = 'kadro_item';
 const KW_TAXONOMY  = 'kadro_tag';
 const KW_KINDS     = ['effect', 'transition', 'element', 'look', 'textStyle', 'lut', 'theme', 'template'];
@@ -23,6 +23,13 @@ const KW_APP_ID    = '6b1d6f0e-3d4c-4f6a-9a5e-4b2f9c1d7e21';
 /** The workshop is browsed on the Kadro website, which also has the privacy policy. */
 const KW_GALLERY   = 'https://kadro.studio/workshop/';
 const KW_PRIVACY   = 'https://kadro.studio/privacy/';
+/** The forum lives on the Kadro website too; the workshop keeps its topics and replies. */
+const KW_FORUM     = 'https://kadro.studio/forum/';
+/** Forum topics and their sections, feedback messages, and the comment types for comments and forum replies. */
+const KW_TOPIC_TYPE    = 'kadro_topic';
+const KW_FORUM_TAX     = 'kadro_forum';
+const KW_FEEDBACK_TYPE = 'kadro_feedback';
+const KW_COMMENT_TYPES = ['kw_comment', 'kw_reply'];
 /** Largest upload per kind, bytes. */
 const KW_MAX_BYTES = [
 	'effect'     => 262144,
@@ -46,6 +53,7 @@ const KW_EXTENSIONS = [
 ];
 
 require_once __DIR__ . '/includes/strings.php';
+require_once __DIR__ . '/includes/strings-community.php';
 require_once __DIR__ . '/includes/validate.php';
 require_once __DIR__ . '/includes/rest.php';
 require_once __DIR__ . '/includes/pages.php';
@@ -54,6 +62,10 @@ require_once __DIR__ . '/includes/account-page.php';
 require_once __DIR__ . '/includes/my-page.php';
 require_once __DIR__ . '/includes/social.php';
 require_once __DIR__ . '/includes/moderation.php';
+require_once __DIR__ . '/includes/community.php';
+require_once __DIR__ . '/includes/comments.php';
+require_once __DIR__ . '/includes/forum.php';
+require_once __DIR__ . '/includes/feedback.php';
 require_once __DIR__ . '/includes/admin.php';
 require_once __DIR__ . '/includes/frontend.php';
 
@@ -98,6 +110,7 @@ register_activation_hook(__FILE__, function () {
 });
 
 register_deactivation_hook(__FILE__, function () {
+	wp_clear_scheduled_hook('kw_cleanup');
 	flush_rewrite_rules();
 });
 
@@ -152,6 +165,8 @@ function kw_item(WP_Post $post): array {
 		'preview'     => $thumb ? $thumb : null,
 		'page'        => get_permalink($post),
 		'own'         => $own,
+		// Comments people can read under the item on kadro.studio.
+		'comments'    => kw_comment_count($post->ID),
 	];
 	// Why a moderator turned it down: for its author and the moderators.
 	if ($own || $mod) {

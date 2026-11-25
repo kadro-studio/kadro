@@ -81,7 +81,7 @@ function kw_rest_review(WP_REST_Request $r) {
 		}
 		// A rejected item goes back to its author as a draft, with the reason.
 		wp_update_post(['ID' => $post->ID, 'post_status' => 'draft']);
-		update_post_meta($post->ID, '_kw_rejected', $reason);
+		update_post_meta($post->ID, '_kw_rejected', wp_slash($reason));
 		delete_post_meta($post->ID, '_kw_reports');
 		if ($author) {
 			kw_mail($author->user_email, kw_tl('mail_rejected_subject', $lang, $vars), kw_tl('mail_rejected_body', $lang, $vars));
@@ -93,12 +93,20 @@ function kw_rest_review(WP_REST_Request $r) {
 	return kw_item(get_post($post->ID));
 }
 
+/**
+ * Reports on published items (from the app): like reports on comments and topics,
+ * only with a confirmed e-mail, at most 20 an hour, the admin's letter within the
+ * day's budget. (The app reads "Invalid"/"incorrect" in a message as a lost sign-in.)
+ */
 function kw_rest_report(WP_REST_Request $r) {
 	$post = kw_find((int) $r['id']);
 	if (!$post || $post->post_status !== 'publish') {
 		return kw_error('kw_not_found', 'Item not found', 404);
 	}
 	$user = get_current_user_id();
+	if (!kw_is_moderator() && !kw_confirmed($user)) {
+		return kw_unconfirmed();
+	}
 	if ((int) $post->post_author === $user) {
 		return kw_error('kw_own', 'This is your own item', 400);
 	}
@@ -106,18 +114,35 @@ function kw_rest_report(WP_REST_Request $r) {
 	if ($reason === '') {
 		return kw_error('kw_reason', 'Say what is wrong', 400);
 	}
-	$reports = kw_reports($post->ID);
-	foreach ($reports as $rep) {
-		if ((int) $rep['user'] === $user) {
-			return ['reported' => true];
-		}
+	// Check, save, count: one request at a time per member (community.php).
+	$lock = kw_member_lock($user);
+	if (!kw_lock($lock)) {
+		return kw_busy();
 	}
-	$reports[] = ['user' => $user, 'reason' => $reason, 'time' => time()];
-	update_post_meta($post->ID, '_kw_reports', array_slice($reports, -50));
+	try {
+		// Reports saved while this request waited: not in this request's copy of the meta.
+		wp_cache_delete($post->ID, 'post_meta');
+		$reports = kw_reports($post->ID);
+		foreach ($reports as $rep) {
+			if ((int) ($rep['user'] ?? 0) === $user) {
+				return ['reported' => true];
+			}
+		}
+		$error = kw_report_rate($user);
+		if ($error) {
+			return $error;
+		}
+		$reports[] = ['user' => $user, 'reason' => $reason, 'time' => time()];
+		// Meta functions unslash what they save; the reason keeps its backslashes this way.
+		update_post_meta($post->ID, '_kw_reports', wp_slash(array_slice($reports, -50)));
+		kw_report_counted($user);
+	} finally {
+		kw_unlock($lock);
+	}
 	// The admin hears about the first report on an item; later ones only add up.
 	if (count($reports) === 1) {
 		$vars = ['title' => get_the_title($post), 'reason' => $reason, 'page' => get_permalink($post), 'count' => count($reports)];
-		kw_mail(get_option('admin_email'), kw_tl('mail_report_subject', kw_lang(), $vars), kw_tl('mail_report_body', kw_lang(), $vars));
+		kw_mail_budget('report', (string) get_option('admin_email'), kw_tl('mail_report_subject', kw_lang(), $vars), kw_tl('mail_report_body', kw_lang(), $vars));
 	}
 	return ['reported' => true];
 }

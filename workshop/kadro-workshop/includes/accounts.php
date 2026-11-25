@@ -48,12 +48,15 @@ function kw_tl(string $key, int $lang, array $vars = []): string {
 /**
  * Plain-text letter; false when it did not leave the site (no working mail on
  * the host, for one). A failure never stops the action that caused it.
+ * $headers are extra header lines such as "Reply-To: …" (never From: the mail plugin sets it).
  */
-function kw_mail(string $to, string $subject, string $body): bool {
+function kw_mail(string $to, string $subject, string $body, array $headers = []): bool {
 	if (!is_email($to)) {
 		return false;
 	}
-	return (bool) wp_mail($to, '[' . kw_tl('site_name', 0) . '] ' . $subject, $body);
+	// No line breaks inside a header line: nobody may add headers of their own.
+	$headers = array_values(array_filter($headers, fn($h) => is_string($h) && $h !== '' && !preg_match('/[\r\n]/', $h)));
+	return (bool) wp_mail($to, '[' . kw_tl('site_name', 0) . '] ' . $subject, $body, $headers);
 }
 
 /** Sends the link that confirms a member's e-mail; false when the letter did not leave the site. */

@@ -7,7 +7,12 @@ if (!defined('ABSPATH')) {
 }
 
 function kw_strings(): array {
-	return [
+	// Built once per request: letters and admin screens look strings up often.
+	static $all = null;
+	if ($all !== null) {
+		return $all;
+	}
+	return $all = array_merge([
 		'items'          => ['Workshop items', 'Предметы мастерской', 'Предмети майстерні'],
 		'item'           => ['Workshop item', 'Предмет мастерской', 'Предмет майстерні'],
 		'menu'           => ['Workshop', 'Мастерская', 'Майстерня'],
@@ -47,7 +52,7 @@ function kw_strings(): array {
 		'join_email'     => ['E-mail', 'E-mail', 'E-mail'],
 		'join_email_hint' => ['For the confirmation letter and news about your items. Never shown to anyone.', 'Для письма с подтверждением и новостей о ваших публикациях. Никому не показывается.', 'Для листа з підтвердженням і новин про ваші публікації. Нікому не показується.'],
 		'join_password'  => ['Password (at least 8 characters)', 'Пароль (не меньше 8 символов)', 'Пароль (щонайменше 8 символів)'],
-		'join_rules'     => ['I publish only my own work or what its author’s licence allows, nothing harmful or offensive, and moderators may remove what breaks these rules.', 'Я публикую только свои работы или то, что разрешает лицензия автора, ничего вредного или оскорбительного, и модераторы могут убрать то, что нарушает эти правила.', 'Я публікую лише свої роботи або те, що дозволяє ліцензія автора, нічого шкідливого чи образливого, і модератори можуть прибрати те, що порушує ці правила.'],
+		'join_rules'     => ['I publish only my own work or what its author’s licence allows, nothing harmful or offensive. In comments and on the forum I am respectful and post no spam, ads or other people’s personal data. Moderators may remove what breaks these rules.', 'Я публикую только свои работы или то, что разрешает лицензия автора, ничего вредного или оскорбительного. В комментариях и на форуме я уважаю других и не публикую спам, рекламу и чужие личные данные. Модераторы могут убрать то, что нарушает эти правила.', 'Я публікую лише свої роботи або те, що дозволяє ліцензія автора, нічого шкідливого чи образливого. У коментарях і на форумі я поважаю інших і не публікую спам, рекламу та чужі особисті дані. Модератори можуть прибрати те, що порушує ці правила.'],
 		'join_submit'    => ['Create account', 'Создать аккаунт', 'Створити акаунт'],
 		'join_closed'    => ['Sign-up is closed right now.', 'Регистрация сейчас закрыта.', 'Реєстрацію зараз закрито.'],
 		'join_failed'    => ['Could not create the account. Please try again.', 'Не удалось создать аккаунт. Попробуйте ещё раз.', 'Не вдалося створити акаунт. Спробуйте ще раз.'],
@@ -190,13 +195,13 @@ function kw_strings(): array {
 		'work_deleted'   => ['The work is deleted.', 'Работа удалена.', 'Роботу видалено.'],
 		'work_gone'      => ['This work is no longer here.', 'Этой работы уже нет.', 'Цієї роботи вже немає.'],
 		'delete_title'   => ['Delete account', 'Удалить аккаунт', 'Видалити акаунт'],
-		'delete_lead'    => ['The account and all your publications are deleted for good. This cannot be undone.', 'Аккаунт и все ваши публикации будут удалены навсегда. Это нельзя отменить.', 'Акаунт і всі ваші публікації буде видалено назавжди. Цього не можна скасувати.'],
+		'delete_lead'    => ['The account, your works, comments and forum posts are deleted for good. A topic other people have replied to stays, without your text and name: only its title remains. This cannot be undone.', 'Аккаунт, ваши работы, комментарии и записи на форуме будут удалены навсегда. Тема, в которой ответили другие, останется без вашего текста и имени — сохранится только её название. Это нельзя отменить.', 'Акаунт, ваші роботи, коментарі й дописи на форумі буде видалено назавжди. Тема, у якій відповіли інші, залишиться без вашого тексту й імені — збережеться лише її назва. Цього не можна скасувати.'],
 		'delete_confirm_login' => ['Type your login, {login}, to confirm', 'Введите свой логин, {login}, для подтверждения', 'Введіть свій логін, {login}, для підтвердження'],
 		'delete_wrong'   => ['The login does not match.', 'Логин не совпадает.', 'Логін не збігається.'],
 		'delete_submit'  => ['Delete my account', 'Удалить мой аккаунт', 'Видалити мій акаунт'],
 		'delete_moderator' => ['A moderator account can be deleted only by the site administrator.', 'Аккаунт модератора может удалить только администратор сайта.', 'Акаунт модератора може видалити лише адміністратор сайту.'],
 		'deleted_title'  => ['Account deleted', 'Аккаунт удалён', 'Акаунт видалено'],
-		'deleted'        => ['Your account and publications are deleted. Thank you for being part of the workshop.', 'Ваш аккаунт и публикации удалены. Спасибо, что были частью мастерской.', 'Ваш акаунт і публікації видалено. Дякуємо, що були частиною майстерні.'],
+		'deleted'        => ['Your account, works, comments and forum posts are deleted. Topics other people replied to stay under their titles, without your text and name. Thank you for being part of the workshop.', 'Ваш аккаунт, работы, комментарии и записи на форуме удалены. Темы, в которых ответили другие, остались под своими названиями, но без вашего текста и имени. Спасибо, что были частью мастерской.', 'Ваш акаунт, роботи, коментарі й дописи на форумі видалено. Теми, у яких відповіли інші, лишилися під своїми назвами, але без вашого тексту й імені. Дякуємо, що були частиною майстерні.'],
 		// Google and Discord
 		'social_title'   => ['One more step', 'Ещё один шаг', 'Ще один крок'],
 		'social_lead'    => ['Choose the name others will see as the author of your items. Your e-mail, {email}, is confirmed by {provider}.', 'Выберите имя, которое другие увидят как автора ваших публикаций. Ваш e-mail {email} подтверждён через {provider}.', 'Оберіть ім’я, яке інші бачитимуть як автора ваших публікацій. Ваш e-mail {email} підтверджено через {provider}.'],
@@ -222,7 +227,7 @@ function kw_strings(): array {
 		'confirm_email'  => ['Confirm e-mail', 'Подтвердить e-mail', 'Підтвердити e-mail'],
 		'confirm_email_ask' => ['Confirm {email} by hand? Do it only if the person wrote to you from this very address: otherwise anyone could sign up with someone else’s e-mail.', 'Подтвердить {email} вручную? Делайте это, только если человек написал вам именно с этого адреса: иначе кто угодно сможет зарегистрироваться с чужим e-mail.', 'Підтвердити {email} вручну? Робіть це, лише якщо людина написала вам саме з цієї адреси: інакше будь-хто зможе зареєструватися з чужим e-mail.'],
 		'email_confirmed_by_hand' => ['The e-mail of {name} is confirmed: publishing is open now.', 'E-mail пользователя {name} подтверждён: публикация открыта.', 'E-mail користувача {name} підтверджено: публікація відкрита.'],
-	];
+	], kw_community_strings());
 }
 
 function kw_lang(): int {
