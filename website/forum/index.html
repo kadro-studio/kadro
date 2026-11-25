@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Форум Kadro</title>
+    <meta
+      name="description"
+      content="Форум спільноти Kadro: питання про монтаж, ідеї, повідомлення про помилки, ваші роботи й новини безкоштовного відеоредактора."
+    />
+    <meta property="og:title" content="Форум Kadro" />
+    <meta property="og:description" content="Питання, ідеї, помилки й ваші роботи — спільнота відеоредактора Kadro." />
+    <meta property="og:image" content="https://kadro.studio/assets/screenshot-uk.webp" />
+    <meta property="og:url" content="https://kadro.studio/forum/" />
+    <meta property="og:type" content="website" />
+    <link rel="canonical" href="https://kadro.studio/forum/" />
+    <meta name="theme-color" content="#08080a" />
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="../styles.css?v=dev" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="../">
+          <img src="../assets/logo.png" alt="" width="30" height="30" />
+          <span>Kadro</span>
+        </a>
+        <nav class="nav-links">
+          <a href="../#features" data-i18n="nav.features">Можливості</a>
+          <a href="../workshop/" data-i18n="nav.workshop">Майстерня</a>
+          <a href="./" class="active" data-i18n="nav.forum">Форум</a>
+          <a href="../#support" data-i18n="nav.support">Підтримати</a>
+          <a href="../#faq" data-i18n="nav.faq">Питання</a>
+        </nav>
+        <div class="nav-actions">
+          <select class="lang" id="lang" aria-label="Language">
+            <option value="uk">UA</option>
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+          <a class="btn btn-primary btn-sm" href="../#download" data-i18n="nav.download">Завантажити</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="fm">
+      <div class="glow"></div>
+      <!-- forum.js draws the view chosen by the address (?s=, ?t=, ?new=1, ?q=, ?mine=1) here. -->
+      <div class="wrap fm-wrap" id="view">
+        <div class="fm-head">
+          <h1 class="fm-title" tabindex="-1">Форум Kadro</h1>
+          <p class="fm-lead">Питання про монтаж, ідеї, повідомлення про помилки, ваші роботи й новини Kadro. Читати може кожен, а писати — з акаунтом майстерні.</p>
+        </div>
+        <p class="ws-state">Завантаження…</p>
+        <noscript><p class="ws-state">Форум працює з увімкненим JavaScript.</p></noscript>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div class="brand small">
+          <img src="../assets/logo.png" alt="" width="22" height="22" />
+          <span>Kadro</span>
+        </div>
+        <nav>
+          <a href="../workshop/" data-i18n="nav.workshop">Майстерня</a>
+          <a href="./" data-i18n="footer.forum">Форум</a>
+          <a href="../contact/" data-i18n="footer.contact">Зворотний зв’язок</a>
+          <a data-link="source" href="#" data-i18n="footer.source">Вихідний код</a>
+          <a data-link="issues" href="#" data-i18n="footer.issues">Повідомити про помилку</a>
+          <a href="../privacy/" data-i18n="footer.privacy">Приватність</a>
+        </nav>
+        <p data-i18n="footer.note">Будьте ввічливими: без спаму, реклами й чужих особистих даних. Модератори можуть видаляти дописи.</p>
+      </div>
+    </footer>
+
+    <script src="../config.js?v=dev"></script>
+    <script src="../community.js?v=dev"></script>
+    <script src="forum.js?v=dev"></script>
+    <script src="../account.js?v=dev"></script>
+  </body>
+</html>

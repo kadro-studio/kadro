@@ -64,6 +64,8 @@
     'footer.kadro': 'Kadro video editor',
     'footer.releases': 'All versions',
     'footer.issues': 'Report a bug',
+    'footer.forum': 'Forum',
+    'footer.contact': 'Feedback',
     'footer.privacy': 'Privacy',
     'footer.note': 'Free. In the browser and on Windows 10 / 11.',
   };
@@ -128,6 +130,8 @@
     'footer.kadro': 'Відеоредактор Kadro',
     'footer.releases': 'Усі версії',
     'footer.issues': 'Повідомити про помилку',
+    'footer.forum': 'Форум',
+    'footer.contact': 'Зворотний зв’язок',
     'footer.privacy': 'Приватність',
     'footer.note': 'Безкоштовно. У браузері та на Windows 10 / 11.',
   };

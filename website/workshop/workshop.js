@@ -20,6 +20,7 @@
     uk: {
       'nav.features': 'Можливості',
       'nav.workshop': 'Майстерня',
+      'nav.forum': 'Форум',
       'nav.support': 'Підтримати',
       'nav.faq': 'Питання',
       'nav.download': 'Завантажити',
@@ -65,6 +66,7 @@
       downloads: 'Завантажень',
       likes: 'Вподобань',
       size: 'Розмір',
+      comments: 'Коментарі',
       close: 'Закрити',
       'share.title': 'Поділіться своїм',
       'share.lead': 'Публікувати можна прямо з програми — без файлів і ручного завантаження.',
@@ -75,6 +77,10 @@
       'share.3': 'Після перевірки модератором елемент з’явиться тут і в програмі в усіх користувачів.',
       'share.rules':
         'Публікуйте лише власні роботи або те, що дозволяє ліцензія автора. Ефекти з CapCut і TikTok переносити не можна — але схожий ефект завжди можна зробити самому.',
+      'forum.text': 'Питання про ефекти й шаблони, ідеї для майстерні та ваші роботи — обговорюйте на форумі спільноти.',
+      'forum.open': 'Відкрити форум',
+      'footer.forum': 'Форум',
+      'footer.contact': 'Зворотний зв’язок',
       'footer.privacy': 'Приватність',
       'footer.source': 'Вихідний код',
       'footer.issues': 'Повідомити про помилку',
@@ -83,6 +89,7 @@
     ru: {
       'nav.features': 'Возможности',
       'nav.workshop': 'Мастерская',
+      'nav.forum': 'Форум',
       'nav.support': 'Поддержать',
       'nav.faq': 'Вопросы',
       'nav.download': 'Скачать',
@@ -128,6 +135,7 @@
       downloads: 'Скачиваний',
       likes: 'Лайков',
       size: 'Размер',
+      comments: 'Комментарии',
       close: 'Закрыть',
       'share.title': 'Поделитесь своим',
       'share.lead': 'Публиковать можно прямо из программы — без файлов и ручной загрузки.',
@@ -138,6 +146,10 @@
       'share.3': 'После проверки модератором элемент появится здесь и в программе у всех пользователей.',
       'share.rules':
         'Публикуйте только свои работы или то, что разрешает лицензия автора. Эффекты из CapCut и TikTok переносить нельзя — но похожий эффект всегда можно сделать самому.',
+      'forum.text': 'Вопросы об эффектах и шаблонах, идеи для мастерской и ваши работы — обсуждайте на форуме сообщества.',
+      'forum.open': 'Открыть форум',
+      'footer.forum': 'Форум',
+      'footer.contact': 'Обратная связь',
       'footer.privacy': 'Конфиденциальность',
       'footer.source': 'Исходный код',
       'footer.issues': 'Сообщить об ошибке',
@@ -146,6 +158,7 @@
     en: {
       'nav.features': 'Features',
       'nav.workshop': 'Workshop',
+      'nav.forum': 'Forum',
       'nav.support': 'Support',
       'nav.faq': 'FAQ',
       'nav.download': 'Download',
@@ -191,6 +204,7 @@
       downloads: 'Downloads',
       likes: 'Likes',
       size: 'Size',
+      comments: 'Comments',
       close: 'Close',
       'share.title': 'Share your own',
       'share.lead': 'You publish straight from the app — no files to upload by hand.',
@@ -201,6 +215,10 @@
       'share.3': 'Once a moderator has checked it, the item appears here and in the app for everyone.',
       'share.rules':
         'Only publish your own work or what the author’s licence allows. Effects from CapCut and TikTok cannot be brought over — but you can always make a similar one yourself.',
+      'forum.text': 'Questions about effects and templates, ideas for the workshop and your own work — talk them over on the community forum.',
+      'forum.open': 'Open the forum',
+      'footer.forum': 'Forum',
+      'footer.contact': 'Feedback',
       'footer.privacy': 'Privacy',
       'footer.source': 'Source code',
       'footer.issues': 'Report a bug',
@@ -263,17 +281,23 @@
     return box;
   }
 
+  function stats(item) {
+    const box = el('div', 'ws-card-stats');
+    box.append(el('span', '', `↓ ${item.downloads}`), el('span', '', `♥ ${item.likes}`));
+    if (Number(item.comments) > 0) box.append(el('span', '', `💬 ${Number(item.comments)}`));
+    return box;
+  }
+
   function card(item) {
     const b = el('button', 'ws-card');
     b.type = 'button';
+    b.dataset.id = String(item.id);
     b.addEventListener('click', () => openItem(item));
     const body = el('div', 'ws-card-body');
     body.append(el('strong', 'ws-card-title', item.title));
     const meta = el('div', 'ws-card-meta');
     meta.append(el('span', 'ws-kind', t(`one.${item.kind}`)), el('span', '', item.author));
-    const stats = el('div', 'ws-card-stats');
-    stats.append(el('span', '', `↓ ${item.downloads}`), el('span', '', `♥ ${item.likes}`));
-    body.append(meta, stats);
+    body.append(meta, stats(item));
     b.append(preview(item, 'ws-card-preview'), body);
     return b;
   }
@@ -383,6 +407,8 @@
     actions.append(open, dl);
     box.append(actions);
     box.append(el('p', 'hint', t('openHint')));
+    const talk = commentsSection(item);
+    if (talk) box.append(talk);
 
     // The item's page on the workshop site leads back here, so there is no link to it.
     const foot = el('p', 'ws-detail-foot');
@@ -392,24 +418,75 @@
     box.append(foot);
   }
 
-  function openItem(item) {
+  // Comments under the item (community.js). The thread outlives a redraw of the modal (a language
+  // switch), so a half-written comment stays; drafts also survive closing the modal.
+  const community = window.KadroCommunity;
+  let comments = null; // { id, handle, title }
+
+  const commentsTitle = (n) => (typeof n === 'number' && n >= 0 ? `${t('comments')} (${n})` : t('comments'));
+
+  function commentsSection(item) {
+    if (!community || !open || community.isUnavailable()) return null;
+    const id = Number(item.id);
+    const sec = el('section', 'ws-comments');
+    sec.id = 'comments';
+    const title = el('h3', '', commentsTitle(item.comments));
+    title.id = 'comments-title';
+    sec.setAttribute('aria-labelledby', 'comments-title');
+    sec.append(title);
+    if (comments && comments.id === id) {
+      sec.append(comments.handle.root);
+      comments.handle.render();
+      comments.title = title;
+      return sec;
+    }
+    if (comments) comments.handle.destroy();
+    comments = { id, title, handle: null };
+    comments.handle = community.thread(sec, {
+      kind: 'item',
+      id,
+      // After signing in, the workshop brings the visitor back to these comments.
+      back: () => `${location.origin}${location.pathname}${location.search}#item-${id}-comments`,
+      onCount: (n) => setComments(id, n),
+      onUnavailable: () => {
+        if (comments && comments.id === id) comments.title.closest('section').hidden = true;
+      },
+    });
+    return sec;
+  }
+
+  // The approved count from the thread: the heading, the cached item and its card follow it.
+  function setComments(id, n) {
+    for (const x of [...state.items, shown]) if (x && x.id === id) x.comments = n;
+    if (comments && comments.id === id) comments.title.textContent = commentsTitle(n);
+    const known = state.items.find((x) => x.id === id);
+    const old = known && itemsBox.querySelector(`.ws-card[data-id="${id}"] .ws-card-stats`);
+    if (old) old.replaceWith(stats(known));
+  }
+
+  function openItem(item, toComments = false) {
     shown = item;
     detail(item);
     if (!dialog.open) dialog.showModal();
-    const hash = item ? `#item-${item.id}` : location.hash;
+    const hash = item ? `#item-${item.id}${toComments ? '-comments' : ''}` : location.hash;
     if (location.hash !== hash) history.replaceState(null, '', hash);
+    if (item && toComments) {
+      const sec = $('comments');
+      if (sec) requestAnimationFrame(() => sec.scrollIntoView({ block: 'start' }));
+    }
   }
 
-  // Shared links: kadro.studio/workshop/#item-123
+  // Shared links: kadro.studio/workshop/#item-123, and #item-123-comments for its comments.
   async function openFromHash() {
-    const m = /^#item-(\d+)$/.exec(location.hash);
+    const m = /^#item-(\d+)(-comments)?$/.exec(location.hash);
     if (!m) return;
     const id = Number(m[1]);
+    const toComments = !!m[2];
     const known = state.items.find((x) => x.id === id);
-    if (known) return openItem(known);
+    if (known) return openItem(known, toComments);
     try {
       const r = await fetch(`${API}/items/${id}`);
-      openItem(r.ok ? await r.json() : null);
+      openItem(r.ok ? await r.json() : null, toComments);
     } catch {
       openItem(null);
     }
@@ -417,6 +494,10 @@
 
   dialog.addEventListener('close', () => {
     shown = null;
+    if (comments) {
+      comments.handle.destroy();
+      comments = null;
+    }
     if (location.hash) history.replaceState(null, '', location.pathname + location.search);
   });
   // A click on the backdrop closes the dialog.

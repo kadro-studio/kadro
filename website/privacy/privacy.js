@@ -7,31 +7,43 @@
       title: 'Політика приватності — Kadro',
       'nav.features': 'Можливості',
       'nav.workshop': 'Майстерня',
+      'nav.forum': 'Форум',
       'nav.support': 'Підтримати',
       'nav.faq': 'Питання',
       'nav.download': 'Завантажити',
+      'footer.forum': 'Форум',
+      'footer.contact': 'Зворотний зв’язок',
       'footer.source': 'Вихідний код',
       'footer.issues': 'Повідомити про помилку',
+      contactPage: 'форма зворотного зв’язку',
     },
     ru: {
       title: 'Политика конфиденциальности — Kadro',
       'nav.features': 'Возможности',
       'nav.workshop': 'Мастерская',
+      'nav.forum': 'Форум',
       'nav.support': 'Поддержать',
       'nav.faq': 'Вопросы',
       'nav.download': 'Скачать',
+      'footer.forum': 'Форум',
+      'footer.contact': 'Обратная связь',
       'footer.source': 'Исходный код',
       'footer.issues': 'Сообщить об ошибке',
+      contactPage: 'форма обратной связи',
     },
     en: {
       title: 'Privacy policy — Kadro',
       'nav.features': 'Features',
       'nav.workshop': 'Workshop',
+      'nav.forum': 'Forum',
       'nav.support': 'Support',
       'nav.faq': 'FAQ',
       'nav.download': 'Download',
+      'footer.forum': 'Forum',
+      'footer.contact': 'Feedback',
       'footer.source': 'Source code',
       'footer.issues': 'Report a bug',
+      contactPage: 'the feedback form',
     },
   };
 
@@ -44,15 +56,28 @@
     else a.hidden = true;
   }
 
-  // Requests about data go to the e-mail in config.js; without one, to GitHub issues.
-  const mail = typeof site.contact === 'string' && site.contact.includes('@') ? site.contact : '';
+  // Requests about data go to the contact in config.js: a page of this site ("/contact/"), an
+  // e-mail address, or, without either, GitHub issues.
+  const contact = typeof site.contact === 'string' ? site.contact.trim() : '';
+  const page = contact.startsWith('/') ? contact : '';
+  const mail = !page && contact.includes('@') ? contact : '';
   for (const box of document.querySelectorAll('[data-contact]')) {
     const a = document.createElement('a');
-    a.href = mail ? `mailto:${mail}` : issues;
-    a.textContent = mail || 'GitHub Issues';
+    if (page) {
+      const L = box.closest('article')?.lang;
+      const lang = T[L] ? L : 'en';
+      const url = new URL(page, location.href);
+      url.searchParams.set('lang', lang);
+      a.href = url.href;
+      a.textContent = T[lang].contactPage;
+    } else {
+      a.href = mail ? `mailto:${mail}` : issues;
+      a.textContent = mail || 'GitHub Issues';
+    }
     box.replaceChildren(a);
   }
-  for (const p of document.querySelectorAll('[data-contact-hint]')) p.hidden = !!mail;
+  // The hint about public issues is only for the GitHub fallback.
+  for (const p of document.querySelectorAll('[data-contact-hint]')) p.hidden = !!(mail || page);
 
   function apply(lang) {
     for (const a of document.querySelectorAll('article[data-lang]')) a.hidden = a.dataset.lang !== lang;

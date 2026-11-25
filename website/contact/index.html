@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Зворотний зв’язок — Kadro</title>
+    <meta name="description" content="Напишіть розробникам відеоредактора Kadro: питання, ідея чи помилка. Акаунт не потрібен." />
+    <link rel="canonical" href="https://kadro.studio/contact/" />
+    <meta name="theme-color" content="#08080a" />
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="../styles.css?v=dev" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="../">
+          <img src="../assets/logo.png" alt="" width="30" height="30" />
+          <span>Kadro</span>
+        </a>
+        <nav class="nav-links">
+          <a href="../#features" data-i18n="nav.features">Можливості</a>
+          <a href="../workshop/" data-i18n="nav.workshop">Майстерня</a>
+          <a href="../forum/" data-i18n="nav.forum">Форум</a>
+          <a href="../#support" data-i18n="nav.support">Підтримати</a>
+          <a href="../#faq" data-i18n="nav.faq">Питання</a>
+        </nav>
+        <div class="nav-actions">
+          <select class="lang" id="lang" aria-label="Language">
+            <option value="uk">UA</option>
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+          <a class="btn btn-primary btn-sm" href="../#download" data-i18n="nav.download">Завантажити</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="doc">
+      <div class="wrap doc-wrap">
+        <h1 data-i18n="title">Зворотний зв’язок</h1>
+        <p class="doc-lead" data-i18n="lead">Питання, ідея чи щось не працює? Напишіть нам — ми читаємо кожне повідомлення. Акаунт для цього не потрібен.</p>
+
+        <!-- Shown instead of (or above) the form when it cannot send: the workshop is closed or not updated yet. -->
+        <div class="ct-off" id="off" hidden>
+          <p id="off-text"></p>
+          <p class="doc-note" id="off-keep" data-i18n="offKeep" hidden>Ваш текст лишився у формі — його можна скопіювати.</p>
+        </div>
+
+        <form class="ct-form" id="form" novalidate>
+          <div class="ct-row">
+            <div class="field">
+              <label class="field-label" for="ct-name"><span data-i18n="name">Ім’я</span> <small data-i18n="optional">(необов’язково)</small></label>
+              <input class="input" id="ct-name" name="name" type="text" maxlength="80" autocomplete="name" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="ct-email"><span data-i18n="email">E-mail</span> <small data-i18n="optional">(необов’язково)</small></label>
+              <input class="input" id="ct-email" name="email" type="email" maxlength="254" autocomplete="email" aria-describedby="ct-email-hint" />
+              <small class="field-hint" id="ct-email-hint" data-i18n="emailHint">Якщо хочете отримати відповідь.</small>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="ct-topic" data-i18n="topic">Тема</label>
+            <select class="select" id="ct-topic" name="topic">
+              <option value="question" data-i18n="topic.question">Питання</option>
+              <option value="bug" data-i18n="topic.bug">Помилка</option>
+              <option value="idea" data-i18n="topic.idea">Ідея</option>
+              <option value="workshop" data-i18n="topic.workshop">Майстерня</option>
+              <option value="other" data-i18n="topic.other">Інше</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="ct-message" data-i18n="message">Повідомлення</label>
+            <textarea class="textarea" id="ct-message" name="message" rows="8" data-i18n-placeholder="messagePh"></textarea>
+            <span class="counter" id="ct-count"></span>
+          </div>
+          <!-- Left empty by people; bots that fill every field are dropped by the server. -->
+          <div class="hp" aria-hidden="true">
+            <label>Website <input id="ct-website" name="website" type="text" tabindex="-1" autocomplete="off" /></label>
+          </div>
+          <p class="ct-consent" id="ct-consent"></p>
+          <p class="form-error" id="ct-error" role="alert" hidden></p>
+          <div class="ct-actions">
+            <button class="btn btn-primary" id="ct-send" type="submit" data-i18n="send">Надіслати</button>
+          </div>
+        </form>
+
+        <div class="ct-done" id="done" hidden>
+          <h2 id="done-title" tabindex="-1" data-i18n="thanks">Дякуємо! Повідомлення надіслано.</h2>
+          <p id="done-note"></p>
+          <button class="btn btn-ghost btn-sm" id="again" type="button" data-i18n="again">Написати ще</button>
+        </div>
+
+        <h2 data-i18n="other">Інші способи</h2>
+        <ul>
+          <li><a href="../forum/" data-i18n="other.forum">Форум</a> — <span data-i18n="other.forumText">поставте питання спільноті або поділіться ідеєю.</span></li>
+          <li>
+            <a data-link="issues" href="#" data-i18n="other.issues">GitHub Issues</a> —
+            <span data-i18n="other.issuesText">для помилок, якщо у вас є акаунт GitHub. Повідомлення там бачать усі.</span>
+          </li>
+        </ul>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div class="brand small">
+          <img src="../assets/logo.png" alt="" width="22" height="22" />
+          <span>Kadro</span>
+        </div>
+        <nav>
+          <a href="../workshop/" data-i18n="nav.workshop">Майстерня</a>
+          <a href="../forum/" data-i18n="footer.forum">Форум</a>
+          <a href="./" data-i18n="footer.contact">Зворотний зв’язок</a>
+          <a data-link="source" href="#" data-i18n="footer.source">Вихідний код</a>
+          <a data-link="issues" href="#" data-i18n="footer.issues">Повідомити про помилку</a>
+          <a href="../privacy/" data-i18n="footer.privacy">Приватність</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="../config.js?v=dev"></script>
+    <script src="../community.js?v=dev"></script>
+    <script src="contact.js?v=dev"></script>
+    <script src="../account.js?v=dev"></script>
+  </body>
+</html>

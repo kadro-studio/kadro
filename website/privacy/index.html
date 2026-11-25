@@ -20,6 +20,7 @@
         <nav class="nav-links">
           <a href="../#features" data-i18n="nav.features">Можливості</a>
           <a href="../workshop/" data-i18n="nav.workshop">Майстерня</a>
+          <a href="../forum/" data-i18n="nav.forum">Форум</a>
           <a href="../#support" data-i18n="nav.support">Підтримати</a>
           <a href="../#faq" data-i18n="nav.faq">Питання</a>
         </nav>
@@ -38,10 +39,11 @@
       <!-- The same policy in three languages; privacy.js shows one. -->
       <article class="wrap doc-wrap" data-lang="uk" lang="uk">
         <h1>Політика приватності</h1>
-        <p class="doc-date">Оновлено 20 листопада 2026</p>
+        <p class="doc-date">Оновлено 25 листопада 2026</p>
         <p class="doc-lead">
           Kadro — безкоштовний відеоредактор з відкритим кодом. Тут пояснено, що програма Kadro, цей сайт і Майстерня Kadro роблять із даними про вас.
-          Коротко: програма нічого не збирає, сайт не стежить за вами, а майстерня зберігає лише те, без чого не працює акаунт.
+          Коротко: програма нічого не збирає, сайт не стежить за вами, а майстерня зберігає лише те, без чого не працюють акаунт, обговорення й
+          зворотний зв’язок.
         </p>
 
         <h2>Програма Kadro</h2>
@@ -69,9 +71,16 @@
           <li>Браузер запам’ятовує лише вибрану мову.</li>
           <li>
             Щоб показати у шапці ваш акаунт майстерні, сторінки запитують workshop.kadro.studio, чи ви ввійшли. Якщо так, браузер додає до цього запиту
-            cookie входу майстерні, а сторінка отримує у відповідь лише ваше ім’я для показу.
+            cookie входу майстерні, а сторінка отримує у відповідь ваше ім’я для показу, чи підтверджено ваш e-mail, чи ви модератор, і службовий ключ
+            безпеки (nonce), з яким сайт від вашого імені надсилає коментарі й дописи на форумі. Ключ діє щонайбільше добу, і сайт його ніде не зберігає.
           </li>
           <li>Сторінка майстерні завантажує елементи разом із їхніми зображеннями з workshop.kadro.studio.</li>
+          <li>
+            Коментарі в майстерні та форум завантажуються з workshop.kadro.studio. Якщо ви ввійшли, браузер надсилає ці запити разом із cookie входу й
+            ключем безпеки, про який сказано вище, — і коли ви читаєте (щоб показати вам ваші приховані дописи), і коли пишете, скаржитеся чи видаляєте
+            допис.
+          </li>
+          <li>Форма зворотного зв’язку надсилає те, що ви в ній написали, на workshop.kadro.studio (про це нижче).</li>
           <li>Кількість завантажень — це підсумки GitHub для кожного файлу, за ними нікого не можна впізнати.</li>
           <li>Донати йдуть напряму на Ko-fi, Patreon чи в криптомережу; ми бачимо лише те, що показують ці сервіси.</li>
         </ul>
@@ -94,15 +103,35 @@
             його використано востаннє. Їх видно на сторінці акаунта, там само їх можна відключити.
           </li>
           <li>Те, що ви публікуєте: елемент, опис, мітки, ліцензія й зображення, з вашим ім’ям для показу як автора. Опубліковані елементи бачать усі.</li>
-          <li>Елементи, які ви вподобали, і ваші скарги з причинами. Скарги бачать лише модератори.</li>
+          <li>
+            Коментарі до елементів, теми й відповіді на форумі: текст, час, позначка про редагування й ваше ім’я для показу як автора. Їх бачать усі.
+            Свої коментарі й відповіді ви можете видалити будь-коли, поки сам елемент чи тему опубліковано, а тему — поки в ній не відповіли інші.
+            Коли ви або модератор видаляєте допис, він потрапляє в кошик сайту й остаточно стирається приблизно через 30 днів; коментарі під
+            елементом і відповіді в темі зникають і тоді, коли видаляють сам елемент чи тему.
+          </li>
+          <li>
+            Елементи, які ви вподобали, і ваші скарги з причинами — на елементи, коментарі й дописи на форумі. Хто поскаржився і чому, бачать лише
+            модератори.
+          </li>
+          <li>Чи надсилати вам листи про нові коментарі й відповіді.</li>
         </ul>
         <p>Ваш e-mail ніде не показується публічно. Адміністратор сайту й модератори бачать акаунти в панелі керування сайтом.</p>
 
         <h3>Листи</h3>
         <p>
-          Майстерня пише лише про ваш акаунт: підтвердження адреси, скидання пароля, зміна e-mail і рішення модераторів щодо ваших елементів. Жодних
-          розсилок. Листи надсилає сервіс Brevo (Франція): він отримує вашу адресу й текст листа та зберігає журнал доставки за
-          <a href="https://www.brevo.com/legal/privacypolicy/">своєю політикою приватності</a>.
+          Майстерня пише лише про ваш акаунт: підтвердження адреси, скидання пароля, зміна e-mail, рішення модераторів щодо ваших елементів, а також нові
+          коментарі до ваших робіт і відповіді у ваших темах (такі листи можна вимкнути на сторінці акаунта). Жодних розсилок. Листи надсилає сервіс Brevo (Франція): він отримує вашу адресу й текст листа та зберігає журнал доставки за
+          <a href="https://www.brevo.com/legal/privacypolicy/">своєю політикою приватності</a>. Коли ви коментуєте чужу роботу чи відповідаєте в чужій
+          темі, її автор може отримати лист (через Brevo) з вашим ім’ям для показу й початком вашого тексту (до 300 символів, без посилань).
+        </p>
+
+        <h3>Зворотний зв’язок</h3>
+        <p>
+          Написати нам через форму зворотного зв’язку можна й без акаунта. Майстерня зберігає повідомлення в панелі керування сайтом до 12 місяців, а потім
+          видаляє: ім’я та e-mail, якщо ви їх указали, тему, текст, адресу сторінки, з якої ви відкрили форму, мову і, якщо ви ввійшли, ваш акаунт.
+          Повідомлення пересилається адміністраторові листом через Brevo, і бачать його лише адміністратори. Якщо ви вказали e-mail, ми можемо на нього
+          відповісти. Ваша IP-адреса потрібна лише для захисту від спаму — близько години (до 70 хвилин), у вигляді хешу, — і разом із повідомленням не
+          зберігається.
         </p>
 
         <h3>Cookie</h3>
@@ -114,7 +143,8 @@
         <h3>Захист від зловживань</h3>
         <p>
           Невдалі спроби входу, реєстрації й запити на скидання пароля рахуються за IP-адресою (вхід — ще й за іменем) у вигляді хешу протягом від 15 хвилин
-          до години, а потім видаляються.
+          до години, а потім видаляються. Коментарі, дописи на форумі й скарги рахуються за акаунтом, а повідомлення зворотного зв’язку — за IP-адресою та
+          e-mail у вигляді хешу; ці лічильники живуть від години до трохи більше доби (до 25 годин).
         </p>
 
         <h3>Де зберігаються дані</h3>
@@ -126,21 +156,25 @@
 
         <h3>Як довго</h3>
         <p>
-          Акаунт і опубліковане зберігаються, доки ви їх не видалите. «Видалити акаунт» на сторінці акаунта одразу видаляє акаунт, ваші елементи й
-          підключення Kadro; копії можуть ще якийсь час лишатися в резервних копіях хостингу. Ваші вподобання лишаються в лічильниках елементів, але без
-          вашого імені.
+          Акаунт і опубліковане зберігаються, доки ви їх не видалите. «Видалити акаунт» на сторінці акаунта одразу видаляє акаунт, ваші елементи,
+          коментарі, дописи на форумі й підключення Kadro. Тема, у якій уже відповіли інші, лишається без вашого тексту й імені, але з назвою. Копії можуть
+          ще якийсь час лишатися в резервних копіях хостингу. Ваші вподобання лишаються в лічильниках елементів, але без вашого імені. Ваші скарги
+          лишаються в модераторів разом із причинами, але без вашого імені. Повідомлення зворотного зв’язку видаляються через 12 місяців після
+          надсилання. Видалення акаунта їх не видаляє: до того часу вони лишаються в панелі керування з ім’ям та e-mail, якщо ви їх указали, а
+          надіслані з акаунта — ще й із номером цього колишнього акаунта.
         </p>
 
         <h2>Підстави</h2>
         <p>
-          Дані акаунта ми обробляємо, щоб надавати майстерню, у якій ви зареєструвалися, а лічильники захисту й журнали — через законний інтерес захищати
-          сервіс (GDPR, ст. 6(1)(b) і (f)). Ми не продаємо дані й не використовуємо їх для реклами.
+          Дані акаунта, коментарі й дописи на форумі ми обробляємо, щоб надавати майстерню, у якій ви зареєструвалися, а лічильники захисту, журнали й
+          повідомлення зворотного зв’язку — через законний інтерес захищати сервіс, відповідати вам і покращувати Kadro (GDPR, ст. 6(1)(b) і (f)). Ми не продаємо дані й не використовуємо їх для реклами.
         </p>
 
         <h2>Ваші права</h2>
         <p>
-          Змінити ім’я, e-mail і пароль, відключити Kadro чи сервіс і видалити акаунт можна самостійно на
-          <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=uk">сторінці акаунта</a>. Також можна попросити копію своїх даних,
+          Змінити ім’я, e-mail і пароль, вимкнути листи про коментарі, відключити Kadro чи сервіс і видалити акаунт можна самостійно на
+          <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=uk">сторінці акаунта</a>, а свої коментарі, відповіді й теми —
+          видалити там, де їх опубліковано (тему — поки в ній не відповіли інші). Також можна попросити копію своїх даних,
           виправлення або припинення обробки й подати скаргу до органу із захисту даних у вашій країні.
         </p>
 
@@ -154,10 +188,11 @@
 
       <article class="wrap doc-wrap" data-lang="ru" lang="ru" hidden>
         <h1>Политика конфиденциальности</h1>
-        <p class="doc-date">Обновлено 20 ноября 2026</p>
+        <p class="doc-date">Обновлено 25 ноября 2026</p>
         <p class="doc-lead">
           Kadro — бесплатный видеоредактор с открытым кодом. Здесь объясняется, что программа Kadro, этот сайт и Мастерская Kadro делают с данными о вас.
-          Коротко: программа ничего не собирает, сайт не следит за вами, а мастерская хранит только то, без чего не работает аккаунт.
+          Коротко: программа ничего не собирает, сайт не следит за вами, а мастерская хранит только то, без чего не работают аккаунт, обсуждения и
+          обратная связь.
         </p>
 
         <h2>Программа Kadro</h2>
@@ -185,9 +220,17 @@
           <li>Браузер запоминает только выбранный язык.</li>
           <li>
             Чтобы показать в шапке ваш аккаунт мастерской, страницы спрашивают workshop.kadro.studio, вошли ли вы. Если да, браузер добавляет к этому запросу
-            cookie входа мастерской, а страница получает в ответ только ваше имя для показа.
+            cookie входа мастерской, а страница получает в ответ ваше имя для показа, подтверждён ли ваш e-mail, модератор ли вы, и служебный ключ
+            безопасности (nonce), с которым сайт от вашего имени отправляет комментарии и сообщения на форуме. Ключ действует не больше суток, и сайт его
+            нигде не хранит.
           </li>
           <li>Страница мастерской загружает элементы вместе с их изображениями с workshop.kadro.studio.</li>
+          <li>
+            Комментарии в мастерской и форум загружаются с workshop.kadro.studio. Если вы вошли, браузер отправляет эти запросы вместе с cookie входа и
+            ключом безопасности, о котором сказано выше, — и когда вы читаете (чтобы показать вам ваши скрытые сообщения), и когда пишете, жалуетесь или
+            удаляете сообщение.
+          </li>
+          <li>Форма обратной связи отправляет то, что вы в ней написали, на workshop.kadro.studio (об этом ниже).</li>
           <li>Число скачиваний — это итоги GitHub по каждому файлу, по ним никого нельзя узнать.</li>
           <li>Донаты идут напрямую на Ko-fi, Patreon или в криптосеть; мы видим только то, что показывают эти сервисы.</li>
         </ul>
@@ -210,15 +253,34 @@
             пользовались в последний раз. Они видны на странице аккаунта, там же их можно отключить.
           </li>
           <li>То, что вы публикуете: элемент, описание, метки, лицензия и изображение, с вашим именем для показа как автора. Опубликованное видят все.</li>
-          <li>Элементы, которые вы отметили «нравится», и ваши жалобы с причинами. Жалобы видят только модераторы.</li>
+          <li>
+            Комментарии к элементам, темы и ответы на форуме: текст, время, отметка о правке и ваше имя для показа как автора. Их видят все. Свои
+            комментарии и ответы вы можете удалить когда угодно, пока сам элемент или тема опубликованы, а тему — пока в ней не ответили другие.
+            Когда вы или модератор удаляете сообщение, оно попадает в корзину сайта и окончательно стирается примерно через 30 дней; комментарии
+            к элементу и ответы в теме исчезают и тогда, когда удаляют сам элемент или тему.
+          </li>
+          <li>
+            Элементы, которые вы отметили «нравится», и ваши жалобы с причинами — на элементы, комментарии и сообщения на форуме. Кто пожаловался и почему,
+            видят только модераторы.
+          </li>
+          <li>Присылать ли вам письма о новых комментариях и ответах.</li>
         </ul>
         <p>Ваш e-mail нигде не показывается публично. Администратор сайта и модераторы видят аккаунты в панели управления сайтом.</p>
 
         <h3>Письма</h3>
         <p>
-          Мастерская пишет только о вашем аккаунте: подтверждение адреса, сброс пароля, смена e-mail и решения модераторов о ваших элементах. Никаких
-          рассылок. Письма отправляет сервис Brevo (Франция): он получает ваш адрес и текст письма и хранит журнал доставки по
-          <a href="https://www.brevo.com/legal/privacypolicy/">своей политике конфиденциальности</a>.
+          Мастерская пишет только о вашем аккаунте: подтверждение адреса, сброс пароля, смена e-mail, решения модераторов о ваших элементах, а также новые
+          комментарии к вашим работам и ответы в ваших темах (такие письма можно отключить на странице аккаунта). Никаких рассылок. Письма отправляет сервис Brevo (Франция): он получает ваш адрес и текст письма и хранит журнал доставки по
+          <a href="https://www.brevo.com/legal/privacypolicy/">своей политике конфиденциальности</a>. Когда вы комментируете чужую работу или отвечаете в
+          чужой теме, её автор может получить письмо (через Brevo) с вашим именем для показа и началом вашего текста (до 300 символов, без ссылок).
+        </p>
+
+        <h3>Обратная связь</h3>
+        <p>
+          Написать нам через форму обратной связи можно и без аккаунта. Мастерская хранит сообщение в панели управления сайтом до 12 месяцев, а затем
+          удаляет: имя и e-mail, если вы их указали, тему, текст, адрес страницы, с которой вы открыли форму, язык и, если вы вошли, ваш аккаунт. Сообщение
+          пересылается администратору письмом через Brevo, и видят его только администраторы. Если вы указали e-mail, мы можем на него ответить. Ваш
+          IP-адрес используется только для защиты от спама — около часа (до 70 минут), в виде хеша, — и вместе с сообщением не хранится.
         </p>
 
         <h3>Cookie</h3>
@@ -230,7 +292,8 @@
         <h3>Защита от злоупотреблений</h3>
         <p>
           Неудачные попытки входа, регистрации и запросы на сброс пароля считаются по IP-адресу (вход — ещё и по имени) в виде хеша от 15 минут до часа, а
-          затем удаляются.
+          затем удаляются. Комментарии, сообщения на форуме и жалобы считаются по аккаунту, а сообщения обратной связи — по IP-адресу и e-mail в виде хеша;
+          эти счётчики живут от часа до чуть больше суток (до 25 часов).
         </p>
 
         <h3>Где хранятся данные</h3>
@@ -242,21 +305,25 @@
 
         <h3>Как долго</h3>
         <p>
-          Аккаунт и опубликованное хранятся, пока вы их не удалите. «Удалить аккаунт» на странице аккаунта сразу удаляет аккаунт, ваши элементы и
-          подключения Kadro; копии могут ещё какое-то время оставаться в резервных копиях хостинга. Ваши отметки «нравится» остаются в счётчиках элементов,
-          но без вашего имени.
+          Аккаунт и опубликованное хранятся, пока вы их не удалите. «Удалить аккаунт» на странице аккаунта сразу удаляет аккаунт, ваши элементы,
+          комментарии, сообщения на форуме и подключения Kadro. Тема, в которой уже ответили другие, остаётся без вашего текста и имени, но с названием.
+          Копии могут ещё какое-то время оставаться в резервных копиях хостинга. Ваши отметки «нравится» остаются в счётчиках элементов, но без вашего
+          имени. Ваши жалобы остаются у модераторов вместе с причинами, но без вашего имени. Сообщения обратной связи удаляются через 12 месяцев после
+          отправки. Удаление аккаунта их не удаляет: до этого срока они остаются в панели управления с именем и e-mail, если вы их указали, а
+          отправленные из аккаунта — ещё и с номером этого бывшего аккаунта.
         </p>
 
         <h2>Основания</h2>
         <p>
-          Данные аккаунта мы обрабатываем, чтобы предоставлять мастерскую, в которой вы зарегистрировались, а счётчики защиты и журналы — в силу законного
-          интереса защищать сервис (GDPR, ст. 6(1)(b) и (f)). Мы не продаём данные и не используем их для рекламы.
+          Данные аккаунта, комментарии и сообщения на форуме мы обрабатываем, чтобы предоставлять мастерскую, в которой вы зарегистрировались, а счётчики
+          защиты, журналы и сообщения обратной связи — в силу законного интереса защищать сервис, отвечать вам и улучшать Kadro (GDPR, ст. 6(1)(b) и (f)). Мы не продаём данные и не используем их для рекламы.
         </p>
 
         <h2>Ваши права</h2>
         <p>
-          Изменить имя, e-mail и пароль, отключить Kadro или сервис и удалить аккаунт можно самостоятельно на
-          <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=ru">странице аккаунта</a>. Также можно попросить копию своих данных,
+          Изменить имя, e-mail и пароль, выключить письма о комментариях, отключить Kadro или сервис и удалить аккаунт можно самостоятельно на
+          <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=ru">странице аккаунта</a>, а свои комментарии, ответы и темы —
+          удалить там, где они опубликованы (тему — пока в ней не ответили другие). Также можно попросить копию своих данных,
           исправление или прекращение обработки и подать жалобу в орган по защите данных в вашей стране.
         </p>
 
@@ -270,10 +337,10 @@
 
       <article class="wrap doc-wrap" data-lang="en" lang="en" hidden>
         <h1>Privacy policy</h1>
-        <p class="doc-date">Updated 20 November 2026</p>
+        <p class="doc-date">Updated 25 November 2026</p>
         <p class="doc-lead">
           Kadro is a free, open-source video editor. This page explains what the Kadro app, this website and the Kadro Workshop do with data about you. In
-          short: the app collects nothing, the website doesn’t track you, and the workshop keeps only what an account needs.
+          short: the app collects nothing, the website doesn’t track you, and the workshop keeps only what an account, discussions and feedback need.
         </p>
 
         <h2>The Kadro app</h2>
@@ -301,9 +368,16 @@
           <li>Your browser remembers only the language you picked.</li>
           <li>
             To show your workshop account in the header, the pages ask workshop.kadro.studio whether you are signed in. If you are, your browser sends the
-            workshop’s sign-in cookie with that request, and the page gets back only your display name.
+            workshop’s sign-in cookie with that request, and the page gets back your display name, whether your e-mail address is confirmed, whether you
+            are a moderator, and a security token (a nonce) the site uses to send your comments and forum posts for you. The token lasts a day at most, and
+            the site doesn’t store it anywhere.
           </li>
           <li>The workshop page loads items, with their pictures, from workshop.kadro.studio.</li>
+          <li>
+            Workshop comments and the forum load from workshop.kadro.studio. If you are signed in, your browser sends these requests with the sign-in
+            cookie and the security token above — when you read (so you see your own hidden posts) as well as when you write, report or delete a post.
+          </li>
+          <li>The feedback form sends what you type in it to workshop.kadro.studio (see below).</li>
           <li>Download counts are GitHub’s totals for each file and don’t identify anyone.</li>
           <li>Donations go straight to Ko-fi, Patreon or the crypto network; we see only what those services show us.</li>
         </ul>
@@ -327,15 +401,34 @@
             last used. You see them on your account page and can disconnect them there.
           </li>
           <li>What you publish: the item, its description, tags, licence and picture, with your display name as the author. Published items are public.</li>
-          <li>The items you liked, and your reports with their reasons. Only moderators see reports.</li>
+          <li>
+            Comments on items, forum topics and replies: the text, the time, whether it was edited, and your display name as the author. They are public.
+            You can delete your own comments and replies at any time while the item or topic itself is published, and your topic while nobody else
+            has replied in it. When you or a moderator delete a post, it goes to the site’s trash and is erased for good after about 30 days;
+            comments under an item and replies in a topic also go when the item or topic itself is deleted.
+          </li>
+          <li>The items you liked, and your reports with their reasons — on items, comments and forum posts. Only moderators see who reported what and why.</li>
+          <li>Whether to send you letters about new comments and replies.</li>
         </ul>
         <p>Your e-mail address is never shown publicly. The site administrator and moderators can see accounts in the site’s admin panel.</p>
 
         <h3>Letters</h3>
         <p>
-          The workshop writes only about your account: confirming your address, resetting your password, changing your e-mail address, and moderators’
-          decisions about your items. No newsletters. Letters are sent through Brevo (France): it receives your address and the letter and keeps delivery
-          records under <a href="https://www.brevo.com/legal/privacypolicy/">its own privacy policy</a>.
+          The workshop writes only about your account: confirming your address, resetting your password, changing your e-mail address, moderators’
+          decisions about your items, and new comments on your works and replies in your topics (you can switch those off on your account page). No
+          newsletters. Letters are sent through Brevo (France): it receives your address and the letter and keeps delivery
+          records under <a href="https://www.brevo.com/legal/privacypolicy/">its own privacy policy</a>. When you comment on someone’s work or reply in
+          their topic, its author may get a letter (through Brevo) with your display name and the start of your text (up to 300 characters, links
+          removed).
+        </p>
+
+        <h3>Feedback</h3>
+        <p>
+          You can write to us through the feedback form without an account. The workshop keeps the message in the site’s admin panel for up to 12 months
+          and then deletes it: your name and e-mail address if you gave them, the topic, the text, the address of the page you opened the form from, the
+          language and, if you are signed in, your account. The message is forwarded to the administrator as a letter through Brevo, and only
+          administrators see it. If you gave an e-mail address, we may reply to it. Your IP address is used only against spam — for about an hour (70
+          minutes at most), as a hash — and is not stored with the message.
         </p>
 
         <h3>Cookies</h3>
@@ -347,7 +440,8 @@
         <h3>Protection from abuse</h3>
         <p>
           Failed sign-ins, sign-ups and password reset requests are counted per IP address (sign-ins also per name), as a hash, for 15 minutes to an hour, and
-          then deleted.
+          then deleted. Comments, forum posts and reports are counted per account, and feedback messages per IP address and e-mail address, as a hash;
+          these counters last from an hour to just over a day (25 hours at most).
         </p>
 
         <h3>Where it is stored</h3>
@@ -359,20 +453,25 @@
 
         <h3>How long</h3>
         <p>
-          Your account and what you published stay until you delete them. “Delete account” on your account page removes the account, your items and your
-          Kadro connections at once; copies may remain in the host’s backups for a while. Likes you gave stay in the items’ counts, without your name.
+          Your account and what you published stay until you delete them. “Delete account” on your account page removes the account, your items, comments,
+          forum posts and Kadro connections at once. A topic that others have already replied to stays, without your text and name but with its title.
+          Copies may remain in the host’s backups for a while. Likes you gave stay in the items’ counts, without your name. Your reports stay with the
+          moderators, with their reasons but without your name. Feedback messages are deleted 12 months after they were sent. Deleting your account does
+          not delete them: until then they stay in the admin panel with the name and e-mail address you gave, if any, and those sent while you were
+          signed in also with that former account’s number.
         </p>
 
         <h2>Legal basis</h2>
         <p>
-          We handle account data to provide the workshop you signed up for, and abuse counters and logs because of our legitimate interest in keeping the
-          service safe (GDPR Art. 6(1)(b) and (f)). We don’t sell data or use it for advertising.
+          We handle account data, comments and forum posts to provide the workshop you signed up for, and abuse counters, logs and feedback messages
+          because of our legitimate interest in keeping the service safe, answering you and improving Kadro (GDPR Art. 6(1)(b) and (f)). We don’t sell data or use it for advertising.
         </p>
 
         <h2>Your rights</h2>
         <p>
-          You can change your name, e-mail address and password, disconnect Kadro or a service, and delete your account yourself on your
-          <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=en">account page</a>. You can also ask for a copy of your data, for a
+          You can change your name, e-mail address and password, switch off letters about comments, disconnect Kadro or a service, and delete your account
+          yourself on your <a data-account href="https://workshop.kadro.studio/?kadro=account&amp;lang=en">account page</a>, and delete your own comments,
+          replies and topics where they are published (a topic while nobody else has replied in it). You can also ask for a copy of your data, for a
           correction or for us to stop handling it, and complain to the data protection authority in your country.
         </p>
 
@@ -393,6 +492,8 @@
         </div>
         <nav>
           <a href="../workshop/" data-i18n="nav.workshop">Майстерня</a>
+          <a href="../forum/" data-i18n="footer.forum">Форум</a>
+          <a href="../contact/" data-i18n="footer.contact">Зворотний зв’язок</a>
           <a data-link="source" href="#" data-i18n="footer.source">Вихідний код</a>
           <a data-link="issues" href="#" data-i18n="footer.issues">Повідомити про помилку</a>
         </nav>
